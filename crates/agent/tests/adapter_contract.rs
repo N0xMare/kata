@@ -409,6 +409,7 @@ const NANOCODE_SOURCES: &[&str] = &[
     "adapter/seam.rs",
     "adapter/toolhost_client.rs",
     "adapter/events.rs",
+    "adapter/platform.rs",
 ];
 
 /// The one host-side module the nanocode crate may carry, outside the scan by
