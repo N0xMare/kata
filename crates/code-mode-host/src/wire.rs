@@ -12,7 +12,9 @@ use std::io::{self, Read, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
-use nanocode_code_mode_engine::{NativeLimits, RuntimeEvent};
+use nanocode_code_mode_engine::RuntimeEvent;
+
+use crate::CodeModeLimits;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, value::RawValue};
 
@@ -142,7 +144,9 @@ pub enum ToInterpreter {
     Start {
         execution_id: u64,
         source: String,
-        tools: Vec<Value>,
+        /// The cell's tools as the engine encoded them
+        /// (`CellTools::encoded`): definitions, descriptions, schemas.
+        tools: [String; 3],
         prelude: Option<String>,
     },
     /// The answer to the interpreter's last `Load`: the running cell's stored
@@ -180,24 +184,22 @@ pub enum FromInterpreter {
     Event(Event),
 }
 
-/// The engine's `NativeLimits`, field for field. [`From`] destructures the
-/// engine's struct whole, so a field the engine adds fails this build until it
-/// crosses the wire too.
+/// [`CodeModeLimits`], field for field. [`From`] destructures the struct
+/// whole, so a field added to it fails this build until it crosses the wire
+/// too.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Limits {
     memory_bytes: usize,
-    max_stack_bytes: usize,
     thread_stack_bytes: usize,
     cell_wall_nanos: u64,
     cell_emitted_bytes: usize,
     live_workers: usize,
 }
 
-impl From<NativeLimits> for Limits {
-    fn from(limits: NativeLimits) -> Self {
-        let NativeLimits {
+impl From<CodeModeLimits> for Limits {
+    fn from(limits: CodeModeLimits) -> Self {
+        let CodeModeLimits {
             memory_bytes,
-            max_stack_bytes,
             thread_stack_bytes,
             cell_wall,
             cell_emitted_bytes,
@@ -205,7 +207,6 @@ impl From<NativeLimits> for Limits {
         } = limits;
         Self {
             memory_bytes,
-            max_stack_bytes,
             thread_stack_bytes,
             cell_wall_nanos: u64::try_from(cell_wall.as_nanos()).unwrap_or(u64::MAX),
             cell_emitted_bytes,
@@ -214,11 +215,10 @@ impl From<NativeLimits> for Limits {
     }
 }
 
-impl From<Limits> for NativeLimits {
+impl From<Limits> for CodeModeLimits {
     fn from(limits: Limits) -> Self {
         Self {
             memory_bytes: limits.memory_bytes,
-            max_stack_bytes: limits.max_stack_bytes,
             thread_stack_bytes: limits.thread_stack_bytes,
             cell_wall: Duration::from_nanos(limits.cell_wall_nanos),
             cell_emitted_bytes: limits.cell_emitted_bytes,
@@ -263,6 +263,9 @@ pub enum Event {
     Held {
         cell_id: u64,
     },
+    Waiting {
+        cell_id: u64,
+    },
     Replayed {
         cell_id: u64,
     },
@@ -283,6 +286,7 @@ impl Event {
             | Self::Done { cell_id, .. }
             | Self::Error { cell_id, .. }
             | Self::Held { cell_id }
+            | Self::Waiting { cell_id }
             | Self::Replayed { cell_id }
             | Self::Diverged { cell_id, .. } => *cell_id,
         }
@@ -291,6 +295,25 @@ impl Event {
     /// The wire form of `event`; `Err` for a content item that does not
     /// serialize (nanocode refuses to write an image `file_id` it does not
     /// accept).
+    /// What this event costs the cell's output limit: a notification its text,
+    /// a content item every string in it but its `type`, a tool call (its
+    /// input excepted) and a yield nothing, each beside
+    /// [`crate::CELL_EVENT_BYTES`]; a terminal or journal event nothing.
+    pub fn charge(&self) -> usize {
+        let payload = match self {
+            Self::Notify { text, .. } => text.len(),
+            Self::Content { content, .. } => crate::supervisor::content_payload_bytes(content),
+            Self::ToolCall { .. } | Self::Yielded { .. } => 0,
+            Self::Done { .. }
+            | Self::Error { .. }
+            | Self::Held { .. }
+            | Self::Waiting { .. }
+            | Self::Replayed { .. }
+            | Self::Diverged { .. } => return 0,
+        };
+        crate::CELL_EVENT_BYTES.saturating_add(payload)
+    }
+
     pub fn encode(event: RuntimeEvent) -> Result<Self, serde_json::Error> {
         Ok(match event {
             RuntimeEvent::ToolCall {
@@ -323,6 +346,7 @@ impl Event {
                 stored,
             },
             RuntimeEvent::Held { cell_id } => Self::Held { cell_id },
+            RuntimeEvent::Waiting { cell_id } => Self::Waiting { cell_id },
             RuntimeEvent::Replayed { cell_id } => Self::Replayed { cell_id },
             RuntimeEvent::Diverged { cell_id, reason } => Self::Diverged { cell_id, reason },
         })
@@ -361,6 +385,7 @@ impl Event {
                 stored,
             },
             Self::Held { cell_id } => RuntimeEvent::Held { cell_id },
+            Self::Waiting { cell_id } => RuntimeEvent::Waiting { cell_id },
             Self::Replayed { cell_id } => RuntimeEvent::Replayed { cell_id },
             Self::Diverged { cell_id, reason } => RuntimeEvent::Diverged { cell_id, reason },
         })

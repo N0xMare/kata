@@ -410,13 +410,12 @@ pub enum SessionEvidenceEvent {
     /// refused the cell a worker) — read off the vendored guard's own report of
     /// the hit, a harness notification that the harness's truncation of the
     /// model's view of the cell does not reach, or for `workers` off the
-    /// refused `exec` result; the turn went on. The guard reports a wall or
-    /// output hit from its own budget, a heap or stack hit by QuickJS's own
-    /// error heading the failure, and a heap hit the bootstrap could not
-    /// report by the heap it left exhausted; a heap or stack hit the cell
-    /// rethrows inside an error of its own, or a heap hit reported as
-    /// `Uncaught null` once its heap was released, is not reported, and a
-    /// cell's own notification of a report's text is recorded as a hit.
+    /// refused `exec` result; the turn went on. A wall or output hit is
+    /// reported from the interpreter's own budget, every heap hit by the
+    /// engine (djs ends it uncatchably), and a stack hit by djs's own error
+    /// heading the failure; a stack hit the cell rethrows inside an error of
+    /// its own is not reported, and a cell's own notification of a report's
+    /// text is recorded as a hit.
     CodeModeLimit { which: SmolStr },
     /// The embedded harness: a Code Mode cell's interpreter PROCESS ended while
     /// the cell ran, and the cell failed with that end; the turn went on, and
@@ -427,9 +426,8 @@ pub enum SessionEvidenceEvent {
     /// the end, a harness notification sent just before the cell's error, as
     /// [`Self::CodeModeLimit`] is read off the guard's: so a cell's own
     /// notification of a report's text is recorded too, though nothing ended.
-    /// An interpreter that ends after its cell's terminal event (QuickJS
-    /// aborting as it drops that cell's runtime) ends no cell and is recorded
-    /// nowhere.
+    /// An interpreter that ends after its cell's terminal event ends no cell
+    /// and is recorded nowhere.
     CodeModeInterpreterEnded { signal: Option<SmolStr> },
     /// The embedded harness: a step of the turn's end did not complete as
     /// planned. `step` is `kill_all`, and `outcome` is `wire_broken` (the

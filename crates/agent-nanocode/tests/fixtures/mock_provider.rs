@@ -39,6 +39,9 @@ pub enum Reply {
     DropAfter(Duration),
     /// Record the request and answer it with this HTTP status and JSON body.
     Status(u16, Value),
+    /// [`Reply::Status`] with these extra response headers, each `name` and
+    /// `value` as written.
+    StatusWith(u16, Vec<(&'static str, String)>, Value),
     /// Record the request, begin a response that carries all of these events
     /// — over HTTP its head declares their whole length — stream every event
     /// but the last, and drop the connection: the response ends mid-body,
@@ -353,6 +356,24 @@ async fn serve_http_connection(mut socket: TcpStream, shared: Shared) {
                     return;
                 }
             }
+            Reply::StatusWith(status, headers, body) => {
+                let body = body.to_string();
+                let headers = headers
+                    .iter()
+                    .fold(String::new(), |mut out, (name, value)| {
+                        use std::fmt::Write as _;
+                        let _ = write!(out, "{name}: {value}\r\n");
+                        out
+                    });
+                let response = format!(
+                    "HTTP/1.1 {status} Mock\r\ncontent-type: application/json\r\n{headers}\
+                     content-length: {}\r\n\r\n{body}",
+                    body.len()
+                );
+                if socket.write_all(response.as_bytes()).await.is_err() {
+                    return;
+                }
+            }
             Reply::Gated(..) => unreachable!("`ungated` answers what a gate holds"),
             Reply::Paused { head, gate, rest } => {
                 let first = sse_text(&head);
@@ -480,7 +501,7 @@ async fn serve_ws(listener: TcpListener, shared: Shared) {
                             }
                         }
                     }
-                    Reply::Drop | Reply::Status(..) => return,
+                    Reply::Drop | Reply::Status(..) | Reply::StatusWith(..) => return,
                     Reply::Gated(..) => unreachable!("`ungated` answers what a gate holds"),
                 }
             }

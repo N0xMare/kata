@@ -62,7 +62,8 @@ use mock_provider::{
     code_reply, empty_reply, exec_command_reply, message_reply, usage,
 };
 use openai_turn::{
-    MODEL, TURN_BOUND, bounded, cancellable_turn, openai, openai_prompt, scope, scope_with, turn,
+    MODEL, RETRY_EXHAUSTION_BOUND, TURN_BOUND, bounded, cancellable_turn, exhausting_turn, openai,
+    openai_prompt, scope, scope_with, turn,
 };
 use serde_json::{Value, json};
 use toolhost_double::{
@@ -108,6 +109,22 @@ fn execs(witness: &DoubleWitness) -> Vec<String> {
             } => Some(format!("{} @ {}", script, workdir.unwrap_or_default())),
             _ => None,
         })
+        .collect()
+}
+
+/// The times nanocode re-sends a Responses call whose stream failed on a
+/// reconnectable error — a dropped or cut connection, a non-terminal error
+/// event — whatever the endpoint's `max_attempts`: MEASURED at 8ec3b215, five
+/// (its `STREAM_MAX_RETRIES`), 200 ms × 2ⁿ apart, 6.2 s in all (2ac77424 re-sent
+/// none). A cell whose Responses call must fail scripts the failure this many
+/// more times; a reply scripted past them is never requested.
+const RECONNECTS: usize = 5;
+
+/// `first`, a reply that fails a Responses call reconnectably, followed by
+/// the [`RECONNECTS`] dropped connections that fail nanocode's re-sends of it.
+fn failed_with_reconnects(first: Reply) -> Vec<Reply> {
+    std::iter::once(first)
+        .chain(std::iter::repeat_n(Reply::Drop, RECONNECTS))
         .collect()
 }
 
@@ -444,84 +461,25 @@ async fn an_anthropic_call_stating_no_usage_is_never_metered() {
     );
 }
 
-/// nanocode's own telemetry, read as it is emitted: the `session.id` of every
-/// `nanocode`-target span (the `agent.turn`, each `model.call`) as it opens,
-/// with the span's name. A layer of the subscriber a cell sets as its
-/// thread's default; `#[tokio::test]` runs every task of the turn on that
-/// thread.
-#[derive(Clone, Default)]
-struct NanocodeSessionSpans(std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>);
-
-impl NanocodeSessionSpans {
-    fn seen(&self) -> Vec<(String, String)> {
-        self.0.lock().expect("spans").clone()
-    }
-}
-
-/// The `session.id` field of one span, however it was recorded.
-struct SessionIdField(Option<String>);
-
-impl tracing::field::Visit for SessionIdField {
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        if field.name() == "session.id" {
-            self.0 = Some(value.to_owned());
-        }
-    }
-
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "session.id" {
-            self.0 = Some(format!("{value:?}"));
-        }
-    }
-}
-
-impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for NanocodeSessionSpans {
-    fn on_new_span(
-        &self,
-        attrs: &tracing::span::Attributes<'_>,
-        _id: &tracing::span::Id,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
-        if attrs.metadata().target() != "nanocode" {
-            return;
-        }
-        let mut session = SessionIdField(None);
-        attrs.record(&mut session);
-        if let Some(session) = session.0 {
-            self.0
-                .lock()
-                .expect("spans")
-                .push((attrs.metadata().name().to_owned(), session));
-        }
-    }
-}
-
-/// **The Anthropic kind's session id is re-derived from the seed, the agent
-/// driven runs under it, and the provider is told none.** As
-/// [`the_session_id_is_rederived_from_the_seed`]: one seed opens one session
-/// id, another seed another, each the version-7 UUID nanocode takes. The
-/// Messages API has no session field, so the session driven is read off
-/// nanocode itself: its own telemetry names the agent's session on the
-/// `agent.turn` span and on every `model.call`, and every such span names the
-/// session's id. Nanocode's Messages client tells the provider none under an
-/// API key (MEASURED at 2ac77424: the request's keys are `cache_control`,
-/// `max_tokens`, `messages`, `model`, `stream`, `system` and `tools`): no
-/// request line, header or body the mock received names any of the ids.
-/// Every request carries the turn's whole conversation, so there is no
-/// provider-side session another attempt's state could be found in.
+/// **The Anthropic kind's session id is re-derived from the seed, and the
+/// agent driven runs under it.** As [`the_session_id_is_rederived_from_the_seed`]:
+/// one seed opens one session id, another seed another, each the version-7
+/// UUID nanocode takes. The Messages API has no session field, but nanocode's
+/// API-key wire names the agent's session on every request since 8ec3b215
+/// (upstream 6c44fe519, as stock Claude Code does): the
+/// `x-claude-code-session-id` header and the `session_id` of
+/// `metadata.user_id` ([`claude_session_identity`]), read off the requests
+/// the mock RECEIVED, are the session's own id, and no request names the
+/// other seed's. That is an identity, not state: every request carries the
+/// turn's whole conversation, so there is no provider-side session another
+/// attempt's state could be found in.
 ///
 /// **Would red if:** the id were derived from anything but the seed (watched:
-/// a re-open with the same seed naming another id), the agent were built
-/// without the session's id (watched: nanocode's spans naming its own), or a
-/// request named it outside its body (watched: the id in the request line).
+/// a re-open with the same seed naming another id), or the agent were built
+/// without the session's id (watched: nanocode's own id on the wire).
 #[tokio::test]
 async fn the_anthropic_session_id_is_rederived_from_the_seed() {
-    use tracing_subscriber::layer::SubscriberExt as _;
-
-    async fn opened(seed: u8) -> (String, Vec<(String, String)>, String) {
-        let spans = NanocodeSessionSpans::default();
-        let _default =
-            tracing::subscriber::set_default(tracing_subscriber::registry().with(spans.clone()));
+    async fn opened(seed: u8) -> (String, Vec<(Option<String>, Option<String>)>, String) {
         let mock = MockProvider::start(vec![claude_text_reply("ok")]).await;
         let (mut session, _witness) = open_scoped(
             &anthropic(&mock),
@@ -533,51 +491,58 @@ async fn the_anthropic_session_id_is_rederived_from_the_seed() {
             matches!(outcome, TurnOutcome::Completed { .. }),
             "{outcome:?}"
         );
-        let sent: String = mock
-            .heads()
-            .into_iter()
-            .chain(mock.requests().iter().map(Value::to_string))
+        let heads = mock.heads();
+        let requests = mock.requests();
+        let named = heads
+            .iter()
+            .zip(&requests)
+            .map(|(head, body)| claude_session_identity(head, body))
             .collect();
-        (session.session_id().as_str().to_owned(), spans.seen(), sent)
+        let sent: String = heads
+            .into_iter()
+            .chain(requests.iter().map(Value::to_string))
+            .collect();
+        (session.session_id().as_str().to_owned(), named, sent)
     }
-    let (first, first_spans, first_sent) = opened(3).await;
-    let (again, again_spans, again_sent) = opened(3).await;
-    let (other, other_spans, other_sent) = opened(4).await;
+    let (first, first_named, first_sent) = opened(3).await;
+    let (again, again_named, again_sent) = opened(3).await;
+    let (other, other_named, other_sent) = opened(4).await;
     assert_eq!(first, again, "one seed, one session id");
     assert_ne!(first, other, "another seed, another session id");
     assert_eq!(first.len(), 36, "{first}");
     assert_eq!(&first[14..15], "7", "a version-7 UUID: {first}");
-    for (id, spans) in [
-        (&first, &first_spans),
-        (&again, &again_spans),
-        (&other, &other_spans),
+    for (id, named, sent, foreign) in [
+        (&first, &first_named, &first_sent, &other),
+        (&again, &again_named, &again_sent, &other),
+        (&other, &other_named, &other_sent, &first),
     ] {
-        for name in ["agent.turn", "model.call"] {
-            assert!(
-                spans.iter().any(|(span, _)| span == name),
-                "nanocode opened no `{name}` span: {spans:?}"
+        assert!(!named.is_empty(), "the turn sent a request");
+        for identity in named {
+            assert_eq!(
+                identity,
+                &(Some(id.clone()), Some(id.clone())),
+                "the agent driven ran under another session than {id}"
             );
         }
         assert!(
-            spans.iter().all(|(_, session)| session == id),
-            "the agent driven ran under another session than {id}: {spans:?}"
+            !sent.contains(foreign.as_str()),
+            "the provider was told another seed's id {foreign}: {sent}"
         );
-    }
-    for sent in [&first_sent, &again_sent, &other_sent] {
-        for id in [&first, &other] {
-            assert!(
-                !sent.contains(id.as_str()),
-                "the provider was told {id}: {sent}"
-            );
-        }
     }
 }
 
 /// The twin: the re-prompt is sent ONCE per turn. A second empty response
-/// fails the turn as Ambiguous with model tokens issued (nanocode's
-/// `MalformedResponse`), and the reply scripted third is never requested.
+/// ends the turn on it: MEASURED at 8ec3b215, nanocode answers the turn with
+/// an empty final message after warning "turn ended without a final message
+/// or exec call after the empty-response reprompt" (its `run/turn.rs`; at
+/// 2ac77424 it failed the turn `MalformedResponse`), so the turn is
+/// `Completed` with an empty response and both calls' usage, and the reply
+/// scripted third is never requested.
+///
+/// **Would red if:** the re-prompt were sent twice (watched: the third reply
+/// requested), or the empty response were dropped from the usage.
 #[tokio::test]
-async fn a_second_empty_response_fails_the_turn_without_a_third_request() {
+async fn a_second_empty_response_ends_the_turn_empty_without_a_third_request() {
     let mock = MockProvider::start(vec![
         empty_reply("r1", usage(10, 0, 1)),
         empty_reply("r2", usage(10, 0, 1)),
@@ -586,13 +551,22 @@ async fn a_second_empty_response_fails_the_turn_without_a_third_request() {
     .await;
     let (mut session, _witness) = open(&openai(&mock.url, None), DoubleConfig::default());
     let outcome = turn(session.as_mut(), &openai_prompt("go")).await;
-    let TurnOutcome::Ambiguous { issued, evidence } = &outcome else {
-        panic!("a second empty response fails the turn after its model calls: {outcome:?}");
+    let TurnOutcome::Completed {
+        response, usage, ..
+    } = &outcome
+    else {
+        panic!("a second empty response ends the turn with an empty message: {outcome:?}");
     };
-    assert_eq!(*issued, MayHaveIssued::ModelTokens);
-    assert!(
-        evidence.contains("without a final message or exec call"),
-        "{evidence}"
+    assert_eq!(response, "");
+    assert_eq!(
+        *usage,
+        Some(TokenUsage {
+            input: 20,
+            output: 2,
+            cache_read: 0,
+            cache_write: 0,
+        }),
+        "both calls are metered"
     );
     assert_eq!(
         mock.requests().len(),
@@ -619,19 +593,26 @@ async fn a_json_final_message_is_the_typed_output_response_verbatim() {
 
 /// The marks of a Claude Code / Claude Agent SDK request that nanocode's
 /// SUBSCRIPTION wire adds (`ClaudeClient::post` under
-/// `subscription_compatibility`, and `subscription_wire::prepare_with`), each
-/// as the mock RECEIVED it. An API key's credits may refuse a request that
-/// carries one: measured, the Agent SDK identity as the first system block, or
-/// the `claude-code-20250219` beta, alone turns a key's 200 into a 400 "credit
-/// balance is too low". The refused set:
+/// `subscription_compatibility`, and `subscription_wire::prepare_with`) and its
+/// API-key wire does not, each as the mock RECEIVED it. An API key's credits
+/// may refuse a request that carries one: measured, the Agent SDK identity as
+/// the first system block, or the `claude-code-20250219` beta, alone turns a
+/// key's 200 into a 400 "credit balance is too low". The refused set:
 ///
 /// - a header `authorization` (the OAuth bearer), `x-app`,
-///   `x-claude-code-session-id`, `anthropic-dangerous-direct-browser-access`,
-///   or any `x-stainless-*`; a `user-agent` naming `claude-cli/`;
+///   `anthropic-dangerous-direct-browser-access`, or any `x-stainless-*`; a
+///   `user-agent` naming `claude-cli/`;
 /// - an `anthropic-beta` token `claude-code-20250219` or `oauth-2025-04-20`;
 /// - a system block whose text is the Agent SDK identity or the legacy Claude
 ///   Code one, or begins with the `x-anthropic-billing-header:` line;
-/// - a body `metadata` (the subscription's account and session ids).
+/// - a body `metadata` naming an account (a non-empty `account_uuid` in its
+///   `user_id`: the subscription's).
+///
+/// Not refused: the session identity nanocode's API-key wire sends on every
+/// request since 8ec3b215 (upstream 6c44fe519, "as stock Claude Code 2.1.300
+/// does" with an API key), the `x-claude-code-session-id` header and a
+/// `metadata.user_id` with an empty `account_uuid`; [`claude_session_identity`]
+/// reads them.
 fn claude_code_marks(head: &str, body: &Value) -> Vec<String> {
     const IDENTITIES: [&str; 2] = [
         "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
@@ -646,10 +627,7 @@ fn claude_code_marks(head: &str, body: &Value) -> Vec<String> {
         let value = value.trim();
         if matches!(
             name.as_str(),
-            "authorization"
-                | "x-app"
-                | "x-claude-code-session-id"
-                | "anthropic-dangerous-direct-browser-access"
+            "authorization" | "x-app" | "anthropic-dangerous-direct-browser-access"
         ) || name.starts_with("x-stainless-")
             || (name == "user-agent" && value.contains("claude-cli/"))
         {
@@ -669,16 +647,44 @@ fn claude_code_marks(head: &str, body: &Value) -> Vec<String> {
             marks.push(format!("system block {text:?}"));
         }
     }
-    if body.get("metadata").is_some() {
-        marks.push("body metadata".to_owned());
+    if let Some(metadata) = body.get("metadata") {
+        let account = metadata["user_id"]
+            .as_str()
+            .and_then(|user| serde_json::from_str::<Value>(user).ok())
+            .map(|user| user["account_uuid"].clone());
+        if account != Some(json!("")) {
+            marks.push(format!("body metadata {metadata}"));
+        }
     }
     marks
+}
+
+/// The session identity an API-key Messages request carries, as the mock
+/// RECEIVED it: the `x-claude-code-session-id` header's value and the
+/// `session_id` in `metadata.user_id` (a JSON string, nanocode's
+/// `SubscriptionIdentity::api_metadata`).
+fn claude_session_identity(head: &str, body: &Value) -> (Option<String>, Option<String>) {
+    let header = head.lines().skip(1).find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        name.trim()
+            .eq_ignore_ascii_case("x-claude-code-session-id")
+            .then(|| value.trim().to_owned())
+    });
+    let metadata = body["metadata"]["user_id"]
+        .as_str()
+        .and_then(|user| serde_json::from_str::<Value>(user).ok())
+        .and_then(|user| user["session_id"].as_str().map(str::to_owned));
+    (header, metadata)
 }
 
 /// **An API-key Anthropic turn's Messages request carries no Claude Code or
 /// Claude Agent SDK mark** ([`claude_code_marks`]' refused set), read out of
 /// the head and body the mock provider RECEIVED. The request is still a whole
-/// one: the key arrives as `x-api-key` and the system prompt is there.
+/// one: the key arrives as `x-api-key` and the system prompt is there; the
+/// session identity it does carry names the session's own id. The turn is
+/// ONE request: the final message ends it, with no finish check after it
+/// (nanocode's Claude finish check and persistence nudge run only on a
+/// `headless` agent, which kata does not build).
 ///
 /// **Would red if:** the turn kept nanocode's default system blocks, which
 /// open with the Agent SDK identity (watched: red), or its client
@@ -719,6 +725,12 @@ async fn an_api_key_anthropic_request_carries_no_claude_code_mark() {
         claude_code_marks(&heads[0], &requests[0]),
         [] as [String; 0],
         "the API-key request carries a Claude Code mark"
+    );
+    let id = session.session_id().as_str().to_owned();
+    assert_eq!(
+        claude_session_identity(&heads[0], &requests[0]),
+        (Some(id.clone()), Some(id)),
+        "the session identity names the session"
     );
 }
 
@@ -1056,14 +1068,17 @@ impl Kind {
         }
     }
 
-    /// A reply that fails the model call it answers after its request left:
-    /// a dropped connection on the Responses kind, whose test endpoint makes
-    /// one attempt; a 400 on the Messages kind, whose client re-sends a
-    /// request its connection dropped (MEASURED at 2ac77424: five attempts in
-    /// all, with backoff) and ends the turn on a rejection at once.
+    /// A reply that fails the model call it answers after its request left,
+    /// at once: a 400 on either kind, which neither client re-sends. Both
+    /// re-send a dropped connection (MEASURED at 8ec3b215: the Responses
+    /// client [`RECONNECTS`] times, the Messages client to eleven attempts in
+    /// all, about 180 s of backoff).
     fn failing(self) -> Reply {
         match self {
-            Self::OpenAi => Reply::Drop,
+            Self::OpenAi => Reply::Status(
+                400,
+                json!({"error": {"message": "mock fails this call", "type": "invalid_request_error", "param": null, "code": null}}),
+            ),
             Self::Anthropic => Reply::Status(
                 400,
                 json!({"type": "error", "error": {"type": "invalid_request_error", "message": "mock fails this call"}}),
@@ -1092,13 +1107,16 @@ fn pixel_in_work() -> DoubleConfig {
 
 /// codex's `view_image` reads the image's BYTES inside the capsule
 /// (`FileHost::read_bytes` as a `ReadFile` frame, no text check), and the
-/// model is handed them as a data URL, read back from the next request.
+/// model is handed them as a data URL, read back from the next request. The
+/// cell hands the image on with Code Mode's `image()`: since 8ec3b215 a cell's
+/// `text()` prints a data URL's base64 as a count ("[N base64 characters not
+/// printed as text; pass the value to image() to see it]").
 #[tokio::test]
 async fn a_codex_view_image_reads_the_capsules_bytes_through_the_toolhost() {
     let mock = MockProvider::start(vec![
         code_reply(
             "r1",
-            "const result = await tools.view_image({path: \"/work/pixel.png\", detail: \"original\"});\ntext(result.image_url);",
+            "const result = await tools.view_image({path: \"/work/pixel.png\", detail: \"original\"});\nimage(result);",
             usage(1, 0, 1),
         ),
         message_reply("r2", "seen", usage(1, 0, 1)),
@@ -1124,13 +1142,13 @@ async fn a_codex_view_image_reads_the_capsules_bytes_through_the_toolhost() {
 }
 
 /// claude's `Read` of an image reads its BYTES inside the capsule the same
-/// way.
+/// way, handed on with `image()` the same way.
 #[tokio::test]
 async fn a_claude_image_read_reads_the_capsules_bytes_through_the_toolhost() {
     let mock = MockProvider::start(vec![
         claude_code_reply(
             "r1",
-            "const result = await tools.Read({file_path: \"/work/pixel.png\"});\ntext(JSON.stringify(result));",
+            "const result = await tools.Read({file_path: \"/work/pixel.png\"});\nimage(result);",
         ),
         claude_text_reply("seen"),
     ])
@@ -1537,13 +1555,14 @@ async fn an_anthropic_turn_failing_before_any_request_is_refused() {
     assert!(execs(&witness).is_empty(), "no tool ran");
 }
 
-/// MEASURED at 2ac77424: a Messages endpoint whose socket refuses the
+/// MEASURED at 8ec3b215: a Messages endpoint whose socket refuses the
 /// connection. The connect happens inside the request `MessagesMark` marked
 /// before it delegated, so the watermark reads `ModelTokens`, the conservative
 /// residual the Responses kind's HTTPS transport has too: over-marked, never
 /// under-marked. nanocode's Messages client classes a refused connect
-/// transient and re-sends it (five attempts in all), each through the mark,
-/// so the turn ends a `Transient` provider failure charged UNKNOWN. No byte
+/// transient and re-sends it (eleven attempts in all, about 180 s of backoff:
+/// [`RETRY_EXHAUSTION_BOUND`]; five at 2ac77424), each through the mark, so
+/// the turn ends a `Transient` provider failure charged UNKNOWN. No byte
 /// reached a provider (nothing listens on the port).
 #[tokio::test]
 async fn a_refused_messages_connect_is_marked_conservatively() {
@@ -1554,7 +1573,7 @@ async fn a_refused_messages_connect_is_marked_conservatively() {
         max_attempts: NonZeroU32::MIN,
     });
     let (mut session, _witness) = open(&adapter, DoubleConfig::default());
-    let outcome = turn(session.as_mut(), &anthropic_prompt("go")).await;
+    let outcome = exhausting_turn(session.as_mut(), &anthropic_prompt("go")).await;
     let TurnOutcome::ProviderFailed {
         class,
         reason,
@@ -1577,9 +1596,10 @@ async fn a_refused_messages_connect_is_marked_conservatively() {
 /// `a_toolhost_frame_the_codec_refuses_is_named_in_the_outcome`): the turn
 /// ends a `Transient` provider failure that says a tool ran, the watermark at
 /// its FIRST crossing (the model call that asked for the tool), the tool's
-/// frame on the double's log. MEASURED at 2ac77424: nanocode's Messages client
-/// re-sends a request whose connection dropped, five attempts in all, so the
-/// mock's own log holds the first call and five more.
+/// frame on the double's log. MEASURED at 8ec3b215: nanocode's Messages client
+/// re-sends a request whose connection dropped, eleven attempts in all, about
+/// 180 s of backoff ([`RETRY_EXHAUSTION_BOUND`]; five at 2ac77424), so the
+/// mock's own log holds the first call and eleven more.
 ///
 /// **Would red if:** the Messages requests went unmarked (watched: the
 /// watermark at `ToolCall`, the tool frame's mark), or the gate lost the tool
@@ -1587,10 +1607,14 @@ async fn a_refused_messages_connect_is_marked_conservatively() {
 #[tokio::test]
 async fn an_anthropic_dropped_model_connection_after_a_tool_frame_is_a_transient_failure() {
     let mut script = vec![Kind::Anthropic.run("r1", "touch effect")];
-    script.extend(std::iter::repeat_n(Reply::Drop, 5));
+    script.extend(std::iter::repeat_n(
+        Reply::Drop,
+        Kind::Anthropic.transient_attempts(),
+    ));
+    script.push(claude_text_reply("must never be asked for"));
     let mock = MockProvider::start(script).await;
     let (mut session, witness) = open(&anthropic(&mock), DoubleConfig::default());
-    let outcome = turn(session.as_mut(), &anthropic_prompt("go")).await;
+    let outcome = exhausting_turn(session.as_mut(), &anthropic_prompt("go")).await;
     let TurnOutcome::ProviderFailed {
         class, tool_called, ..
     } = outcome
@@ -1605,64 +1629,92 @@ async fn an_anthropic_dropped_model_connection_after_a_tool_frame_is_a_transient
         "the first crossing is the model call"
     );
     assert_eq!(execs(&witness), ["touch effect @ /work"]);
-    assert_eq!(mock.requests().len(), 1 + 5);
+    assert_eq!(
+        mock.requests().len(),
+        1 + Kind::Anthropic.transient_attempts()
+    );
 }
 
 /// The provider drops the model connection MID-RESPONSE on the Responses
 /// kind's HTTPS transport, after a tool frame was forwarded to the toolhost:
 /// the response's head declared its whole body, and the connection closed
-/// after every event but the terminal one. MEASURED at 2ac77424: nanocode
-/// reports the cut as a body it could not decode (`error decoding response
-/// body`) and gives it no retry advice, so it is neither the provider's
-/// refusal nor a transient failure (the session's `provider_failed` classes): the turn
-/// ends `Ambiguous` at its FIRST crossing (the model call that asked for the
-/// tool), and the mock's own log holds the two requests and no third — the
-/// session does not re-send it. The no-spend live twin is
-/// `agent_change_live`'s
-/// `a_provider_disconnect_mid_response_settles_proven_ambiguous_live`.
+/// after every event but the terminal one, on the call and on every re-send of
+/// it. MEASURED at 8ec3b215: nanocode reports the cut as a transport failure
+/// it advises retrying ("request or response body error: connection closed
+/// before message completed", `ResponsesError::HttpRequest { retryable: true
+/// }`), re-sends the call [`RECONNECTS`] times, and ends the turn on the last
+/// cut; so the cut is the provider's TRANSIENT failure, as the Messages
+/// client's stream that ended early already was: the turn ends
+/// `ProviderFailed` classed `Transient`, saying a tool ran, the watermark at its
+/// FIRST crossing (the model call that asked for the tool). The mock's own log
+/// holds the first call, the cut one and its re-sends, and no more. (At
+/// 2ac77424 nanocode reported the cut as `error decoding response body` with
+/// no retry advice and re-sent nothing, and the turn ended `Ambiguous`.)
 ///
-/// **Would red if:** the cut were classed a provider failure, refused or
-/// transient (the worker would settle it PROVEN NOT PERFORMED, and a
-/// transient one would be re-run), or the session re-sent the cut request.
+/// **Would red if:** the adapter classified the failure by the bytes that left
+/// rather than by nanocode's typed error (the turn `Ambiguous`), or the gate
+/// lost the tool call (`tool_called: false`).
 #[tokio::test]
-async fn a_model_connection_dropped_mid_response_is_ambiguous() {
+async fn a_model_connection_dropped_mid_response_is_a_transient_failure() {
     let Reply::Events(answer) = message_reply("r2", "DONE", usage(1, 0, 1)) else {
         unreachable!("a message reply is a stream of events")
     };
-    let mock = MockProvider::start(vec![
-        Kind::OpenAi.run("r1", "touch effect"),
+    let mut script = vec![Kind::OpenAi.run("r1", "touch effect")];
+    script.extend(std::iter::repeat_n(
         Reply::DropMidResponse(answer),
-    ])
-    .await;
+        1 + RECONNECTS,
+    ));
+    script.push(message_reply(
+        "r3",
+        "must never be asked for",
+        usage(1, 0, 1),
+    ));
+    let mock = MockProvider::start(script).await;
     let (mut session, witness) = open(&openai(&mock.url, None), DoubleConfig::default());
     let outcome = turn(session.as_mut(), &openai_prompt("go")).await;
-    let TurnOutcome::Ambiguous { issued, evidence } = outcome else {
-        panic!("a cut response is no provider failure, it is ambiguous: {outcome:?}");
+    let TurnOutcome::ProviderFailed {
+        class,
+        reason,
+        tool_called,
+        ..
+    } = outcome
+    else {
+        panic!("a cut response is the provider's transient failure: {outcome:?}");
     };
-    assert_eq!(
-        issued,
-        MayHaveIssued::ModelTokens,
-        "the first crossing is the model call: {evidence}"
-    );
+    assert_eq!(class, ProviderFailureClass::Transient, "{reason}");
     assert!(
-        evidence.contains("error decoding response body"),
-        "the evidence is nanocode's own account of the cut: {evidence}"
+        reason.contains("connection closed before message completed"),
+        "the reason is nanocode's own account of the cut: {reason}"
+    );
+    assert!(tool_called, "the tool frame was forwarded");
+    assert_eq!(
+        session.issuance(),
+        Some(MayHaveIssued::ModelTokens),
+        "the first crossing is the model call"
     );
     assert_eq!(execs(&witness), ["touch effect @ /work"]);
-    assert_eq!(mock.requests().len(), 2, "the cut request is not re-sent");
+    assert_eq!(
+        mock.requests().len(),
+        2 + RECONNECTS,
+        "the cut request is re-sent as nanocode reconnects, and no more"
+    );
 }
 
 /// An operator cancel nanocode confirms on the Anthropic kind, with a `Bash`
 /// in flight in the capsule, is `Cancelled`, carrying the usage the model
 /// call before it reported, and `close` reports nanocode acknowledged it. No
-/// model request follows the cancel (the mock's own log).
+/// model request follows the cancel (the mock's own log). The command is one
+/// that never ends, not a `sleep`: nanocode's Claude `Bash` refuses a
+/// standalone `sleep` of two seconds or more before it runs (MEASURED at
+/// 8ec3b215: "Blocked: standalone sleep 60"), so no `Exec` would reach the
+/// capsule.
 ///
 /// **Would red if:** a confirmed cancel dropped the usage observed so far
 /// (watched: `Cancelled{usage: None}`).
 #[tokio::test]
 async fn an_anthropic_confirmed_cancel_carries_partial_usage() {
     let mock = MockProvider::start(vec![
-        Kind::Anthropic.run("r1", "sleep 60"),
+        Kind::Anthropic.run("r1", "tail -f /dev/null"),
         claude_text_reply("must never be asked for"),
     ])
     .await;
@@ -1943,11 +1995,13 @@ async fn a_tool_result_is_recorded_on_either_kind() {
 /// frame on the double's log.
 #[tokio::test]
 async fn a_dropped_model_connection_after_a_tool_frame_is_a_transient_failure() {
-    let mock = MockProvider::start(vec![
-        exec_command_reply("r1", &exec_args("touch effect"), usage(1, 0, 1)),
-        Reply::Drop,
-    ])
-    .await;
+    let mut script = vec![exec_command_reply(
+        "r1",
+        &exec_args("touch effect"),
+        usage(1, 0, 1),
+    )];
+    script.extend(failed_with_reconnects(Reply::Drop));
+    let mock = MockProvider::start(script).await;
     let (mut session, witness) = open(&openai(&mock.url, None), DoubleConfig::default());
     let outcome = turn(session.as_mut(), &openai_prompt("go")).await;
     let TurnOutcome::ProviderFailed {
@@ -1964,7 +2018,11 @@ async fn a_dropped_model_connection_after_a_tool_frame_is_a_transient_failure() 
         "the first crossing is the model call"
     );
     assert_eq!(execs(&witness), ["touch effect @ /work"]);
-    assert_eq!(mock.requests().len(), 2);
+    assert_eq!(
+        mock.requests().len(),
+        2 + RECONNECTS,
+        "the dropped request and nanocode's re-sends of it"
+    );
 }
 
 /// How long the session gives nanocode to confirm a stop it asked for
@@ -2369,15 +2427,16 @@ async fn every_turn_end_kills_the_capsules_processes_before_the_outcome() {
 #[tokio::test]
 async fn no_tool_frame_reaches_the_capsule_once_the_turn_has_ended() {
     let looping = Gate::default();
-    let mock = MockProvider::start(vec![
-        code_reply(
-            "r1",
-            "// @exec: {\"yield_time_ms\": 200}\nfor (;;) { await tools.exec_command({cmd: \"tick\", yield_time_ms: 250}); }",
-            usage(1, 0, 1),
-        ),
-        Reply::Gated(looping.clone(), Box::new(Reply::Drop)),
-    ])
-    .await;
+    let mut script = vec![code_reply(
+        "r1",
+        "// @exec: {\"yield_time_ms\": 200}\nfor (;;) { await tools.exec_command({cmd: \"tick\", yield_time_ms: 250}); }",
+        usage(1, 0, 1),
+    )];
+    script.extend(failed_with_reconnects(Reply::Gated(
+        looping.clone(),
+        Box::new(Reply::Drop),
+    )));
+    let mock = MockProvider::start(script).await;
     let (mut session, witness) = open(&openai(&mock.url, None), DoubleConfig::default());
     let prompt = openai_prompt("loop");
     let (outcome, ()) = tokio::join!(
@@ -2450,11 +2509,12 @@ const cat = await tools.exec_command({"cmd": "cat", "yield_time_ms": 50});
 await tools.write_stdin({"session_id": cat.session_id, "chars": "x".repeat(2 * 1024 * 1024), "yield_time_ms": 250});
 text("wrote");"#;
     let writing = Gate::default();
-    let mock = MockProvider::start(vec![
-        code_reply("r1", source, usage(1, 0, 1)),
-        Reply::Gated(writing.clone(), Box::new(Reply::Drop)),
-    ])
-    .await;
+    let mut script = vec![code_reply("r1", source, usage(1, 0, 1))];
+    script.extend(failed_with_reconnects(Reply::Gated(
+        writing.clone(),
+        Box::new(Reply::Drop),
+    )));
+    let mock = MockProvider::start(script).await;
     let config = DoubleConfig {
         execs: vec![ExecMode::Hold],
         pause_after_first_stdin: Some(STDIN_PAUSE),
@@ -2521,15 +2581,15 @@ fn interpreter_cpu_ticks() -> u64 {
 /// would spin one core.
 #[tokio::test]
 async fn a_still_running_code_mode_cell_is_ended_at_the_turn_end() {
-    let mock = MockProvider::start(vec![
-        code_reply(
-            "r1",
-            "// @exec: {\"yield_time_ms\": 200}\nwhile (true) {}",
-            usage(1, 0, 1),
-        ),
-        Reply::DropAfter(Duration::from_secs(2)),
-    ])
-    .await;
+    let mut script = vec![code_reply(
+        "r1",
+        "// @exec: {\"yield_time_ms\": 200}\nwhile (true) {}",
+        usage(1, 0, 1),
+    )];
+    script.extend(failed_with_reconnects(Reply::DropAfter(
+        Duration::from_secs(2),
+    )));
+    let mock = MockProvider::start(script).await;
     let (mut session, _witness) = open(&openai(&mock.url, None), DoubleConfig::default());
     let prompt = openai_prompt("spin");
     let (outcome, ()) = tokio::join!(turn(session.as_mut(), &prompt), async {
@@ -2548,8 +2608,8 @@ async fn a_still_running_code_mode_cell_is_ended_at_the_turn_end() {
     );
     assert_eq!(
         mock.requests().len(),
-        2,
-        "the cell yielded and the next call failed"
+        2 + RECONNECTS,
+        "the cell yielded and the next call failed, as did nanocode's re-sends of it"
     );
     assert_no_code_mode_cell_runs("after the turn ended").await;
 }
@@ -2664,11 +2724,11 @@ async fn a_code_mode_cell_in_a_native_step_past_the_shutdown_is_recorded_live() 
     let (mut held, _held_witness) = open(&openai(&sorting.url, None), DoubleConfig::default());
     let held_prompt = openai_prompt("sort");
     let held_cancel = CancelToken::new();
-    let mock = MockProvider::start(vec![
-        a_cell_that_then("r1", A_SPIN),
-        Reply::DropAfter(Duration::from_millis(500)),
-    ])
-    .await;
+    let mut script = vec![a_cell_that_then("r1", A_SPIN)];
+    script.extend(failed_with_reconnects(Reply::DropAfter(
+        Duration::from_millis(500),
+    )));
+    let mock = MockProvider::start(script).await;
     let (mut session, _witness) = open(&openai(&mock.url, None), DoubleConfig::default());
     let prompt = openai_prompt("spin");
     let outcome = tokio::select! {
@@ -2716,11 +2776,11 @@ async fn a_code_mode_cell_in_a_native_step_past_the_shutdown_is_recorded_live() 
 /// been reaped.
 #[tokio::test]
 async fn a_turn_end_whose_cells_reach_an_interrupt_check_records_no_live_worker() {
-    let mock = MockProvider::start(vec![
-        a_cell_that_then("r1", A_SPIN),
-        Reply::DropAfter(Duration::from_millis(1_500)),
-    ])
-    .await;
+    let mut script = vec![a_cell_that_then("r1", A_SPIN)];
+    script.extend(failed_with_reconnects(Reply::DropAfter(
+        Duration::from_millis(1_500),
+    )));
+    let mock = MockProvider::start(script).await;
     let (mut session, _witness) = open(&openai(&mock.url, None), DoubleConfig::default());
     let prompt = openai_prompt("spin");
     let (outcome, ()) = tokio::join!(turn(session.as_mut(), &prompt), async {
@@ -2889,7 +2949,9 @@ async fn close_reports_the_turn_end_it_ran_for_a_dropped_future() {
 /// its own record of reading EOF.
 #[tokio::test]
 async fn a_turn_end_dropped_part_way_is_finished_by_close() {
-    let mock = MockProvider::start(vec![a_spinning_cell("r1"), Reply::Drop]).await;
+    let mut script = vec![a_spinning_cell("r1")];
+    script.extend(failed_with_reconnects(Reply::Drop));
+    let mock = MockProvider::start(script).await;
     let config = DoubleConfig {
         swallow_kill_all: true,
         ..DoubleConfig::default()
@@ -3044,11 +3106,12 @@ async fn a_toolhost_wedged_mid_write_reads_its_stdin_dropped_at_the_turn_end() {
         Value::from(add_file_patch("/work/big.txt", 2 * 1024 * 1024))
     );
     let wedged = Gate::default();
-    let mock = MockProvider::start(vec![
-        code_reply("r1", &source, usage(1, 0, 1)),
-        Reply::Gated(wedged.clone(), Box::new(Reply::Drop)),
-    ])
-    .await;
+    let mut script = vec![code_reply("r1", &source, usage(1, 0, 1))];
+    script.extend(failed_with_reconnects(Reply::Gated(
+        wedged.clone(),
+        Box::new(Reply::Drop),
+    )));
+    let mock = MockProvider::start(script).await;
     let config = DoubleConfig {
         wedge: Some(Wedge {
             body_over: 1024 * 1024,
@@ -3278,10 +3341,12 @@ async fn close_is_bounded_past_a_kill_whose_delivery_never_returns() {
 
 // ── refusal-without-fallback --------------------------------------------------
 
-/// The tools a Responses request offers the model, as `type:name`, and the
-/// host tools a Code Mode cell may call, as their `### \`name\`` sections in
-/// the `exec` tool's description: everything the model can reach, read out of
-/// the request body the mock received.
+/// The tools a Responses request offers the model, as `type:name`, the
+/// namespaces that group them (nanocode 8ec3b215 offers its tools inside one
+/// `namespace` tool, `functions`), and the host tools a Code Mode cell may
+/// call, as their `### \`name\`` sections in the `exec` tool's description:
+/// everything the model can reach, read out of the request body the mock
+/// received.
 fn codex_model_facing(request: &Value) -> Value {
     assert!(
         request
@@ -3290,12 +3355,31 @@ fn codex_model_facing(request: &Value) -> Value {
         "the request carries top-level tools besides the Code Mode set: {}",
         request["tools"]
     );
-    let offered: Vec<&Value> = request["input"]
+    let listed: Vec<&Value> = request["input"]
         .as_array()
         .expect("the request carries an input array")
         .iter()
         .filter(|item| item["type"] == "additional_tools")
         .flat_map(|item| item["tools"].as_array().expect("additional_tools.tools"))
+        .collect();
+    let namespaces: Vec<&str> = listed
+        .iter()
+        .filter(|tool| tool["type"] == "namespace")
+        .map(|tool| tool["name"].as_str().unwrap_or("?"))
+        .collect();
+    let offered: Vec<&Value> = listed
+        .into_iter()
+        .flat_map(|tool| {
+            if tool["type"] == "namespace" {
+                tool["tools"]
+                    .as_array()
+                    .expect("a namespace lists its tools")
+                    .iter()
+                    .collect()
+            } else {
+                vec![tool]
+            }
+        })
         .collect();
     let direct: Vec<String> = offered
         .iter()
@@ -3307,7 +3391,11 @@ fn codex_model_facing(request: &Value) -> Value {
             )
         })
         .collect();
-    json!({"direct": direct, "nested": nested_tools(offered.iter().copied())})
+    json!({
+        "namespaces": namespaces,
+        "direct": direct,
+        "nested": nested_tools(offered.iter().copied()),
+    })
 }
 
 /// The host tools Code Mode's `exec` declares to the model: the `### \`name\``
@@ -3801,14 +3889,34 @@ impl Kind {
         }
     }
 
+    /// A 500 server error, in the kind's error shape: transient to both
+    /// clients, and not one either waits out (MEASURED at 8ec3b215: a 429,
+    /// 502, 503, 504 or 529 each client retries for its patience, up to 600 s,
+    /// `nanocode_http::layer::retry::PATIENCE`).
+    fn server_error(self) -> Reply {
+        match self {
+            Self::OpenAi => Reply::Status(
+                500,
+                json!({"error": {"message": "mock server error", "type": "server_error", "param": null, "code": null}}),
+            ),
+            Self::Anthropic => Reply::Status(
+                500,
+                json!({"type": "error", "error": {"type": "api_error", "message": "mock server error"}}),
+            ),
+        }
+    }
+
     /// The model requests the kind's client sends for one call whose every
-    /// attempt fails transiently: the Responses kind's test endpoint makes
-    /// [`TRANSIENT_ATTEMPTS`]; the Messages client makes five whatever kata
-    /// asks (nanocode 2ac77424 hard-codes them), with backoff between them.
+    /// attempt fails transiently, MEASURED at 8ec3b215: the Responses kind's
+    /// test endpoint makes [`TRANSIENT_ATTEMPTS`], then re-sends the call
+    /// [`RECONNECTS`] times, each again for [`TRANSIENT_ATTEMPTS`]; the
+    /// Messages client makes eleven whatever kata asks (nanocode hard-codes
+    /// them; five at 2ac77424), with backoff between them
+    /// ([`RETRY_EXHAUSTION_BOUND`]).
     const fn transient_attempts(self) -> usize {
         match self {
-            Self::OpenAi => TRANSIENT_ATTEMPTS.get() as usize,
-            Self::Anthropic => 5,
+            Self::OpenAi => TRANSIENT_ATTEMPTS.get() as usize * (1 + RECONNECTS),
+            Self::Anthropic => 11,
         }
     }
 
@@ -3876,8 +3984,10 @@ async fn a_provider_refusal_fails_the_turn_with_the_providers_reason() {
 
 /// **A transient failure that outlives the harness's own retries is a known
 /// failure classed transient, on either kind.** Every attempt the kind's client
-/// makes for the turn's first call is answered 529 overloaded: nanocode retries
-/// it (the mock's own log holds every attempt) and ends the turn on the last.
+/// makes for the turn's first call is answered 500: nanocode retries it (the
+/// mock's own log holds every attempt, [`Kind::transient_attempts`]) and ends
+/// the turn on the last, about 180 s in on the Messages kind
+/// ([`RETRY_EXHAUSTION_BOUND`]).
 /// The outcome is `ProviderFailed` classed `Transient`, naming the provider's
 /// answer, and its charge is UNKNOWN, never zero: no call completed, and a
 /// transient failure is not proof that nothing billed.
@@ -3890,9 +4000,11 @@ async fn a_provider_refusal_fails_the_turn_with_the_providers_reason() {
 async fn a_transient_failure_past_the_harness_retries_is_classed_transient() {
     for kind in KINDS {
         let attempts = kind.transient_attempts();
-        let mock = MockProvider::start(vec![kind.overloaded(); attempts]).await;
+        let mut script = vec![kind.server_error(); attempts];
+        script.push(kind.answer("r1", "must never be asked for"));
+        let mock = MockProvider::start(script).await;
         let (mut session, _witness) = open(&kind.retrying_adapter(&mock), DoubleConfig::default());
-        let outcome = turn(session.as_mut(), &kind.prompt("go")).await;
+        let outcome = exhausting_turn(session.as_mut(), &kind.prompt("go")).await;
         let TurnOutcome::ProviderFailed {
             class,
             reason,
@@ -3904,7 +4016,7 @@ async fn a_transient_failure_past_the_harness_retries_is_classed_transient() {
         };
         assert_eq!(*class, ProviderFailureClass::Transient, "{kind:?}");
         assert!(
-            reason.contains("HTTP 529") && reason.contains("mock overloaded"),
+            reason.contains("HTTP 500") && reason.contains("mock server error"),
             "{kind:?}: the provider's answer: {reason}"
         );
         assert_eq!(*charge, FailedTurnCharge::Unknown, "{kind:?}");
@@ -3968,13 +4080,19 @@ async fn a_provider_failure_after_a_tool_call_says_a_tool_ran() {
 /// does not retry is the provider's refusal, as its HTTPS twin is.** The
 /// production Responses transport is the WebSocket, where the provider answers a
 /// request it refuses with an `error` event stating the HTTP status, not with an
-/// HTTP response. The mock answers the turn's one request over the WebSocket with
-/// such an event: a 400 refusing it for credit, and a 429 `insufficient_quota`
-/// (a code nanocode never retries). Each ends `ProviderFailed` classed
-/// `Refused`, naming the status and the provider's error type and message,
-/// charged NOTHING, no tool run; the mock's own log holds the one request. The
-/// refused set, pinned beside them: an `error` event that states no status, and
-/// a `response.failed` event, stay `Ambiguous{ModelTokens}`.
+/// HTTP response. The mock answers the turn's request over the WebSocket with
+/// such an event, and every re-send of it with the same event: a 400 refusing it
+/// for credit, and a 429 `insufficient_quota` (a code nanocode reads as
+/// terminal). Each ends `ProviderFailed` classed `Refused`, naming the status
+/// and the provider's error type and message, no tool run. MEASURED at
+/// 8ec3b215: nanocode re-sends a request an `error` event refused unless the
+/// event names a terminal code, [`RECONNECTS`] times on a new socket (its
+/// `reconnectable` reads every non-terminal error event so), so the 400 row's
+/// mock log holds the request and its re-sends and its charge is UNKNOWN (a
+/// re-sent request is no proof nothing billed), while the terminal 429 row
+/// holds the one request, charged NOTHING. The refused set, pinned beside them:
+/// an `error` event that states no status (re-sent the same way), and a
+/// `response.failed` event (terminal, sent once), stay `Ambiguous{ModelTokens}`.
 ///
 /// **Would red if:** the adapter read only HTTP rejections as refusals (it did
 /// when the WebSocket's error event went unread: every row
@@ -3988,32 +4106,40 @@ async fn a_websocket_error_event_with_a_4xx_status_is_the_providers_refusal() {
         "type": "insufficient_quota", "code": "insufficient_quota", "param": null,
         "message": "You exceeded your current quota, please check your plan and billing details.",
     });
-    for (label, event, refused_as) in [
+    for (label, event, refused_as, requests) in [
         (
             "a 400 for credit",
             json!({"type": "error", "status": 400, "error": credit}),
-            Some(format!("HTTP 400 invalid_request_error: {CREDIT_REFUSAL}")),
+            Some((
+                format!("HTTP 400 invalid_request_error: {CREDIT_REFUSAL}"),
+                FailedTurnCharge::Unknown,
+            )),
+            1 + RECONNECTS,
         ),
         (
             "a 429 insufficient_quota",
             json!({"type": "error", "status": 429, "error": quota}),
-            Some(
+            Some((
                 "HTTP 429 insufficient_quota (insufficient_quota): You exceeded your current quota"
                     .to_owned(),
-            ),
+                FailedTurnCharge::Nothing,
+            )),
+            1,
         ),
         (
             "an error event stating no status",
             json!({"type": "error", "error": credit}),
             None,
+            1 + RECONNECTS,
         ),
         (
             "a response.failed event",
             json!({"type": "response.failed", "response": {"id": "r1", "error": quota}}),
             None,
+            1,
         ),
     ] {
-        let mock = MockProvider::start(vec![Reply::Events(vec![event])]).await;
+        let mock = MockProvider::start(vec![Reply::Events(vec![event]); 1 + RECONNECTS]).await;
         let (mut session, _witness) = open(
             &openai(&mock.url, Some(&mock.ws_url)),
             DoubleConfig::default(),
@@ -4021,10 +4147,10 @@ async fn a_websocket_error_event_with_a_4xx_status_is_the_providers_refusal() {
         let outcome = turn(session.as_mut(), &openai_prompt("go")).await;
         assert_eq!(
             mock.requests().len(),
-            1,
-            "{label}: one request, never re-sent"
+            requests,
+            "{label}: the request and nanocode's re-sends of it"
         );
-        let Some(refused_as) = refused_as else {
+        let Some((refused_as, charged)) = refused_as else {
             assert!(
                 matches!(
                     outcome,
@@ -4048,7 +4174,7 @@ async fn a_websocket_error_event_with_a_4xx_status_is_the_providers_refusal() {
         };
         assert_eq!(*class, ProviderFailureClass::Refused, "{label}");
         assert!(reason.contains(&refused_as), "{label}: {reason}");
-        assert_eq!(*charge, FailedTurnCharge::Nothing, "{label}");
+        assert_eq!(*charge, charged, "{label}");
         assert!(!tool_called, "{label}");
     }
 }
@@ -4058,10 +4184,18 @@ async fn a_websocket_error_event_with_a_4xx_status_is_the_providers_refusal() {
 /// "usage_limit_reached"`) is no blip a re-run outlasts: the limit resets on the
 /// plan's schedule, hours off. nanocode reads no such code, so over HTTPS its 429
 /// is retryable to nanocode, and on the WebSocket an `error` event may state no
-/// status at all. The mock answers the turn's one request with it three ways — an
+/// status at all. The mock answers the turn's request with it three ways — an
 /// HTTPS 429, a WebSocket `error` event stating 429, one stating none — and each
 /// ends `ProviderFailed` classed `Refused`, its reason naming the usage quota and
-/// the provider's code, charged NOTHING; the mock's own log holds the one request.
+/// the provider's code. MEASURED at 8ec3b215: nanocode waits out a 429 for as
+/// long as its patience allows (600 s, `nanocode_http::layer::retry::PATIENCE`,
+/// whatever the endpoint's `max_attempts`) unless the answer's `retry-after`
+/// already passes it, so the mock's 429 states `retry-after: 3600` (the body's
+/// `resets_in_seconds`; no real provider's 429 has been measured) and is sent
+/// once, charged NOTHING; each WebSocket event is re-sent [`RECONNECTS`] times on a
+/// new socket (nanocode's `reconnectable` reads every non-terminal error event
+/// so), the mock answering each re-send the same, and charged UNKNOWN (a
+/// re-sent request is no proof nothing billed).
 ///
 /// **Would red if:** the adapter classed the answer by nanocode's retry advice
 /// alone (watched, before `provider_failure` read the code by name: the HTTPS
@@ -4072,11 +4206,17 @@ async fn a_plan_usage_limit_is_refused_on_both_transports_naming_the_quota() {
         "type": "usage_limit_reached", "plan_type": "plus", "resets_in_seconds": 3600,
         "message": "The usage limit has been reached",
     });
-    for (label, reply, websocket) in [
+    for (label, reply, websocket, requests, charged) in [
         (
             "an HTTPS 429",
-            Reply::Status(429, json!({"error": limit})),
+            Reply::StatusWith(
+                429,
+                vec![("retry-after", "3600".to_owned())],
+                json!({"error": limit}),
+            ),
             false,
+            1,
+            FailedTurnCharge::Nothing,
         ),
         (
             "a WebSocket error event stating 429",
@@ -4084,21 +4224,25 @@ async fn a_plan_usage_limit_is_refused_on_both_transports_naming_the_quota() {
                 json!({"type": "error", "status": 429, "error": limit}),
             ]),
             true,
+            1 + RECONNECTS,
+            FailedTurnCharge::Unknown,
         ),
         (
             "a WebSocket error event stating no status",
             Reply::Events(vec![json!({"type": "error", "error": limit})]),
             true,
+            1 + RECONNECTS,
+            FailedTurnCharge::Unknown,
         ),
     ] {
-        let mock = MockProvider::start(vec![reply]).await;
+        let mock = MockProvider::start(vec![reply; 1 + RECONNECTS]).await;
         let adapter = openai(&mock.url, websocket.then_some(mock.ws_url.as_str()));
         let (mut session, _witness) = open(&adapter, DoubleConfig::default());
         let outcome = turn(session.as_mut(), &openai_prompt("go")).await;
         assert_eq!(
             mock.requests().len(),
-            1,
-            "{label}: one request, never re-sent"
+            requests,
+            "{label}: the request and nanocode's re-sends of it"
         );
         let TurnOutcome::ProviderFailed {
             class,
@@ -4116,7 +4260,7 @@ async fn a_plan_usage_limit_is_refused_on_both_transports_naming_the_quota() {
                 && reason.contains("The usage limit has been reached"),
             "{label}: the reason names the quota and the provider's answer: {reason}"
         );
-        assert_eq!(*charge, FailedTurnCharge::Nothing, "{label}");
+        assert_eq!(*charge, charged, "{label}");
         assert!(!tool_called, "{label}");
     }
 }
@@ -4180,10 +4324,12 @@ async fn a_plan_usage_limit_in_a_response_failed_event_is_refused_naming_the_quo
 /// Responses transports.** The provider refuses a request chained to a stored
 /// response it no longer holds; a fresh attempt starts a fresh conversation that
 /// chains to none, so the answer is no refusal of the agent. The mock answers
-/// the turn's one request with the 400 the Responses API sends for it, over HTTPS
+/// the turn's request with the 400 the Responses API sends for it, over HTTPS
 /// and as a WebSocket `error` event stating 400: each ends `ProviderFailed`
-/// classed `Transient`, naming the provider's code; the mock's own log holds the
-/// one request.
+/// classed `Transient`, naming the provider's code. The mock's own log holds
+/// the one HTTPS request, and the WebSocket request with its [`RECONNECTS`]
+/// re-sends (MEASURED at 8ec3b215: nanocode re-sends a request a non-terminal
+/// error event refused on a new socket; the mock answers each the same).
 ///
 /// **Would red if:** the adapter read every non-retryable 4xx as a refusal
 /// (watched, before `provider_failure` read the code by name: the HTTPS row
@@ -4194,23 +4340,29 @@ async fn a_previous_response_not_found_is_transient_on_both_transports() {
         "type": "invalid_request_error", "code": "previous_response_not_found",
         "param": "previous_response_id", "message": "Previous response with id 'resp_1' not found.",
     });
-    for (label, reply, websocket) in [
+    for (label, reply, websocket, requests) in [
         (
             "an HTTPS 400",
             Reply::Status(400, json!({"error": gone})),
             false,
+            1,
         ),
         (
             "a WebSocket error event stating 400",
             Reply::Events(vec![json!({"type": "error", "status": 400, "error": gone})]),
             true,
+            1 + RECONNECTS,
         ),
     ] {
-        let mock = MockProvider::start(vec![reply]).await;
+        let mock = MockProvider::start(vec![reply; 1 + RECONNECTS]).await;
         let adapter = openai(&mock.url, websocket.then_some(mock.ws_url.as_str()));
         let (mut session, _witness) = open(&adapter, DoubleConfig::default());
         let outcome = turn(session.as_mut(), &openai_prompt("go")).await;
-        assert_eq!(mock.requests().len(), 1, "{label}: one request");
+        assert_eq!(
+            mock.requests().len(),
+            requests,
+            "{label}: the request and nanocode's re-sends of it"
+        );
         let TurnOutcome::ProviderFailed { class, reason, .. } = &outcome else {
             panic!("{label}: expected ProviderFailed, got {outcome:?}");
         };
@@ -4484,15 +4636,20 @@ async fn a_scope_without_work_is_refused_at_open() {
 /// 3 MiB of stdout is handed to the tool as at most the 1 MiB head+tail window
 /// and the count of what fell out between. The Code Mode cell measures the
 /// `exec_command` result it was given and reports it as its text, which the
-/// mock reads back from the next request.
+/// mock reads back from the next request. nanocode cuts the text it hands the
+/// model further, to its own tool-output budget (MEASURED at 8ec3b215: about
+/// 40 KB for this model whatever `max_output_tokens` asks, keeping the head
+/// and tail), which drops the window's marker from the middle; its result's
+/// `original_token_count` is its count of the text the session handed it, a
+/// token per four bytes, so that count, bounded by the window and its marker,
+/// is the window read through nanocode.
 #[tokio::test]
 async fn a_flooding_session_reaches_the_tool_as_its_bounded_window() {
     let source = format!(
         "const result = await tools.exec_command({});\n\
-         text(JSON.stringify({{length: result.output.length, elided: \
-         result.output.includes(\"{} bytes elided\")}}));",
+         text(JSON.stringify({{length: result.output.length, \
+         original: result.original_token_count}}));",
         json!({"cmd": "yes", "yield_time_ms": 30_000, "max_output_tokens": 4_000_000}),
-        2 * 1024 * 1024
     );
     let mock = MockProvider::start(vec![
         code_reply("r1", &source, usage(1, 0, 1)),
@@ -4520,9 +4677,19 @@ async fn a_flooding_session_reaches_the_tool_as_its_bounded_window() {
         reported <= 1024 * 1024 + 64,
         "the tool was handed {reported} bytes of a 3 MiB session"
     );
+    let original = second
+        .split("\\\"original\\\":")
+        .nth(1)
+        .and_then(|rest| rest.split(['}', ',']).next())
+        .and_then(|count| count.parse::<usize>().ok())
+        .unwrap_or_else(|| panic!("the cell reported nanocode's count: {second}"));
     assert!(
-        second.contains("\\\"elided\\\":true"),
-        "the window states what fell out of it: {second}"
+        original * 4 <= 1024 * 1024 + 64 + 3,
+        "nanocode was handed {original} tokens of a 3 MiB session, past the 1 MiB window"
+    );
+    assert!(
+        original * 4 >= 1024 * 1024,
+        "nanocode was handed {original} tokens, less than the full 1 MiB window"
     );
 }
 
@@ -4774,25 +4941,64 @@ async fn a_stray_read_takes_no_scripted_reply_from_the_mock_provider() {
 /// turn whose first model call the mock never answered then ended as
 /// `TIMEOUT [60.010s]`, its output only `(test timed out)`, and under the 30 s
 /// bound as `FAIL [30.010s]`, `the turn did not end within TURN_BOUND, 30 s`.
+///
+/// The same holds, against its own kill, for each cell that waits
+/// [`RETRY_EXHAUSTION_BOUND`] for a turn ([`RETRY_EXHAUSTION_CELLS`]): a
+/// `[[profile.default.overrides]]` entry whose `filter` names the cell sets
+/// its kill to at least twice that bound.
 #[test]
 fn the_turn_bound_is_at_most_half_of_nextests_kill() {
     let config: toml::Value = toml::from_str(include_str!("../../../.config/nextest.toml"))
         .expect("parse .config/nextest.toml");
-    let slow = &config["profile"]["default"]["slow-timeout"];
-    let period = slow["period"].as_str().expect("a slow-timeout period");
-    let seconds = period
-        .strip_suffix('s')
-        .and_then(|seconds| seconds.parse::<u64>().ok())
-        .unwrap_or_else(|| panic!("a period in whole seconds, not `{period}`"));
-    let periods = slow["terminate-after"]
-        .as_integer()
-        .and_then(|periods| u64::try_from(periods).ok())
-        .expect("a terminate-after count");
-    let kill = Duration::from_secs(seconds * periods);
+    let kill_of = |slow: &toml::Value| {
+        let period = slow["period"].as_str().expect("a slow-timeout period");
+        let seconds = period
+            .strip_suffix('s')
+            .and_then(|seconds| seconds.parse::<u64>().ok())
+            .unwrap_or_else(|| panic!("a period in whole seconds, not `{period}`"));
+        let periods = slow["terminate-after"]
+            .as_integer()
+            .and_then(|periods| u64::try_from(periods).ok())
+            .expect("a terminate-after count");
+        Duration::from_secs(seconds * periods)
+    };
+    let kill = kill_of(&config["profile"]["default"]["slow-timeout"]);
     assert!(
         TURN_BOUND * 2 <= kill,
         "TURN_BOUND {}s is over half of nextest's {}s kill",
         TURN_BOUND.as_secs(),
         kill.as_secs()
     );
+    let overrides = config["profile"]["default"]
+        .get("overrides")
+        .and_then(toml::Value::as_array)
+        .map_or(&[][..], Vec::as_slice);
+    for cell in RETRY_EXHAUSTION_CELLS {
+        let kill = overrides
+            .iter()
+            .filter(|entry| {
+                entry
+                    .get("filter")
+                    .and_then(toml::Value::as_str)
+                    .is_some_and(|filter| filter.contains(cell))
+            })
+            .find_map(|entry| entry.get("slow-timeout").map(kill_of))
+            .unwrap_or_else(|| {
+                panic!("no `[[profile.default.overrides]]` slow-timeout names `{cell}`")
+            });
+        assert!(
+            RETRY_EXHAUSTION_BOUND * 2 <= kill,
+            "{cell}: RETRY_EXHAUSTION_BOUND {}s is over half of its {}s kill",
+            RETRY_EXHAUSTION_BOUND.as_secs(),
+            kill.as_secs()
+        );
+    }
 }
+
+/// The cells that wait [`RETRY_EXHAUSTION_BOUND`] for a turn whose Messages
+/// call exhausts nanocode's retries.
+const RETRY_EXHAUSTION_CELLS: [&str; 3] = [
+    "a_transient_failure_past_the_harness_retries_is_classed_transient",
+    "an_anthropic_dropped_model_connection_after_a_tool_frame_is_a_transient_failure",
+    "a_refused_messages_connect_is_marked_conservatively",
+];

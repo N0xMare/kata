@@ -102,16 +102,16 @@ depends on kata-agent-nanocode (`cargo tree -i kata-agent-nanocode` lists
 them).
 
 Vendored and modified. vendor/nanocode-code-mode-engine/ is a copy of
-nanocode's crates/runtime/code-mode-engine (the QuickJS Code Mode worker) at
+nanocode's crates/runtime/code-mode-engine (the Code Mode host over djs) at
 that revision, with its Cargo.toml's workspace-inherited fields resolved, and
 Cargo.toml's `[patch]` builds every dependency on that crate from the copy.
 vendor/nanocode-code-mode-engine.patch is authored by kata and is the whole
 of kata's change to it; `just nanocode-vendor-check` refuses a copy that is
 anything else. The patch is described in docs/development/nanocode.md.
 
-The engine builds QuickJS (quickjs-ng) from C through rquickjs and
-rquickjs-sys (crates.io, MIT); QuickJS itself is MIT ("Copyright (c)
-2017-2026 Fabrice Bellard" and others, in rquickjs-sys's quickjs/LICENSE).
+The engine runs JavaScript in djs, nanocode's own engine (its
+crates/patches/djs, fetched from the same repository at the same revision,
+MIT OR Apache-2.0 as the workspace states), built from Rust alone.
 
 ==============================================================================
 4. Other Rust dependencies (crates.io) — statically linked into kata

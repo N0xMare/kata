@@ -6,9 +6,9 @@
 //! The witnesses do not share the adapter's code: the engine's own setter
 //! (which names the limits it holds), the mock's log of the request bodies it
 //! received (what the model was told), and the kernel's account of this
-//! process's threads and of its interpreter processes (`/proc`). The installer
-//! runs every cell in an interpreter process, this binary re-executed (its
-//! entry below). Each cell calls the installer first, as the
+//! process's interpreter processes and of its own peak resident set (`/proc`).
+//! The installer runs every cell in an interpreter process, this binary
+//! re-executed (its entry below). Each cell calls the installer first, as the
 //! worker does, and this binary installs no other limits: the engine's are
 //! process-global, so cells under other limits live in their own binaries.
 
@@ -19,7 +19,10 @@ mod mock_provider;
 #[allow(dead_code)]
 mod openai_turn;
 #[path = "fixtures/quickjs_threads.rs"]
+#[allow(dead_code)]
 mod quickjs_threads;
+#[path = "fixtures/resident.rs"]
+mod resident;
 #[path = "fixtures/toolhost_double.rs"]
 #[allow(dead_code)]
 mod toolhost_double;
@@ -28,32 +31,34 @@ use std::time::Duration;
 
 use kata_agent::adapter::TurnOutcome;
 use kata_agent_nanocode::{CODE_MODE_LIMITS, install_code_mode_limits};
+use kata_code_mode_host::{CodeModeLimits, Program};
 use mock_provider::{
     Gate, MockProvider, Reply, call_output, code_reply, message_reply, usage, wait_reply,
 };
-use nanocode_code_mode_engine::{NativeLimits, set_native_limits};
 use openai_turn::{bounded, open, openai, openai_prompt, turn};
-use quickjs_threads::{interpreters, once_listed, quickjs_threads};
+use quickjs_threads::{interpreters, once_listed};
+use resident::peak_resident_bytes;
 use toolhost_double::DoubleConfig;
 
 // The Code Mode limits this binary installs run each cell in an interpreter
 // process: this binary, re-executed.
 kata_code_mode_host::interpreter_entry!();
 
-/// The installer leaves exactly kata's limits installed: the engine refuses
-/// any other limits afterwards and names the ones it holds.
+/// The installer leaves exactly kata's limits installed: the interpreter host
+/// refuses any other limits afterwards and names the ones it holds.
 #[test]
 fn the_installer_installs_kata_code_mode_limits() {
     install_code_mode_limits();
     install_code_mode_limits();
-    let other = NativeLimits {
+    let other = CodeModeLimits {
         memory_bytes: CODE_MODE_LIMITS.memory_bytes / 2,
         ..CODE_MODE_LIMITS
     };
     assert_eq!(
-        set_native_limits(other),
+        kata_code_mode_host::install(other, Program::this_executable())
+            .map_err(|(limits, _)| limits),
         Err(CODE_MODE_LIMITS),
-        "the engine holds kata's limits"
+        "the interpreter host holds kata's limits"
     );
 }
 
@@ -79,15 +84,23 @@ const NEXT_CELL: &str = "await new Promise((resolve) => setTimeout(resolve, 1000
 /// model that cell's failure, naming the out-of-memory error, not a result.
 /// The model's second cell then runs and its text reaches the third request,
 /// and the turn completes with the final message, in this process, which is
-/// the one the main runs the harness in. The cells run in an interpreter
-/// process, never here: the kernel lists no QuickJS thread in this process,
-/// and the same one interpreter process from when it first lists one (the
-/// first cell's, before that cell's 500 ms wait ends in its allocation) and
-/// while the second cell waits, so the host survives the limit hit. The
-/// out-of-memory hit reaches the cell as a JavaScript exception, so the host
-/// is kept with or without the vendored patch's failed-cell end; the wall cell
-/// in `code_mode_wall_through_adapter.rs` is the adapter-level witness of that
-/// end keeping it.
+/// the one the main runs the harness in. MEASURED, the first cell's result:
+/// its header, then `Script error:\nScript stopped: the cell ran out of
+/// memory.` (djs's heap hit, which no script can catch).
+///
+/// The cells run in interpreter processes, never here: this process's peak
+/// resident set stays under half the heap limit the first cell filled
+/// (MEASURED: about 20 MiB), and the kernel lists exactly one interpreter
+/// process when it first lists one (the first cell's, before that cell's
+/// 500 ms wait ends in its allocation) and while the second cell waits, each
+/// cell's its own: nanocode spawns a host per cell, and kata gives each host
+/// an interpreter of its own, reaped when the host is dropped, so the first
+/// cell's is gone by then (the listing names unreaped ones too).
+///
+/// **Would red if:** the cells ran in this process (its peak resident set past
+/// half the heap limit, and no interpreter listed), the first cell's
+/// interpreter outlived its host (two listed, or the same one), or the patched
+/// engine stopped reporting a heap hit (nothing recorded).
 #[tokio::test]
 async fn a_cell_allocating_past_the_memory_limit_fails_to_the_model_and_the_turn_goes_on() {
     install_code_mode_limits();
@@ -106,7 +119,6 @@ async fn a_cell_allocating_past_the_memory_limit_fails_to_the_model_and_the_turn
             // own schedule, and its cell allocates only 500 ms after it starts.
             let allocating =
                 bounded("the first cell's interpreter", once_listed(1, interpreters)).await;
-            assert_eq!(quickjs_threads().len(), 0, "a QuickJS thread runs here");
             mock.wait_for_requests(2).await;
             tokio::time::sleep(Duration::from_millis(300)).await;
             (allocating, interpreters())
@@ -120,7 +132,8 @@ async fn a_cell_allocating_past_the_memory_limit_fails_to_the_model_and_the_turn
     );
     let failed = call_output(&requests[1], "call_r1").expect("the model was told the first cell");
     assert!(
-        failed.contains("Script failed") && failed.contains("out of memory"),
+        failed.contains("Script failed")
+            && failed.contains("Script error:\\nScript stopped: the cell ran out of memory."),
         "the first cell's output names its memory failure: {failed}"
     );
     assert!(
@@ -142,8 +155,14 @@ async fn a_cell_allocating_past_the_memory_limit_fails_to_the_model_and_the_turn
         "one interpreter while the first cell waits: {allocating:?}"
     );
     assert_eq!(
-        allocating, next_running,
-        "the cell after the limit hit ran in another interpreter process"
+        next_running.len(),
+        1,
+        "one interpreter while the second cell waits: {next_running:?}"
+    );
+    assert!(
+        allocating.is_disjoint(&next_running),
+        "the second cell ran in the first cell's interpreter process, which outlived its \
+         host: {allocating:?} {next_running:?}"
     );
     let evidence = session.take_evidence();
     assert!(
@@ -157,24 +176,34 @@ async fn a_cell_allocating_past_the_memory_limit_fails_to_the_model_and_the_turn
     );
     let close = session.close().await;
     assert!(close.is_confirmed(), "{close:?}");
+    let peak = peak_resident_bytes();
+    assert!(
+        peak < u64::try_from(CODE_MODE_LIMITS.memory_bytes / 2).expect("a byte count"),
+        "this process's peak resident set is {peak} bytes: the cell filled its heap here"
+    );
 }
 
-/// **A Code Mode host that ends does not end Code Mode for the turn.** The
-/// model starts a cell that spins in JavaScript and yields after 200 ms, then
-/// calls `wait` with `terminate: true`: nanocode ends that cell by terminating
-/// its host, whose interpreter process is killed and reaped. The model's next
-/// cell runs, and its text reaches the model. The kernel's process list is the
-/// witness that it ran on a NEW host: while the first cell spins there is one
-/// interpreter process, and while the third cell waits on a timer there is one
-/// other.
+/// **A terminated cell's interpreter is killed and reaped, and Code Mode goes
+/// on for the turn.** The model starts a cell that spins in JavaScript and
+/// yields after 200 ms, then calls `wait` with `terminate: true`: nanocode ends
+/// that cell by terminating its host, and kata's supervisor kills and reaps
+/// the host's interpreter process. The model's next cell runs, on a host of
+/// its own, and its text reaches the model. The kernel's process list is the
+/// witness: while the first cell spins it lists one interpreter process, and
+/// while the third cell waits on a timer one other, the spinning one gone
+/// (the listing names unreaped interpreters too, so it was reaped).
 ///
 /// Each sample is taken on the kernel listing an interpreter, and the model's
 /// next answer is held until it is taken: the terminate until the first cell's
 /// interpreter is listed, the turn's last answer until the third cell's is.
 /// An interpreter process starts on its own schedule, so a sample taken on a
 /// sleep instead can land before it is listed (a host under load).
+///
+/// **Would red if:** a terminate left its cell's interpreter running or
+/// unreaped (two listed while the third cell waits), or an ended host ended
+/// Code Mode for the turn (the third cell fails).
 #[tokio::test]
-async fn a_cell_after_its_host_thread_ended_runs_on_a_fresh_host() {
+async fn a_terminated_cell_s_interpreter_is_reaped_and_the_next_cell_runs() {
     install_code_mode_limits();
     let first_listed = Gate::default();
     let third_listed = Gate::default();
@@ -251,9 +280,10 @@ async fn a_cell_after_its_host_thread_ended_runs_on_a_fresh_host() {
         1,
         "one interpreter while the third cell waits: {waiting:?}"
     );
-    assert_ne!(
-        spinning, waiting,
-        "the third cell ran in the terminated cell's interpreter process"
+    assert!(
+        spinning.is_disjoint(&waiting),
+        "the terminated cell's interpreter process outlived the terminate: {spinning:?} \
+         {waiting:?}"
     );
     let close = session.close().await;
     assert!(close.is_confirmed(), "{close:?}");

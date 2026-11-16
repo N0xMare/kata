@@ -18,10 +18,11 @@ version = 2
 # Measure reachability the way the shipped build resolves features: `--workspace`
 # (the justfile's `build` and the flake's cargoBuildFlags), with
 # `cargo tree --workspace -e normal,features -i <crate>`. A `-p` resolve misses
-# what workspace feature unification turns on. Measured that way, ctutils reaches
-# BOTH shipped binaries: hmac 0.13 turns on digest 0.11.3's `mac` feature
-# (dep:ctutils), and that digest reaches `kata` and `kata-worker-bin` through
-# sha1 <- nanocode-audio, so the >=0.4.4 floor is the mitigation there.
+# what workspace feature unification turns on. Measured that way at nanocode
+# 8ec3b215, ctutils links into no shipped binary: its normal paths end at
+# kata-test-seeded, which only dev-dependencies reach. Before that bump it reached both shipped binaries
+# (digest 0.11 through sha1 <- nanocode-audio, which nanocode has since dropped),
+# so the >=0.4.4 floor stays the mitigation should a path come back.
 # crypto-bigint links into no shipped binary: its one normal path
 # (commonware-cryptography <- commonware-runtime) ends at the kata-test-seeded
 # library, which only dev-dependencies reach (kata-api, kata-transport,

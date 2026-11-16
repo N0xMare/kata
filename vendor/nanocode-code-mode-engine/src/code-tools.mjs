@@ -1,15 +1,15 @@
 
 
-
+const ignore = () => {};
 export function createCodeTools(names, invoke) {
   const helpers = {
 
     observe(promise) {
-      promise.catch(() => {});
+      promise.catch(ignore);
       return promise;
     },
-    async dispatch(name, input) {
-      return invoke(name, input);
+    dispatch(name, input) {
+      try { return invoke(name, input); } catch (error) { return helpers.observe(Promise.reject(error)); }
     },
     async unavailable(name) {
       const error = new Error(`TOOL_NOT_AVAILABLE: Tool "${name}" is not available in this Code Mode execution. Check ALL_TOOLS for callable names. A tool exposed directly by the host may need to be called through its direct tool entry instead.`);
@@ -18,19 +18,8 @@ export function createCodeTools(names, invoke) {
       throw error;
     },
   };
-  const target = Object.create(null);
-  for (const name of names) {
-    Object.defineProperty(target, name, {
-      enumerable: true,
-      value(input) {
-        return helpers.observe(helpers.dispatch(name, input));
-      },
-    });
-  }
-  Object.freeze(target);
-  return new Proxy(target, {
-    get(target, name) {
-      if (Object.prototype.hasOwnProperty.call(target, name)) return target[name];
+  const missing = new Proxy(Object.create(null), {
+    get(_, name) {
 
 
       if (typeof name !== "string" || name === "then") return undefined;
@@ -41,12 +30,22 @@ export function createCodeTools(names, invoke) {
       }
       return {
         missing(input) {
-          if (input && typeof input === "object" && typeof input.hand === "string") {
-            return helpers.observe(helpers.dispatch(name, input));
+          if (name in Object.prototype || name === "toJSON") {
+            return helpers.observe(helpers.unavailable(name));
           }
-          return helpers.observe(helpers.unavailable(name));
+          return helpers.dispatch(name, input);
         },
       }.missing;
     },
   });
+  const target = Object.create(missing);
+  for (const name of names) {
+    Object.defineProperty(target, name, {
+      enumerable: true,
+      value(input) {
+        return helpers.dispatch(name, input);
+      },
+    });
+  }
+  return Object.freeze(target);
 }

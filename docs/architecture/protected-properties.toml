@@ -798,10 +798,10 @@ pins = "a panel's seat-0 capsule whose frame the delivery door cannot build is s
 [[property.cell]]
 package = "kata-worker"
 binary = "agent_turn_capsule"
-test = "a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_nothing"
+test = "a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_nothing_unless_resent"
 kind = "host-free"
 layer = "L1"
-pins = "on both nanocode kinds and both Responses transports, a turn whose one request the provider refused for credit (an HTTP 400; on the WebSocket, the `error` event stating status 400), through the worker and the real accept path, read off a second raw handle: verdict `proven_not_performed`, `provider_failure` `refused`, the authoritative `0` charge, and the provider's error type and message in the worker's reason; one request in the mock's own log (red at a81296c51: `proven_ambiguous`; the WebSocket row red while the error event went unread)"
+pins = "on both nanocode kinds and both Responses transports, a turn whose one request the provider refused for credit (an HTTP 400; on the WebSocket, the `error` event stating status 400, and also a 429 `insufficient_quota` event), through the worker and the real accept path, read off a second raw handle: verdict `proven_not_performed`, `provider_failure` `refused`, and the provider's error type and message in the worker's reason; the authoritative `0` charge and one request in the mock's own log where nanocode sent the request once, and an `unavailable` charge with the request and its five re-sends for the WebSocket 400 event, which nanocode re-sends since 8ec3b215 (red at a81296c51: `proven_ambiguous`; the WebSocket row red while the error event went unread)"
 
 [[property.cell]]
 package = "kata-worker"
@@ -809,7 +809,7 @@ binary = "agent_turn_capsule"
 test = "a_transient_nanocode_failure_is_not_performed_and_a_fresh_attempt_completes"
 kind = "host-free"
 layer = "L1"
-pins = "on both nanocode kinds, a turn whose first call's every attempt is answered 529 is, durably, `proven_not_performed` with `provider_failure` `transient` and an `Unavailable` charge; a fresh attempt against the same mock completes on its next answer (red at a81296c51: `proven_ambiguous`, which the main never re-runs)"
+pins = "on both nanocode kinds, a turn whose first call's every attempt is answered 500 (a 529 is waited out for up to 600 s since 8ec3b215; the Responses client sends 12, the Messages client 1, `retry-after` 61 s) is, durably, `proven_not_performed` with `provider_failure` `transient` naming HTTP 500 and an `Unavailable` charge; a fresh attempt against the same mock completes on its next answer (red at a81296c51: `proven_ambiguous`, which the main never re-runs)"
 
 [[property.cell]]
 package = "kata-worker"
@@ -913,7 +913,7 @@ binary = "nanocode_qualification"
 test = "an_anthropic_dropped_model_connection_after_a_tool_frame_is_a_transient_failure"
 kind = "host-free"
 layer = "L1"
-pins = "the Anthropic kind: the provider drops the MODEL connection on the request after a `Bash` frame was forwarded: a `Transient` provider failure that says a tool ran, the watermark at the first crossing, `ModelTokens`, the tool's frame on the double's log, and the mock's log holding the first call and nanocode's five attempts of the dropped one, one send and four re-sends (MEASURED); the toolhost wire's own break stays ambiguous"
+pins = "the Anthropic kind: the provider drops the MODEL connection on the request after a `Bash` frame was forwarded: a `Transient` provider failure that says a tool ran, the watermark at the first crossing, `ModelTokens`, the tool's frame on the double's log, and the mock's log holding the first call and nanocode's eleven attempts of the dropped one, one send and ten re-sends (MEASURED at 8ec3b215, about 180 s; the cell's turn is bounded at 300 s under its own nextest kill); the toolhost wire's own break stays ambiguous"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -929,7 +929,7 @@ binary = "nanocode_qualification"
 test = "a_transient_failure_past_the_harness_retries_is_classed_transient"
 kind = "host-free"
 layer = "L1"
-pins = "on both kinds, every attempt of the turn's first call answered 529 overloaded: the mock's own log holds every attempt the kind's client makes (the Responses test endpoint's two, the Messages client's hard-coded five) and the turn ends `ProviderFailed` classed `Transient`, naming the provider's answer, charged UNKNOWN, never zero (red at a81296c51: `Ambiguous{ModelTokens}`)"
+pins = "on both kinds, every attempt of the turn's first call answered 500 (a 529 is now waited out for up to 600 s): the mock's own log holds every attempt the kind's client makes (the Responses test endpoint's two, each re-sent five times, 12; the Messages client's hard-coded eleven) and the turn ends `ProviderFailed` classed `Transient`, naming the provider's answer, charged UNKNOWN, never zero (red at a81296c51: `Ambiguous{ModelTokens}`)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -945,7 +945,7 @@ binary = "nanocode_qualification"
 test = "a_websocket_error_event_with_a_4xx_status_is_the_providers_refusal"
 kind = "host-free"
 layer = "L1"
-pins = "on the Responses kind's production transport, the WebSocket, the turn's one request answered with an `error` event stating status 400 (credit) or 429 (`insufficient_quota`) ends `ProviderFailed` classed `Refused`, naming the status, type and message, charged NOTHING, one request in the mock's own log; an `error` event stating no status and a `response.failed` event stay `Ambiguous{ModelTokens}` (red while the error event went unread: every row ambiguous; red with a missing status read as 400: the status-less row `Refused`)"
+pins = "on the Responses kind's production transport, the WebSocket, the turn's one request answered with an `error` event stating status 400 (credit) or 429 (`insufficient_quota`) ends `ProviderFailed` classed `Refused`, naming the status, type and message, charged Unknown (nanocode re-sent the event's stream, so a retried attempt ran), six requests in the mock's own log (the call and nanocode's five re-sends); an `error` event stating no status and a `response.failed` event stay `Ambiguous{ModelTokens}` (red while the error event went unread: every row ambiguous; red with a missing status read as 400: the status-less row `Refused`)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -953,7 +953,7 @@ binary = "nanocode_qualification"
 test = "a_plan_usage_limit_is_refused_on_both_transports_naming_the_quota"
 kind = "host-free"
 layer = "L1"
-pins = "a ChatGPT plan's usage quota answer (`error.type = \"usage_limit_reached\"`) to the turn's one request — an HTTPS 429 nanocode reads as retryable, a WebSocket `error` event stating 429, and one stating no status — ends `ProviderFailed` classed `Refused` on each, its reason naming the usage quota, the code and the provider's message, charged NOTHING, one request in the mock's own log (red before the adapter read the code by name: the HTTPS row `Transient`)"
+pins = "a ChatGPT plan's usage quota answer (`error.type = \"usage_limit_reached\"`) to the turn's one request — an HTTPS 429 nanocode reads as retryable, a WebSocket `error` event stating 429, and one stating no status — ends `ProviderFailed` classed `Refused` on each, its reason naming the usage quota, the code and the provider's message (the HTTPS 429 carries `retry-after: 3600`, which nanocode's 600 s patience does not wait out; the WebSocket events' streams re-sent five times) (red before the adapter read the code by name: the HTTPS row `Transient`)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -969,7 +969,7 @@ binary = "nanocode_qualification"
 test = "a_previous_response_not_found_is_transient_on_both_transports"
 kind = "host-free"
 layer = "L1"
-pins = "a `previous_response_not_found` 400 to the turn's one request, over HTTPS and as a WebSocket `error` event stating 400, ends `ProviderFailed` classed `Transient`, naming the code, one request in the mock's own log (red before the adapter read the code by name: the HTTPS row `Refused`)"
+pins = "a `previous_response_not_found` 400 to the turn's one request, over HTTPS and as a WebSocket `error` event stating 400, ends `ProviderFailed` classed `Transient`, naming the code (the WebSocket event's stream re-sent five times) (red before the adapter read the code by name: the HTTPS row `Refused`)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -982,18 +982,18 @@ pins = "a 500 whose body names the terminal `insufficient_quota`, which nanocode
 [[property.cell]]
 package = "kata-agent-nanocode"
 binary = "nanocode_qualification"
-test = "a_model_connection_dropped_mid_response_is_ambiguous"
+test = "a_model_connection_dropped_mid_response_is_a_transient_failure"
 kind = "host-free"
 layer = "L1"
-pins = "on the Responses HTTPS transport, a second response the mock cuts mid-body after a tool frame went out is no provider failure — nanocode reports a body it could not decode, with no retry advice — so the turn ends `Ambiguous{ModelTokens}` naming that account, and the mock's own log holds the two requests and no re-send (MEASURED at nanocode 2ac77424)"
+pins = "on the Responses HTTPS transport, a second response the mock cuts mid-body after a tool frame went out is a retryable transport failure nanocode re-sends five times (at nanocode 2ac77424 it was an undecodable body with no retry advice, `Ambiguous`), so the turn ends `ProviderFailed` classed `Transient` saying a tool ran, and the mock's own log holds seven requests: the first call, the cut one and its five re-sends (MEASURED at 8ec3b215)"
 
 [[property.cell]]
 package = "kata"
 binary = "agent_change_live"
-test = "a_provider_disconnect_mid_response_settles_proven_ambiguous_live"
+test = "a_provider_failing_its_response_mid_turn_settles_proven_ambiguous_live"
 kind = "live"
 layer = "L1"
-pins = "the same cut mid-turn on a real node is settled PROVEN AMBIGUOUS and never automatically re-run, though the stage's two-member fallback panel leaves its failure retry a next seat: one `failed` attempt with `verdict` `proven_ambiguous` read through a second read-only handle, and in the mock's own log the first member's two requests and no third — none naming the second member's model (red with `failure_is_retryable` admitting `proven_ambiguous`: the second member ran)"
+pins = "a turn whose answer is unknown on a real node — a `response.failed` event naming the terminal `insufficient_quota`, which nanocode neither retries nor reconnects, after the turn's command ran in the container — is settled PROVEN AMBIGUOUS and never automatically re-run, though the stage's two-member fallback panel leaves its failure retry a next seat: one `failed` attempt with `verdict` `proven_ambiguous` read through a second read-only handle, and in the mock's own log the first member's two requests and no third — none naming the second member's model (red with the failed event's code made one nanocode retries, `server_error`: the run re-ran and completed; the production mutation `failure_is_retryable` admitting `proven_ambiguous` was watched against the earlier trigger, a mid-body cut, at nanocode 2ac77424)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -1017,7 +1017,7 @@ binary = "nanocode_thread_backend"
 test = "an_anthropic_cancel_nanocode_does_not_confirm_is_ambiguous"
 kind = "host-free"
 layer = "L1"
-pins = "on the engine's own thread backend (no Code Mode limits installed; no kata worker runs it, and behind kata's interpreter backend the same cancel is confirmed), the Anthropic kind: a cancel while a Code Mode cell runs one long native step, its QuickJS thread burning CPU (the kernel's account) before the cancel and through the second after it, is not confirmed within the 5 s grace: ambiguous at `ModelTokens` naming the unconfirmed stop, one request in the mock's log, and `close` reports no acknowledged cancel"
+pins = "on the engine's own thread backend (no Code Mode limits installed; no kata worker runs it, and behind kata's interpreter backend the same cancel is confirmed), the Anthropic kind: a cancel while a Code Mode cell runs one long native step on the runtime's worker threads, burning CPU (the kernel's account) before the cancel and through the second after it, is not confirmed within the 5 s grace: ambiguous at `ModelTokens` naming the unconfirmed stop, one request in the mock's log, and `close` reports no acknowledged cancel"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -1105,7 +1105,7 @@ binary = "nanocode_thread_backend"
 test = "an_unconfirmed_cancel_is_ambiguous_at_the_crossed_class"
 kind = "host-free"
 layer = "L1"
-pins = "on the engine's own thread backend (no Code Mode limits installed; no kata worker runs it, and behind kata's interpreter backend the same cancel is confirmed), an operator cancel that lands while the turn's one Code Mode cell is inside one long default-comparator sort, which nanocode does not confirm within the 5 s grace (measured at 2ac77424), is `Ambiguous{ModelTokens}`, never `Cancelled`: the mock's own log holds the one model request, the double's own log holds no tool frame, the kernel sees the sort burn CPU after the outcome, and `close` reports no acknowledgement"
+pins = "on the engine's own thread backend (no Code Mode limits installed; no kata worker runs it, and behind kata's interpreter backend the same cancel is confirmed), an operator cancel that lands while the turn's one Code Mode cell is inside one long default-comparator sort, which nanocode does not confirm within the 5 s grace (measured at 2ac77424; re-measured at 8ec3b215, cancel to outcome 10.09 s, on a multi-thread runtime since a cell with no backend runs inline on its polling task), is `Ambiguous{ModelTokens}`, never `Cancelled`: the mock's own log holds the one model request, the double's own log holds no tool frame, the kernel sees the sort burn CPU after the outcome, and `close` reports no acknowledgement"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -2053,7 +2053,7 @@ binary = "agent_turn_capsule"
 test = "no_nanocode_cell_outlives_the_shutdown_a_native_step_included"
 kind = "host-free"
 layer = "L1"
-pins = "through the worker, a failed nanocode turn whose cell spins and one whose cell sorts each leave no interpreter process burning a tick over the following second, no QuickJS thread in the test process, and a `worker_reason` (read off the stored failure transition) naming no `code_mode_workers_live`"
+pins = "through the worker, a failed nanocode turn whose cell spins and one whose cell sorts each leave no interpreter process burning a tick over the following second, the test process itself charged under 50 ticks over that second, and a `worker_reason` (read off the stored failure transition) naming no `code_mode_workers_live`"
 
 [[property.cell]]
 package = "kata-code-mode-host"
@@ -6040,7 +6040,7 @@ binary = "nanocode_qualification"
 test = "a_flooding_session_reaches_the_tool_as_its_bounded_window"
 kind = "host-free"
 layer = "L1"
-pins = "a session writing 3 MiB is handed to the tool as at most its 1 MiB head+tail window with the elided count stated"
+pins = "a session writing 3 MiB is handed to the tool as at most its 1 MiB head+tail window, which nanocode's own output budget then cuts: the result's original token count is that of the window and kata's elision marker (MEASURED 262151, between 1 MiB/4 and (1 MiB + 67)/4)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -6432,111 +6432,55 @@ binary = "code_mode_limits"
 test = "a_recursion_past_the_stack_limit_fails_the_cell_with_its_report"
 kind = "host-free"
 layer = "L1"
-pins = "driven through the vendored engine under small limits, an uncaught recursion past `max_stack_bytes` ends the cell with QuickJS's `RangeError: Maximum call stack size exceeded`, the event before it is the guard's `Notify` `Code Mode cell exceeded its 1048576-byte interpreter stack limit`, and the next cell runs"
+pins = "behind kata's interpreter process under small limits, an uncaught recursion past djs's stack limit ends the cell with djs's `RangeError: Maximum call stack size exceeded`, the event before it is the interpreter's `Notify` `Code Mode cell exceeded its interpreter stack limit`, and the next cell runs (red with the interpreter's stack report removed)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_limits"
-test = "the_guard_reports_its_own_limit_hits_only"
+test = "only_real_limit_hits_are_reported"
 kind = "host-free"
 layer = "L1"
-pins = "driven through the vendored engine, a thrown TypeError and thrown errors worded as the guard's wall and output reports fail with no report; a cell that catches its out-of-memory or stack error and ends cleanly has no report; a thrown error named and worded as QuickJS's `InternalError: out of memory` or `RangeError: Maximum call stack size exceeded` is reported as that limit's hit (the stated residual)"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_limits"
-test = "a_heap_hit_quickjs_throws_as_null_fails_with_the_memory_report"
-kind = "host-free"
-layer = "L1"
-pins = "driven through the vendored engine under a 16 MiB heap, a cell flooding the heap with small objects, whose hit QuickJS throws as a bare `null` the bootstrap cannot report, ends with the guard's `Code Mode cell exceeded its 16777216-byte memory limit` as its error and its report (red with the guard reading such a failure for its text only), and the next cell runs"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_limits"
-test = "every_cell_after_a_heap_hit_runs_with_the_whole_heap"
-kind = "host-free"
-layer = "L1"
-pins = "driven through the vendored engine under a 16 MiB heap, one worker's first cell floods the heap with small objects, then two trivial cells run and a 14 MiB allocation succeeds; nine heap floods (objects, a `Map`, typed arrays, closures, strings, a promise chain, a flood caught and resumed, a flood stored through the `Function` constructor `clearTimeout` inherits, a flood then a recursion past the stack limit), twice over, each fail and are each followed by a trivial cell that runs and a 14 MiB allocation that succeeds; on a second worker a first cell keeping 14 MiB in its globals is followed by a 14 MiB allocation that succeeds (red at base: SIGABRT on QuickJS's `gc_decref` assertion after `failed to create a fresh embedded QuickJS context`; red with the runtime kept across cells, or renewed only after a heap hit)"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_limits"
-test = "heap_hits_end_no_process"
-kind = "host-free"
-layer = "L1"
-pins = "a child of the test binary runs `every_cell_after_a_heap_hit_runs_with_the_whole_heap` alone and the kernel reports it exited 0 with that cell passed (red at base: the child died by signal 6)"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_limits"
-test = "no_cell_reaches_the_globals_of_an_earlier_cell"
-kind = "host-free"
-layer = "L1"
-pins = "after a first cell sets a global, the next cell's `clearTimeout.__proto__.constructor(\"return globalThis\")()` is its own `globalThis` without that global, and `clearTimeout`'s prototype is its own `Function.prototype` (red at base and with the runtime kept: `42`, `false`, `false`)"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_limits"
-test = "every_cell_after_the_process_first_starts_with_the_same_free_heap"
-kind = "host-free"
-layer = "L1"
-pins = "driven through the vendored engine under a 16 MiB heap, the free heap a cell starts with (the largest `ArrayBuffer` it can allocate) read after each of nine heap floods, twice over, is within 64 bytes of the second cell's: no flood leaves any of its heap to a later cell (red with the runtime kept across cells)"
+pins = "behind kata's interpreter process, a thrown TypeError and thrown errors worded as the interpreter's wall and output reports fail with no report; a heap hit inside a `try` still ends the cell with the engine's error and its report; a thrown error with djs's stack words below its first line has no report, and one worded as djs's `RangeError: Maximum call stack size exceeded`, thrown uncaught, reads as a stack hit (the stated residual) (red with the interpreter's first-line `ends_with` read as `contains`)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_context_failure"
-test = "every_cell_under_a_memory_limit_too_small_for_it_fails_on_that_limit"
+test = "every_cell_under_a_heap_too_small_for_its_bootstrap_fails_and_the_next_is_answered"
 kind = "host-free"
 layer = "L1"
-pins = "under a one-byte `memory_bytes` (or a child's), each of four trivial cells runs or fails with the guard's memory message as its error and its report, and the worker answers every one; none fails on its context (red with the limit set before the context: `failed to create a fresh embedded QuickJS context`)"
+pins = "behind kata's interpreter process under a one-byte heap, each of four trivial cells fails with the engine's own `failed to compile the embedded Code Mode bootstrap: out of memory` and no report, and the next is answered in the same interpreter (red with `interpreter::run`'s `start_cell` error arm ending the process or answering no terminal event)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_context_failure"
-test = "no_memory_limit_lets_a_context_creation_end_the_process"
+test = "no_heap_limit_lets_a_cells_bootstrap_end_its_interpreter"
 kind = "host-free"
 layer = "L1"
-pins = "children of the test binary run the cell above under one byte and every 2 KiB up to 160 KiB of `memory_bytes`, and the kernel reports each exited 0 with the cell passed (red at base: all 81 failed, those under 32 KiB and 106 KiB by SIGABRT; red with the limit set before the context)"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_context_failure"
-test = "a_context_that_cannot_be_prepared_fails_each_cell_and_the_worker_answers_the_next"
-kind = "host-free"
-layer = "L1"
-pins = "a child of the test binary under a one-byte interpreter stack limit, in which no context can be prepared, runs four trivial cells: each ends with `failed to load the embedded QuickJS bootstrap: Error: Maximum call stack size exceeded` as its error and no report, and the worker answers every one; the kernel reports the child exited 0 (red with a failed preparation ending the worker: `the worker ended instead of answering`)"
+pins = "children of the test binary run trivial cells under one byte and every 8 KiB up to 512 KiB of heap behind kata's interpreter process, and the kernel reports each exited 0 with every cell run or failed on the bootstrap's own out-of-memory error, all of a child's cells in one interpreter (MEASURED: 352 KiB fails, 360 KiB runs)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_out_of_memory_defects"
-test = "an_operation_run_at_every_headroom_of_the_sweep_ends_no_process"
+test = "no_former_quickjs_out_of_memory_defect_ends_an_interpreter"
 kind = "host-free"
 layer = "L1"
-pins = "driven through the vendored engine behind kata's interpreter process under a 4 MiB heap, the control of the cell below: an operation QuickJS handles, run after a pad that leaves every 8 bytes of headroom up to 16 KiB of the free heap a later cell starts with, runs at some headrooms and fails on the heap at others, every cell answers, and the whole sweep runs in one interpreter process"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_out_of_memory_defects"
-test = "quickjs_out_of_memory_defects_end_only_the_interpreter_process"
-kind = "host-free"
-layer = "L1"
-pins = "MEASURED RESIDUAL, contained (QuickJS 0.16.2): the same sweep on `Math.max.bind(null, 1)(2)` and on `eval` compiling a class ends the interpreter process while the cell runs, each such cell failing with the supervisor's report `Code Mode's interpreter process ended by SIGSEGV`, and on `Array.fromAsync([1, 2])` ends it after the cell's `Done`, never before the `Done` reached the supervisor (the next cell runs in a new interpreter, read off the test process's children in /proc; red with the interpreter's cell-ended hook not installed and its `Done` written 1 ms late: all 338 such ends charged to their cells); the test process runs every sweep on, and after every end the next interpreter's second cell starts with the free heap the first interpreter's did, within 64 bytes (red with kata's backend not installed: the test binary dies by SIGSEGV; red when QuickJS handles the failure on that path: no headroom ends the interpreter)"
+pins = "behind kata's interpreter process under a 4 MiB heap, the operations that met QuickJS 0.16.2's out-of-memory defects (`Function.prototype.bind`, `eval` compiling a class, `Array.fromAsync`) and a control, each run after a pad leaving every 8 bytes of headroom up to 16 KiB of the free heap, run at some headrooms and fail on the heap with the engine's error and report at the others, and no interpreter ends (MEASURED ran/failed on the heap: control 1911/138, `bind` 1933/116, `eval` 1528/521, `Array.fromAsync` 1842/207) (red with `set_cell_memory` removed from the interpreter)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_interpreter_through_adapter"
-test = "on_the_messages_kind_a_bind_flood_ends_only_its_interpreter_and_the_turn_completes"
+test = "a_cell_whose_interpreter_is_killed_fails_to_the_model_and_the_turn_completes_on_both_kinds"
 kind = "host-free"
 layer = "L1"
-pins = "through the adapter on the Anthropic kind under kata's limits, cells [text, bind flood, text, bind flood]: each flood's result names `Code Mode's interpreter process ended by SIGSEGV`, the text cell after it runs, the turn completes, the evidence holds two `CodeModeInterpreterEnded{SIGSEGV}`, no QuickJS thread runs in the test process and every interpreter is reaped by `close` (red with kata's backend not installed: the test binary dies by SIGSEGV)"
+pins = "through the adapter on both kinds under kata's limits, a waiting cell whose interpreter process is killed from outside by SIGKILL (the OOM killer's stand-in; no cell-reachable way to end a djs interpreter by a signal is known) fails to the model with `Code Mode's interpreter process ended by SIGKILL`, the next cell runs, the turn completes, the evidence holds exactly `CodeModeInterpreterEnded{SIGKILL}`, and no interpreter is left after close (red with the adapter's `Ended::from_report` read removed)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_interpreter_through_adapter"
-test = "on_the_responses_kind_a_bind_flood_fails_to_the_model_and_the_turn_completes"
+test = "a_bind_flood_is_a_heap_hit_on_both_kinds_and_ends_no_interpreter"
 kind = "host-free"
 layer = "L1"
-pins = "the same cells on the OpenAI kind: each flood fails to the model, the text cell after it runs, the turn completes, and the evidence holds one record per flood (MEASURED: `CodeModeLimit{memory}`, this kind's heap layout meeting the heap limit first)"
+pins = "a model-written flood of `bind` calls (which ended QuickJS's process by SIGSEGV) is, on both kinds under kata's limits, exactly one `CodeModeLimit{memory}` and no interpreter end, with the test process's peak resident memory under 128 MiB"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -6544,7 +6488,7 @@ binary = "agent_turn_capsule"
 test = "a_turn_whose_cells_end_their_interpreter_completes_and_records_each_end"
 kind = "host-free"
 layer = "L1"
-pins = "a `nanocode_anthropic` turn through the whole capsule composition under kata's limits, cells [text, bind flood, text, bind flood]: the worker reports a completed capsule, the model's last request carries each flood's result naming the SIGSEGV and each text cell's text, and the session evidence read back off the rig's CAS by the report's ref names two `CodeModeInterpreterEnded{SIGSEGV}`"
+pins = "on each nanocode kind, a turn through the whole capsule composition under kata's limits, cells [waiter, wait, text, waiter, wait, text], each waiter's interpreter killed from outside by SIGKILL (the OOM killer's stand-in): the worker reports a completed capsule, each wait's result is `Script error:\nCode Mode's interpreter process ended by SIGKILL`, each later text cell's text reaches the model, the session evidence read back off the rig's CAS by the report's ref names two `CodeModeInterpreterEnded{SIGKILL}`, and no interpreter is left"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -6552,15 +6496,15 @@ binary = "agent_turn_capsule"
 test = "a_worker_turn_whose_cells_end_their_interpreter_ends_no_other_process"
 kind = "host-free"
 layer = "L1"
-pins = "a child of the test binary runs the turn above alone and the kernel reports it exited 0 with that cell passed (red with kata's backend not installed: the child ends by SIGSEGV)"
+pins = "a child of the test binary runs the turn above alone and the kernel reports it exited 0 with that cell passed (would red if an interpreter's death ended the hosting process, or the cells ran in it: exit 101)"
 
 [[construct.cell]]
 package = "kata"
 binary = "code_mode_host_live"
-test = "a_bind_flood_ends_only_its_interpreter_under_the_worker_daemon_live"
+test = "a_killed_interpreter_ends_only_itself_under_the_worker_daemon_live"
 kind = "live"
 layer = "L1"
-pins = "a `nanocode_anthropic` stage in a real rootless capsule whose first Code Mode cell is a model-written `bind` flood and whose second is one text (mock Messages model, the test-support door confirmed in the daemon's log before the submit), on a main whose worker is an external `kata-worker` daemon over `local_socket`: the daemon and the main are alive off `/proc` after the flood, the stage completed in the raw ledger, the model told the interpreter's SIGSEGV and the next cell's text, no interpreter child of the daemon left alive nor any unreaped child of it; watched RED with the thread-backend installer (the daemon is a zombie after the flood), with the supervisor reading the interpreter's end without reaping it (a zombie child of the daemon), and with the supervisor keeping its interpreter at its end and the interpreter arming no parent-death signal (a live interpreter child of the daemon)"
+pins = "a `nanocode_anthropic` stage in a real rootless capsule whose first Code Mode cell waits on a timer and whose second is one text (mock Messages model, the test-support door confirmed in the daemon's log before the submit), on a main whose worker is an external `kata-worker` daemon over `local_socket`: the test kills the waiting cell's interpreter, a child of the daemon, by SIGKILL (the OOM killer's stand-in; no cell-reachable way to end a djs interpreter by a signal is known); the daemon and the main are alive off `/proc` after it, the stage's `event_accepted|completed` is read through a second read-only handle, the mock's own log carries the killed interpreter's end naming `SIGKILL` and the next cell's text, the killed interpreter is reaped, and no interpreter child of the daemon is left alive or unreaped"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -6573,10 +6517,10 @@ pins = "folded in order, the supervisor's report of an end by a named signal rec
 [[construct.cell]]
 package = "kata-code-mode-host"
 binary = "interpreter_process"
-test = "cells_run_in_one_child_and_no_quickjs_thread_runs_here"
+test = "cells_run_in_one_child_and_burn_no_cpu_here"
 kind = "host-free"
 layer = "L1"
-pins = "with kata's backend installed, two cells answer while the test process has no `nanocode-code-m` thread and exactly one child, reaped by `terminate` (red with the backend not installed: a QuickJS thread runs in the test process)"
+pins = "with kata's backend installed, two cells answer in exactly one child, reaped by `terminate`, and a 500 ms spin in the second is charged to that child's CPU, not the test process's (red with the backend not installed: no child)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -6584,7 +6528,7 @@ binary = "interpreter_process"
 test = "a_program_that_cannot_start_fails_the_cell_by_name"
 kind = "host-free"
 layer = "L1"
-pins = "an interpreter program that does not exist fails the cell with `Code Mode's interpreter process could not start: <path> (...)` and no QuickJS thread ever runs in the test process: no in-process fallback"
+pins = "an interpreter program that does not exist fails the cell with `Code Mode's interpreter process could not start: <path> (...)` and the cell's own `notify` never reaches the host: no in-process fallback"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -6608,7 +6552,7 @@ binary = "interpreter_process"
 test = "images_up_to_the_cells_limit_pass_and_past_it_the_engine_ends_the_cell"
 kind = "host-free"
 layer = "L1"
-pins = "under a 1 MiB output limit, ten 100,000-byte image data URLs (within 46 KB of the limit as the engine charges them) complete and eleven fail on the engine's own `Code Mode cell output exceeded its 1048576-byte limit`, not a kill: the supervisor charges no more than the engine (red with each string charged twice: the ten-image cell killed)"
+pins = "under a 1 MiB output limit, ten 100,000-byte image data URLs (within 46 KB of the limit as the engine charges them) complete and eleven fail on the interpreter's own `Code Mode cell output exceeded its 1048576-byte limit`, not a kill: the supervisor charges no more than the interpreter (red with each string charged twice: the ten-image cell killed)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -6661,10 +6605,10 @@ pins = "a cell waiting on its tool result, whose interpreter's threads all read 
 [[construct.cell]]
 package = "kata-code-mode-host"
 binary = "lib"
-test = "tests::an_interpreter_holds_descriptors_0_to_2_and_no_environment"
+test = "tests::an_interpreter_holds_descriptors_0_to_2_and_only_an_empty_tz"
 kind = "host-free"
 layer = "L1"
-pins = "a probe started as an interpreter, after the interpreter's confinement up to its syscall filter (whose refusal of the probe's /proc reads the filter's cells pin), lists /proc/self/fd as 0, 1 and 2 and holds no environment variable, though its parent held a descriptor without close-on-exec and an environment (red with the close loop removed: the planted descriptor is listed)"
+pins = "a probe started as an interpreter, after the interpreter's confinement up to its syscall filter (whose refusal of the probe's /proc reads the filter's cells pin), lists /proc/self/fd as 0, 1 and 2 and holds one environment variable, an empty `TZ`, though its parent held a descriptor without close-on-exec and an environment (red with the close loop removed: the planted descriptor is listed)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -6947,14 +6891,6 @@ layer = "L1"
 pins = "the shipped `kata-worker`, started with `INTERPRETER_ARGS`, an empty environment and a socket on descriptor 0, answers `Ready`, runs a cell (its `Load` of a stored value answered by hand, its notification of that value and `Done`, frames written and read by hand), answers `Ready` again, is not dumpable, and exits 0 when the socket closes (red with `main` not dispatching first)"
 
 [[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_limits"
-test = "only_a_failure_quickjs_names_or_an_exhausted_heap_is_read_as_a_limit"
-kind = "host-free"
-layer = "L1"
-pins = "driven through the vendored engine, no report for: QuickJS's out-of-memory or stack words inside an error's first line or on a later line, a heap hit and a stack hit rethrown as the `cause` of the cell's own error (MEASURED residual), a heap hit QuickJS throws as a bare `null` inside a function that the bootstrap reports as `Uncaught null`, or inside an unawaited async function reported as `Unhandled promise rejection: null` (MEASURED residual), a `throw null`, a run rejected with a bare `null` while the heap is far from its limit, and a flood of rejected promises whose bare `null` rejects the run once its heap is released (`embedded QuickJS execution rejected: ...`, MEASURED residual); the next cell runs (red with the guard reading QuickJS's words anywhere in a failure, or every failure outside the bootstrap's report as a heap hit)"
-
-[[construct.cell]]
 package = "kata-worker"
 binary = "lib"
 test = "adapter_registry::tests::the_production_registry_installs_the_code_mode_limits"
@@ -6968,15 +6904,15 @@ binary = "code_mode_through_adapter"
 test = "a_cell_allocating_past_the_memory_limit_fails_to_the_model_and_the_turn_goes_on"
 kind = "host-free"
 layer = "L1"
-pins = "under the installer's limits, a model-written cell allocating 384 MiB reaches the next request as `Script failed` naming out of memory, the next cell runs in the same one interpreter process (/proc, read while each cell waits; no QuickJS thread runs in the test process; the hit is a JavaScript exception, so this does not reach the patched failed-cell end), the turn completes, and its evidence records `CodeModeLimit{memory}`"
+pins = "under the installer's limits, a model-written cell allocating 384 MiB reaches the next request as `Script failed` with `Script error:\nScript stopped: the cell ran out of memory.`, the next cell runs in an interpreter process of its own, the first one reaped (/proc, read while each cell waits), the test process's peak resident memory stays under half the heap, the turn completes, and its evidence records `CodeModeLimit{memory}`"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_through_adapter"
-test = "a_cell_after_its_host_thread_ended_runs_on_a_fresh_host"
+test = "a_terminated_cell_s_interpreter_is_reaped_and_the_next_cell_runs"
 kind = "host-free"
 layer = "L1"
-pins = "a cell the model terminates ends its host, whose interpreter process is killed and reaped, and the model's next cell runs in another interpreter process (/proc: one while the first cell spins, one other while the third waits) and reaches the model"
+pins = "a spinning cell the model terminates is reported `Script terminated`, its interpreter process is killed and reaped (gone from a listing that includes unreaped children), and the model's next cell runs in another interpreter process and its text reaches the model; the turn completes"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -6992,7 +6928,7 @@ binary = "code_mode_wall_through_adapter"
 test = "a_yielded_cell_that_hits_the_wall_is_recorded_from_its_wait"
 kind = "host-free"
 layer = "L1"
-pins = "a model-written cell that spins and yields after 200 ms reaches the model as running cell 1, the model's `wait` on it receives `Script failed` naming the 2 s wall limit and the request after it hands the model the guard's wall report as an output of the cell's own call, the turn completes, its evidence records `CodeModeLimit{wall}` once, off the guard's report the `wait` observed, and its progress sink sees one `code_mode_limit` observation naming the wall"
+pins = "a model-written cell that spins and yields after 200 ms reaches the model as running cell 1, the model's `wait` on it receives `Script failed` naming the 2 s wall limit and the request after it hands the model the interpreter's wall report as an output of the cell's own call, the turn completes, its evidence records `CodeModeLimit{wall}` once, off the report the `wait` observed, and its progress sink sees one `code_mode_limit` observation naming the wall"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7000,7 +6936,7 @@ binary = "code_mode_wall_through_adapter"
 test = "a_wall_hit_after_a_long_text_is_told_to_the_model_and_recorded"
 kind = "host-free"
 layer = "L1"
-pins = "on the Responses kind a cell emitting one 70,000-byte text then spinning past the 2 s wall reaches the next request as `Script failed` ending `[omitted 1 text items ...]` with the wall named nowhere in it, followed by the guard's report `Code Mode cell exceeded its 2000 ms wall-time limit` as an output of its own; the turn completes, the evidence records one `CodeModeLimit{wall}` and the progress sink one `code_mode_limit`"
+pins = "on the Responses kind a cell emitting one 70,000-byte text then spinning past the 2 s wall reaches the next request as `Script failed` and one text middle-truncated to 10,000 tokens whose tail is `Script error:\nCode Mode cell exceeded its 2000 ms wall-time limit`, followed by the interpreter's report of the same text as an output of its own; the turn completes, the evidence records one `CodeModeLimit{wall}` and the progress sink one `code_mode_limit`"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7024,7 +6960,7 @@ binary = "lib"
 test = "adapter::events::tests::a_guard_report_names_its_limit_and_nothing_else_does"
 kind = "host-free"
 layer = "L1"
-pins = "each of the vendored guard's four reports, as a whole text, names its limit (`wall`, `output`, `memory`, `stack`); the same words behind `Script error:`, with a suffix, without a number or with one that is not decimal digits, a stack report without `interpreter`, QuickJS's own out-of-memory and stack messages, and the live-worker refusal name none"
+pins = "each of the vendored guard's four reports, as a whole text, names its limit (`wall`, `output`, `memory`, `stack`); the same words behind `Script error:`, with a suffix, without a number or with one that is not decimal digits, the stack report in its old sized form, an engine's own out-of-memory and stack messages, and the live-worker refusal name none"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7032,7 +6968,7 @@ binary = "lib"
 test = "adapter::events::tests::a_worker_refusal_is_read_off_a_failed_exec_and_nothing_else_is"
 kind = "host-free"
 layer = "L1"
-pins = "the guard's live-worker refusal as the last text of a failed `exec` result is `workers`, in the Responses kind's content items and bare text and in the Messages kind's `{content_blocks}` and `{text}`; the same refusal completed, in a `wait`'s or another tool's result, behind `Script error:` or not last is none, and a failed result whose `Script error:` is a guard report or QuickJS's out of memory is none"
+pins = "the guard's live-worker refusal as the last text of a failed `exec` result is `workers`, in the Responses kind's content items and bare text and in the Messages kind's `{content_blocks}` and `{text}`; the same refusal completed, in a `wait`'s or another tool's result, behind `Script error:` or not last is none, and a failed result whose `Script error:` is a guard report or an engine's out of memory is none"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7088,23 +7024,23 @@ binary = "code_mode_stack_through_adapter"
 test = "a_cell_recursing_through_host_calls_to_the_stack_limit_fails_to_the_model_and_the_turn_goes_on"
 kind = "host-free"
 layer = "L1"
-pins = "under the installer's limits, a model-written cell recursing through `sort`'s comparator (caught) and then through `setTimeout`'s native delay coercion reaches the next request as `Script failed` naming QuickJS's `RangeError: Maximum call stack size exceeded`, not a process abort; the request after it hands the model the guard's report of the interpreter stack limit as an output of its own; the next cell runs both recursions caught and reports both depths in the same interpreter process (/proc), the turn completes, and the evidence records exactly one `CodeModeLimit{stack}`, the first cell's"
+pins = "under the installer's limits, a model-written cell recursing through `sort`'s comparator (caught) and then through `setTimeout`'s native delay coercion reaches the next request as `Script failed` naming djs's `RangeError: Maximum call stack size exceeded`, not a process abort; the request after it hands the model the interpreter's report of the stack limit as an output of its own; the next cell runs both recursions caught and reports both depths (MEASURED 20,972 through `sort`, 15,419 through `setTimeout`), the turn completes, and the evidence records exactly one `CodeModeLimit{stack}`, the first cell's"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_stack_through_adapter"
-test = "with_no_thread_stack_headroom_the_same_recursion_aborts_the_process"
+test = "a_thread_stack_too_small_ends_only_the_interpreter"
 kind = "host-free"
 layer = "L1"
-pins = "the same turn re-run in a child of the test binary with its QuickJS thread stack equal to `max_stack_bytes` dies by SIGABRT (the kernel's exit status) after Rust names `nanocode-code-mode-quickjs` as the thread that overflowed its stack: the twin that makes the turn cell's survival a fact of kata's headroom"
+pins = "children of the test binary run djs's deepest recursion shapes under a 64 KiB cell-thread stack: the child exits 0, and the shapes that overflow it (nested source, regular-expression groups, `JSON.stringify`, `String`, a linked-list collection) end only their interpreter, by SIGABRT, after Rust names `code-mode-cell` as the thread that overflowed (red with `interpreter::serve` ignoring `thread_stack_bytes`)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_stack_through_adapter"
-test = "kata_thread_stack_leaves_measured_headroom_over_the_interpreter_limit"
+test = "kata_thread_stack_is_twice_what_the_deepest_recursions_need"
 kind = "host-free"
 layer = "L1"
-pins = "children of the test binary find, to the page, the smallest QuickJS thread stack the turn passes on (the wider of the sort and `setTimeout` recursions; measured `max_stack_bytes` + 20 KiB, set by sort; `max_stack_bytes` aborts, kata's own passes), and `CODE_MODE_LIMITS.thread_stack_bytes` is at least twice it"
+pins = "children of the test binary find, to the page, the smallest cell-thread stack every measured recursion shape completes on (MEASURED 372 KiB, set by djs's regular-expression parser at its 211-group bound; 368 KiB overflows), and `CODE_MODE_LIMITS.thread_stack_bytes` is at least twice it (8 MiB, 22 times)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7120,7 +7056,7 @@ binary = "code_mode_limits"
 test = "the_output_limit_admits_its_last_byte_and_refuses_the_next"
 kind = "host-free"
 layer = "L1"
-pins = "driven through the vendored engine under a 1 MiB output limit, a text of `limit - 2 * CELL_EVENT_BYTES - 1` bytes then a 1-byte text (exactly the limit) complete the cell with both texts out; the same cell with an empty text after them (its 1-byte separator: the limit plus one) fails on that text with the guard's `Code Mode cell output exceeded its 1048576-byte limit` as its error and its report, and the next cell runs (red with the guard admitting one byte past the limit, refusing at the limit, charging a joined text no separator, or charging an event one byte more)"
+pins = "behind kata's interpreter process under a 1 MiB output limit, output exactly at the limit as the interpreter charges it (`wire::Event::charge`) completes the cell, and one byte past it fails the cell with the interpreter's `Code Mode cell output exceeded its 1048576-byte limit` as its error and its report, and the next cell runs (red with the interpreter's cap check admitting the byte past the limit or refusing at the limit, or `Event::charge` charging an event wrongly)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7128,7 +7064,7 @@ binary = "code_mode_output_through_adapter"
 test = "a_text_flood_past_the_output_limit_is_told_to_the_model_and_recorded"
 kind = "host-free"
 layer = "L1"
-pins = "under the installer's limits a cell's text costing exactly the output limit (`cell_emitted_bytes - CELL_EVENT_BYTES` bytes) reaches nanocode whole (its truncation marker's kept and cut bytes, to within a token) and the 1-byte text after it fails the cell at the output limit, before its closing text; nanocode's visible result ends with `[omitted 1 text items ...]` and carries no guard message, and the guard's report `Code Mode cell output exceeded its 8388608-byte limit` reaches the model as an output of its own; the evidence records one `CodeModeLimit{output}` and the progress sink one `code_mode_limit`; the turn completes (red with the guard charging a text one byte more: the first text fails the cell, whose `Script error:` stays visible)"
+pins = "under the installer's limits a cell's text costing exactly the output limit (`cell_emitted_bytes - CELL_EVENT_BYTES` bytes) reaches nanocode whole (nanocode's original token count of the joined text and error, exactly) and the 1-byte text after it fails the cell at the output limit, before its closing text; nanocode's visible result is one middle-truncated text whose tail is `Script error:\nCode Mode cell output exceeded its 8388608-byte limit`, and the interpreter's report of the same text reaches the model as an output of its own; the evidence records one `CodeModeLimit{output}` and the progress sink one `code_mode_limit`; the turn completes (red with the interpreter charging a text one byte more: the first text fails the cell)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7136,7 +7072,7 @@ binary = "code_mode_output_through_adapter"
 test = "a_heap_hit_after_a_long_text_is_told_to_the_model_and_recorded"
 kind = "host-free"
 layer = "L1"
-pins = "under the installer's limits a cell emitting one 60,000-byte text then allocating past the heap limit reaches the next request as `Script failed` ending `[omitted 1 text items ...]`, the out-of-memory error dropped, and the guard's report `Code Mode cell exceeded its 268435456-byte memory limit` as an output of its own; the next cell's same allocation after a 600-byte text ends with QuickJS's out-of-memory error, followed by the same report; the evidence records one `CodeModeLimit{memory}` per cell and the progress sink one `code_mode_limit` per cell; the turn completes"
+pins = "under the installer's limits a cell emitting one 60,000-byte text then allocating past the heap limit reaches the next request, on the Responses kind, as `Script failed` and one middle-truncated text whose tail keeps the engine's out-of-memory error, and the report `Code Mode cell exceeded its 268435456-byte memory limit` as an output of its own; the next cell's same allocation after a 600-byte text ends with the 600 bytes and the engine's out-of-memory error, followed by the same report; the evidence records one `CodeModeLimit{memory}` per cell and the progress sink one `code_mode_limit` per cell; the turn completes"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7152,7 +7088,7 @@ binary = "code_mode_output_through_adapter"
 test = "a_heap_hit_on_the_messages_kind_is_recorded_and_told_within_the_budget"
 kind = "host-free"
 layer = "L1"
-pins = "on the Messages kind, the heap hit after the 60,000-byte text reaches the model as an error result ending `[<n> more text blocks omitted]` with the out-of-memory error and the guard's report dropped (MEASURED RESIDUAL), and the same allocation after a 600-byte text, which leaves the result's text well inside the budget, as a result ending with its `Script error:` naming out of memory then the guard's memory report; the evidence records one `CodeModeLimit{memory}` per cell"
+pins = "on the Messages kind, the heap hit after the 60,000-byte text reaches the model as an error result ending `[<n> more text blocks omitted]` with the out-of-memory error and kata's report dropped (MEASURED RESIDUAL), and the same allocation after a 600-byte text, which leaves the result's text well inside the budget, as a result ending with its `Script error:` naming out of memory then the guard's memory report; the evidence records one `CodeModeLimit{memory}` per cell"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7160,15 +7096,15 @@ binary = "code_mode_output_through_adapter"
 test = "a_stack_hit_after_a_long_text_is_recorded_on_both_kinds_and_told_on_the_responses_kind"
 kind = "host-free"
 layer = "L1"
-pins = "under the installer's limits a cell emitting one 60,000-byte text then recursing past the interpreter stack limit reaches the model, on the Responses kind, as `Script failed` ending `[omitted 1 text items ...]` with the `RangeError` dropped and the guard's report `Code Mode cell exceeded its 1048576-byte interpreter stack limit` as an output of its own; on the Messages kind as an error result ending `[<n> more text blocks omitted]` with the error and the report dropped (MEASURED RESIDUAL); each kind's evidence records one `CodeModeLimit{stack}`"
+pins = "under the installer's limits a cell emitting one 60,000-byte text then recursing past the interpreter stack limit reaches the model, on the Responses kind, as `Script failed` and one middle-truncated text whose tail keeps djs's `RangeError` and its frames, with the interpreter's report `Code Mode cell exceeded its interpreter stack limit` as an output of its own; on the Messages kind as an error result ending `[<n> more text blocks omitted]` with the error and the report dropped (MEASURED RESIDUAL); each kind's evidence records one `CodeModeLimit{stack}`"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_output_through_adapter"
-test = "a_heap_hit_quickjs_throws_as_null_is_told_and_recorded_on_both_kinds"
+test = "a_heap_hit_no_catch_holds_is_told_and_recorded_on_both_kinds"
 kind = "host-free"
 layer = "L1"
-pins = "under the installer's limits a model-written cell flooding the heap with small objects (QuickJS throws the hit as a bare `null`) reaches the model, on both kinds, as `Script failed` whose error is the guard's `Code Mode cell exceeded its 268435456-byte memory limit`, followed by the same report (Responses: an output of its own; Messages: the result's last text block); each kind's evidence records one `CodeModeLimit{memory}` and the turn completes"
+pins = "under the installer's limits a model-written small-object flood inside `try`/`catch` reaches the model on both kinds as `Script failed` with the engine's `Script stopped: the cell ran out of memory.` and the report `Code Mode cell exceeded its 268435456-byte memory limit`, never the catch's text, and is recorded once on both (red with a heap hit made catchable, or `set_cell_memory` removed)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7176,15 +7112,15 @@ binary = "code_mode_output_through_adapter"
 test = "the_cells_after_heap_hits_run_with_half_the_heap_on_both_kinds"
 kind = "host-free"
 layer = "L1"
-pins = "under the installer's limits, on each kind, one session's cells flood the heap, allocate 128 MiB, write a text, flood the heap again and allocate 128 MiB again: each flood reaches the model as `Script failed` ending with the guard's memory message, each other cell as `Script completed` with its own text, the turn completes and the evidence records two `CodeModeLimit{memory}` (red at base: the second cell failed with `failed to create a fresh embedded QuickJS context`)"
+pins = "under the installer's limits, on each kind, one session's cells flood the heap, allocate 128 MiB, write a text, flood the heap again and allocate 128 MiB again: each flood reaches the model as `Script failed` ending with the engine's out-of-memory error, each other cell as `Script completed` with its own text, the turn completes and the evidence records two `CodeModeLimit{memory}` (red with a cell starting with less than half the heap)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_output_through_adapter"
-test = "a_cell_text_under_the_budget_still_loses_the_reason_and_on_messages_the_report"
+test = "a_cell_text_under_the_budget_keeps_the_reason_and_on_messages_loses_the_report"
 kind = "host-free"
 layer = "L1"
-pins = "MEASURED RESIDUAL: a cell writing 47,900 bytes of text (11,975 tokens, under the 12,000-token visible budget alone) then allocating past the heap limit reaches the model on both kinds with the text whole and its `Script error:` middle-truncated past `out of memory` (the budget counts the header and the error too); on the Messages kind the result ends `[1 more text blocks omitted]`, the guard's report dropped, on the Responses kind the report is an output of its own; each kind's evidence records one `CodeModeLimit{memory}`"
+pins = "MEASURED RESIDUAL: a cell writing 47,900 bytes of text (11,975 tokens) then allocating past the heap limit reaches the model on the Responses kind as one text whose tail keeps its whole `Script error:`, with the report as an output of its own, and on the Messages kind with its error middle-truncated, its tail keeping the reason, and the report dropped (`[1 more text blocks omitted]`); recorded once on both kinds"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7197,10 +7133,10 @@ pins = "MEASURED RESIDUAL on the Responses kind: a cell writing a 60,000-byte te
 [[construct.cell]]
 package = "kata-worker"
 binary = "agent_turn_capsule"
-test = "a_limit_hit_past_the_visible_budget_is_in_the_published_evidence_on_the_responses_kind"
+test = "a_limit_hit_past_the_visible_budget_reaches_the_model_and_the_published_evidence_on_the_responses_kind"
 kind = "host-free"
 layer = "L1"
-pins = "a `nanocode_openai` turn through the whole capsule composition (registry with the nanocode adapter, toolhost double, mock provider) whose one cell writes a 60,000-byte text then allocates past kata's heap limit: the next request's result for the cell ends `[omitted 1 text items ...]` and the guard's memory report follows as an output of its own; the session evidence the worker published, read back off the rig's CAS by the report's ref and decoded as the wire type, names one `CodeModeLimit{memory}`"
+pins = "a `nanocode_openai` turn through the whole capsule composition (registry with the nanocode adapter, toolhost double, mock provider) whose one cell writes a 60,000-byte text then allocates past kata's heap limit: the next request's result for the cell is its header and one text middle-truncated to 10,000 tokens ending `Script error:\nScript stopped: the cell ran out of memory.`, and kata's memory report follows as an output of its own; the session evidence the worker published, read back off the rig's CAS by the report's ref and decoded as the wire type, names one `CodeModeLimit{memory}`"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -7208,7 +7144,7 @@ binary = "agent_turn_capsule"
 test = "a_limit_hit_past_the_visible_budget_is_in_the_published_evidence_on_the_messages_kind"
 kind = "host-free"
 layer = "L1"
-pins = "the same turn as `nanocode_anthropic`: the next request's `tool_result` ends `[<n> more text blocks omitted]` with the out-of-memory error and the guard's report dropped (MEASURED RESIDUAL); the session evidence the worker published, read back off the CAS by its ref, names one `CodeModeLimit{memory}`"
+pins = "the same turn as `nanocode_anthropic`: the next request's `tool_result` ends `[<n> more text blocks omitted]` with the out-of-memory error and kata's report dropped (MEASURED RESIDUAL); the session evidence the worker published, read back off the CAS by its ref, names one `CodeModeLimit{memory}`"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -7216,7 +7152,7 @@ binary = "agent_turn_capsule"
 test = "a_turn_whose_cells_hit_the_heap_completes_and_its_later_cells_run"
 kind = "host-free"
 layer = "L1"
-pins = "on each nanocode kind, a turn through the whole capsule composition under kata's Code Mode limits whose cells flood the heap, allocate 128 MiB, write a text, flood the heap again and allocate 128 MiB again: the worker reports a completed capsule, the model's last request carries every cell's result (each flood's `Script failed` with the guard's memory message, each other cell's `Script completed` with its text), and the session evidence the worker published, read back off the rig's CAS by the report's ref, names two `CodeModeLimit{memory}` (red at base: the second cell's `failed to create a fresh embedded QuickJS context`)"
+pins = "on each nanocode kind, a turn through the whole capsule composition under kata's Code Mode limits whose cells flood the heap, allocate 128 MiB, write a text, flood the heap again and allocate 128 MiB again: the worker reports a completed capsule, the model's last request carries every cell's result (each flood's `Script failed` with `Script stopped: the cell ran out of memory.` and kata's memory report beside it, each other cell's `Script completed` with its text), and the session evidence the worker published, read back off the rig's CAS by the report's ref, names two `CodeModeLimit{memory}`"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -7376,7 +7312,7 @@ binary = "nanocode_qualification"
 test = "the_anthropic_session_id_is_rederived_from_the_seed"
 kind = "host-free"
 layer = "L1"
-pins = "the Anthropic kind's session id is re-derived from the attempt's seed (one seed one id, another seed another, version-7); the agent driven runs under it (nanocode's own `agent.turn` and `model.call` spans name it, and no other); and no request line, header or body the mock received names it"
+pins = "the Anthropic kind's session id is re-derived from the attempt's seed (one seed one id, another seed another, version-7); the requests the mock received name it as the session's identity and no request names the other seed's id (nanocode's telemetry is its own `nanocode_trace` since 8ec3b215, which no `tracing` layer sees)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7384,7 +7320,7 @@ binary = "nanocode_qualification"
 test = "an_api_key_anthropic_request_carries_no_claude_code_mark"
 kind = "host-free"
 layer = "L1"
-pins = "an API-key Anthropic turn's Messages request, as the mock received it, carries none of the Claude Code / Agent SDK marks nanocode's subscription wire adds: no `authorization`, `x-app`, `x-claude-code-session-id`, `anthropic-dangerous-direct-browser-access` or `x-stainless-*` header, no `claude-cli/` user agent, no `claude-code-20250219` or `oauth-2025-04-20` beta, no system block that is the Agent SDK or legacy Claude Code identity or the billing line, and no body `metadata`; the key arrives as `x-api-key` and the system prompt is sent (red at 76a343c54: the Agent SDK identity opened the system prompt, and that line alone turns an API key's 200 into a 400 `credit balance is too low`, MEASURED 2026-11-12)"
+pins = "an API-key Anthropic turn's Messages request, as the mock received it, carries none of the Claude Code / Agent SDK marks nanocode's subscription wire adds: no `authorization`, `x-app`, `anthropic-dangerous-direct-browser-access` or `x-stainless-*` header, no `claude-cli/` user agent, no `claude-code-20250219` or `oauth-2025-04-20` beta, no system block that is the Agent SDK or legacy Claude Code identity or the billing line, and no `metadata.user_id` naming an account; the `x-claude-code-session-id` header and `metadata.user_id` nanocode sends every API-key request since 8ec3b215 name only the session's own id (not measured against a key's credits); the key arrives as `x-api-key` and the system prompt is sent (red at 76a343c54: the Agent SDK identity opened the system prompt, and that line alone turns an API key's 200 into a 400 `credit balance is too low`, MEASURED 2026-11-12)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -7533,10 +7469,10 @@ pins = "the `change` pack's first agent turn on a worker respawned over a provid
 [[construct.cell]]
 package = "kata"
 binary = "agent_change_live"
-test = "a_provider_disconnect_mid_response_settles_proven_ambiguous_live"
+test = "a_provider_failing_its_response_mid_turn_settles_proven_ambiguous_live"
 kind = "live"
 layer = "L1"
-pins = "on real youki under the real worker, a `nanocode_openai` turn whose command ran in the container and whose next response the mock model cuts mid-body (its head declaring the whole body) settles PROVEN AMBIGUOUS: through a second read-only handle, one `failed` attempt on the stage whose terminal payload's `verdict` is `proven_ambiguous` with no `provider_failure`, no accepted attempt and the execution's head never advanced; the mock's own log holds the turn's two requests on the first panel member's model and no third (no re-send, and no re-run on the stage's second panel member, whose model no request names); `git` shows trunk unmoved and the turn's write on no commit (red with `agent_turn`'s `Ambiguous` arm settling `ProvenNotPerformed`, and with `failure_is_retryable` admitting `proven_ambiguous`)"
+pins = "on real youki under the real worker, a `nanocode_openai` turn whose command ran in the container and whose next response the mock model begins and then fails with a `response.failed` event naming `insufficient_quota` settles PROVEN AMBIGUOUS: through a second read-only handle, one `failed` attempt on the stage whose terminal payload's `verdict` is `proven_ambiguous` with no `provider_failure` and a reason naming the turn's answer unknown and that event, no accepted attempt and the execution's head never advanced; the mock's own log holds the turn's two requests on the first panel member's model and no third (no re-send, and no re-run on the stage's second panel member, whose model no request names); `git` shows trunk unmoved and the turn's write on no commit (red with the failed event's code made one nanocode retries, `server_error`: the run re-ran and completed; the production mutations, `agent_turn`'s `Ambiguous` arm settling `ProvenNotPerformed` and `failure_is_retryable` admitting `proven_ambiguous`, were watched against the earlier trigger at nanocode 2ac77424)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -13934,7 +13870,7 @@ binary = "nanocode_qualification"
 test = "the_anthropic_session_id_is_rederived_from_the_seed"
 kind = "host-free"
 layer = "L1"
-pins = "the Anthropic kind's session id is re-derived from the attempt's seed (one seed one id, another seed another, version-7); the agent driven runs under it (nanocode's own `agent.turn` and `model.call` spans name it, and no other); and no request line, header or body the mock received names it"
+pins = "the Anthropic kind's session id is re-derived from the attempt's seed (one seed one id, another seed another, version-7); the requests the mock received name it as the session's identity and no request names the other seed's id (nanocode's telemetry is its own `nanocode_trace` since 8ec3b215, which no `tracing` layer sees)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -13998,7 +13934,7 @@ binary = "lib"
 test = "adapter::events::tests::a_guard_report_names_its_limit_and_nothing_else_does"
 kind = "host-free"
 layer = "L1"
-pins = "each of the vendored guard's four reports, as a whole text, names its limit (`wall`, `output`, `memory`, `stack`); the same words behind `Script error:`, with a suffix, without a number or with one that is not decimal digits, a stack report without `interpreter`, QuickJS's own out-of-memory and stack messages, and the live-worker refusal name none"
+pins = "each of the vendored guard's four reports, as a whole text, names its limit (`wall`, `output`, `memory`, `stack`); the same words behind `Script error:`, with a suffix, without a number or with one that is not decimal digits, the stack report in its old sized form, an engine's own out-of-memory and stack messages, and the live-worker refusal name none"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14006,7 +13942,7 @@ binary = "lib"
 test = "adapter::events::tests::a_worker_refusal_is_read_off_a_failed_exec_and_nothing_else_is"
 kind = "host-free"
 layer = "L1"
-pins = "the guard's live-worker refusal as the last text of a failed `exec` result is `workers`, in the Responses kind's content items and bare text and in the Messages kind's `{content_blocks}` and `{text}`; the same refusal completed, in a `wait`'s or another tool's result, behind `Script error:` or not last is none, and a failed result whose `Script error:` is a guard report or QuickJS's out of memory is none"
+pins = "the guard's live-worker refusal as the last text of a failed `exec` result is `workers`, in the Responses kind's content items and bare text and in the Messages kind's `{content_blocks}` and `{text}`; the same refusal completed, in a `wait`'s or another tool's result, behind `Script error:` or not last is none, and a failed result whose `Script error:` is a guard report or an engine's out of memory is none"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14062,7 +13998,7 @@ binary = "nanocode_qualification"
 test = "an_api_key_anthropic_request_carries_no_claude_code_mark"
 kind = "host-free"
 layer = "L1"
-pins = "an API-key Anthropic turn's Messages request, as the mock received it, carries none of the Claude Code / Agent SDK marks nanocode's subscription wire adds: no `authorization`, `x-app`, `x-claude-code-session-id`, `anthropic-dangerous-direct-browser-access` or `x-stainless-*` header, no `claude-cli/` user agent, no `claude-code-20250219` or `oauth-2025-04-20` beta, no system block that is the Agent SDK or legacy Claude Code identity or the billing line, and no body `metadata`; the key arrives as `x-api-key` and the system prompt is sent (red at 76a343c54: the Agent SDK identity opened the system prompt, and that line alone turns an API key's 200 into a 400 `credit balance is too low`, MEASURED 2026-11-12)"
+pins = "an API-key Anthropic turn's Messages request, as the mock received it, carries none of the Claude Code / Agent SDK marks nanocode's subscription wire adds: no `authorization`, `x-app`, `anthropic-dangerous-direct-browser-access` or `x-stainless-*` header, no `claude-cli/` user agent, no `claude-code-20250219` or `oauth-2025-04-20` beta, no system block that is the Agent SDK or legacy Claude Code identity or the billing line, and no `metadata.user_id` naming an account; the `x-claude-code-session-id` header and `metadata.user_id` nanocode sends every API-key request since 8ec3b215 name only the session's own id (not measured against a key's credits); the key arrives as `x-api-key` and the system prompt is sent (red at 76a343c54: the Agent SDK identity opened the system prompt, and that line alone turns an API key's 200 into a 400 `credit balance is too low`, MEASURED 2026-11-12)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14110,7 +14046,7 @@ binary = "nanocode_qualification"
 test = "a_flooding_session_reaches_the_tool_as_its_bounded_window"
 kind = "host-free"
 layer = "L1"
-pins = "a session writing 3 MiB is handed to the tool as at most its 1 MiB head+tail window with the elided count stated"
+pins = "a session writing 3 MiB is handed to the tool as at most its 1 MiB head+tail window, which nanocode's own output budget then cuts: the result's original token count is that of the window and kata's elision marker (MEASURED 262151, between 1 MiB/4 and (1 MiB + 67)/4)"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -14791,18 +14727,18 @@ pins = "building the worker's production adapter registry leaves exactly `CODE_M
 [[construct.cell]]
 package = "kata-code-mode-host"
 binary = "interpreter_process"
-test = "cells_run_in_one_child_and_no_quickjs_thread_runs_here"
+test = "cells_run_in_one_child_and_burn_no_cpu_here"
 kind = "host-free"
 layer = "L1"
-pins = "with kata's backend installed, two cells answer while the test process has no `nanocode-code-m` thread and exactly one child, reaped by `terminate` (red with the backend not installed: a QuickJS thread runs in the test process)"
+pins = "with kata's backend installed, two cells answer in exactly one child, reaped by `terminate`, and a 500 ms spin in the second is charged to that child's CPU, not the test process's (red with the backend not installed: no child)"
 
 [[construct.cell]]
 package = "kata"
 binary = "code_mode_host_live"
-test = "a_bind_flood_ends_only_its_interpreter_under_the_worker_daemon_live"
+test = "a_killed_interpreter_ends_only_itself_under_the_worker_daemon_live"
 kind = "live"
 layer = "L1"
-pins = "a `nanocode_anthropic` stage in a real rootless capsule whose first Code Mode cell is a model-written `bind` flood and whose second is one text (mock Messages model, the test-support door confirmed in the daemon's log before the submit), on a main whose worker is an external `kata-worker` daemon over `local_socket`: the daemon and the main are alive off `/proc` after the flood, the stage completed in the raw ledger, the model told the interpreter's SIGSEGV and the next cell's text, no interpreter child of the daemon left alive nor any unreaped child of it; watched RED with the thread-backend installer (the daemon is a zombie after the flood), with the supervisor reading the interpreter's end without reaping it (a zombie child of the daemon), and with the supervisor keeping its interpreter at its end and the interpreter arming no parent-death signal (a live interpreter child of the daemon)"
+pins = "a `nanocode_anthropic` stage in a real rootless capsule whose first Code Mode cell waits on a timer and whose second is one text (mock Messages model, the test-support door confirmed in the daemon's log before the submit), on a main whose worker is an external `kata-worker` daemon over `local_socket`: the test kills the waiting cell's interpreter, a child of the daemon, by SIGKILL (the OOM killer's stand-in; no cell-reachable way to end a djs interpreter by a signal is known); the daemon and the main are alive off `/proc` after it, the stage's `event_accepted|completed` is read through a second read-only handle, the mock's own log carries the killed interpreter's end naming `SIGKILL` and the next cell's text, the killed interpreter is reaped, and no interpreter child of the daemon is left alive or unreaped"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -14810,15 +14746,15 @@ binary = "interpreter_process"
 test = "a_program_that_cannot_start_fails_the_cell_by_name"
 kind = "host-free"
 layer = "L1"
-pins = "an interpreter program that does not exist fails the cell with `Code Mode's interpreter process could not start: <path> (...)` and no QuickJS thread ever runs in the test process: no in-process fallback"
+pins = "an interpreter program that does not exist fails the cell with `Code Mode's interpreter process could not start: <path> (...)` and the cell's own `notify` never reaches the host: no in-process fallback"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
 binary = "lib"
-test = "tests::an_interpreter_holds_descriptors_0_to_2_and_no_environment"
+test = "tests::an_interpreter_holds_descriptors_0_to_2_and_only_an_empty_tz"
 kind = "host-free"
 layer = "L1"
-pins = "a probe started as an interpreter, after the interpreter's confinement up to its syscall filter (whose refusal of the probe's /proc reads the filter's cells pin), lists /proc/self/fd as 0, 1 and 2 and holds no environment variable, though its parent held a descriptor without close-on-exec and an environment (red with the close loop removed: the planted descriptor is listed)"
+pins = "a probe started as an interpreter, after the interpreter's confinement up to its syscall filter (whose refusal of the probe's /proc reads the filter's cells pin), lists /proc/self/fd as 0, 1 and 2 and holds one environment variable, an empty `TZ`, though its parent held a descriptor without close-on-exec and an environment (red with the close loop removed: the planted descriptor is listed)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -14954,7 +14890,7 @@ binary = "code_mode_through_adapter"
 test = "a_cell_allocating_past_the_memory_limit_fails_to_the_model_and_the_turn_goes_on"
 kind = "host-free"
 layer = "L1"
-pins = "under the installer's limits, a model-written cell allocating 384 MiB reaches the next request as `Script failed` naming out of memory (never `allocated`); the next cell runs and reaches the model; the interpreter list read while each cell waits is one process, the same one both times, and no QuickJS thread runs in the test process; the turn completes `DONE` and its evidence records `CodeModeLimit{memory}`"
+pins = "under the installer's limits, a model-written cell allocating 384 MiB reaches the next request as `Script failed` naming out of memory (never `allocated`); the next cell runs and reaches the model; the interpreter list read while each cell waits is one process, each cell's own, and the test process's peak resident memory stays under half the heap; the turn completes `DONE` and its evidence records `CodeModeLimit{memory}`"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14967,18 +14903,18 @@ pins = "under kata's limits with a cap of two live Code Mode workers, a third mo
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_through_adapter"
-test = "a_cell_after_its_host_thread_ended_runs_on_a_fresh_host"
+test = "a_terminated_cell_s_interpreter_is_reaped_and_the_next_cell_runs"
 kind = "host-free"
 layer = "L1"
-pins = "a spinning cell the model terminates is reported `Script terminated`, and the model's next cell runs in a different interpreter process (one listed while the first spins, one other while the third waits) and its text reaches the model; the turn completes"
+pins = "a spinning cell the model terminates is reported `Script terminated`, its interpreter process is killed and reaped (gone from a listing that includes unreaped children), and the model's next cell runs in another interpreter process and its text reaches the model; the turn completes"
 
 [[construct.cell]]
 package = "kata-worker"
 binary = "agent_turn_capsule"
-test = "a_limit_hit_past_the_visible_budget_is_in_the_published_evidence_on_the_responses_kind"
+test = "a_limit_hit_past_the_visible_budget_reaches_the_model_and_the_published_evidence_on_the_responses_kind"
 kind = "host-free"
 layer = "L1"
-pins = "a `nanocode_openai` turn through the whole capsule composition (registry with the nanocode adapter, toolhost double, mock provider) whose one cell writes a 60,000-byte text then allocates past kata's heap limit: the next request's result for the cell ends `[omitted 1 text items ...]` and the guard's memory report follows as an output of its own; the session evidence the worker published, read back off the rig's CAS by the report's ref and decoded as the wire type, names one `CodeModeLimit{memory}`"
+pins = "a `nanocode_openai` turn through the whole capsule composition (registry with the nanocode adapter, toolhost double, mock provider) whose one cell writes a 60,000-byte text then allocates past kata's heap limit: the next request's result for the cell is its header and one text middle-truncated to 10,000 tokens ending `Script error:\nScript stopped: the cell ran out of memory.`, and kata's memory report follows as an output of its own; the session evidence the worker published, read back off the rig's CAS by the report's ref and decoded as the wire type, names one `CodeModeLimit{memory}`"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14986,7 +14922,7 @@ binary = "code_mode_limits"
 test = "a_recursion_past_the_stack_limit_fails_the_cell_with_its_report"
 kind = "host-free"
 layer = "L1"
-pins = "driven through the vendored engine under the test's 1 MiB stack limit, an uncaught recursion ends the cell with QuickJS's `RangeError: Maximum call stack size exceeded`, the guard reports `Code Mode cell exceeded its 1048576-byte interpreter stack limit`, and the next cell runs"
+pins = "behind kata's interpreter process, an uncaught recursion past djs's stack limit ends the cell with djs's `RangeError: Maximum call stack size exceeded`, the interpreter reports `Code Mode cell exceeded its interpreter stack limit`, and the next cell runs"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14994,31 +14930,15 @@ binary = "code_mode_limits"
 test = "the_output_limit_admits_its_last_byte_and_refuses_the_next"
 kind = "host-free"
 layer = "L1"
-pins = "driven through the vendored engine under a 1 MiB output limit, a text of `limit - 2 * CELL_EVENT_BYTES - 1` bytes then a 1-byte text (exactly the limit) complete the cell with both texts out; the same cell with an empty text after them (its 1-byte separator: the limit plus one) fails on that text with the guard's `Code Mode cell output exceeded its 1048576-byte limit` as its error and its report, and the next cell runs (red with the guard admitting one byte past the limit, refusing at the limit, charging a joined text no separator, or charging an event one byte more)"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_limits"
-test = "every_cell_after_a_heap_hit_runs_with_the_whole_heap"
-kind = "host-free"
-layer = "L1"
-pins = "driven through the vendored engine under a 16 MiB heap, one worker's first cell floods the heap with small objects, then two trivial cells run and a 14 MiB allocation succeeds; nine heap floods (objects, a `Map`, typed arrays, closures, strings, a promise chain, a flood caught and resumed, a flood stored through the `Function` constructor `clearTimeout` inherits, a flood then a recursion past the stack limit), twice over, each fail and are each followed by a trivial cell that runs and a 14 MiB allocation that succeeds; on a second worker a first cell keeping 14 MiB in its globals is followed by a 14 MiB allocation that succeeds (red at base: SIGABRT on QuickJS's `gc_decref` assertion after `failed to create a fresh embedded QuickJS context`; red with the runtime kept across cells, or renewed only after a heap hit)"
-
-[[construct.cell]]
-package = "kata-agent-nanocode"
-binary = "code_mode_limits"
-test = "no_cell_reaches_the_globals_of_an_earlier_cell"
-kind = "host-free"
-layer = "L1"
-pins = "after a first cell sets a global, the next cell's `clearTimeout.__proto__.constructor(\"return globalThis\")()` is its own `globalThis` without that global, and `clearTimeout`'s prototype is its own `Function.prototype` (red at base and with the runtime kept: `42`, `false`, `false`)"
+pins = "behind kata's interpreter process under a 1 MiB output limit, output exactly at the limit as the interpreter charges it (`wire::Event::charge`) completes the cell, and one byte past it fails the cell with the interpreter's `Code Mode cell output exceeded its 1048576-byte limit` as its error and its report, and the next cell runs (red with the interpreter's cap check admitting the byte past the limit or refusing at the limit, or `Event::charge` charging an event wrongly)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_out_of_memory_defects"
-test = "quickjs_out_of_memory_defects_end_only_the_interpreter_process"
+test = "no_former_quickjs_out_of_memory_defect_ends_an_interpreter"
 kind = "host-free"
 layer = "L1"
-pins = "MEASURED RESIDUAL, contained (QuickJS 0.16.2): the same sweep on `Math.max.bind(null, 1)(2)` and on `eval` compiling a class ends the interpreter process while the cell runs, each such cell failing with the supervisor's report `Code Mode's interpreter process ended by SIGSEGV`, and on `Array.fromAsync([1, 2])` ends it after the cell's `Done`, never before the `Done` reached the supervisor (the next cell runs in a new interpreter, read off the test process's children in /proc; red with the interpreter's cell-ended hook not installed and its `Done` written 1 ms late: all 338 such ends charged to their cells); the test process runs every sweep on, and after every end the next interpreter's second cell starts with the free heap the first interpreter's did, within 64 bytes (red with kata's backend not installed: the test binary dies by SIGSEGV; red when QuickJS handles the failure on that path: no headroom ends the interpreter)"
+pins = "behind kata's interpreter process under a 4 MiB heap, the operations that met QuickJS 0.16.2's out-of-memory defects (`Function.prototype.bind`, `eval` compiling a class, `Array.fromAsync`) and a control, each run after a pad leaving every 8 bytes of headroom up to 16 KiB of the free heap, run at some headrooms and fail on the heap with the engine's error and report at the others, and no interpreter ends (MEASURED ran/failed on the heap: control 1911/138, `bind` 1933/116, `eval` 1528/521, `Array.fromAsync` 1842/207) (red with `set_cell_memory` removed from the interpreter)"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -15026,7 +14946,7 @@ binary = "agent_turn_capsule"
 test = "a_turn_whose_cells_end_their_interpreter_completes_and_records_each_end"
 kind = "host-free"
 layer = "L1"
-pins = "a `nanocode_anthropic` turn through the whole capsule composition under kata's limits, cells [text, bind flood, text, bind flood]: the worker reports a completed capsule, the model's last request carries each flood's result naming the SIGSEGV and each text cell's text, and the session evidence read back off the rig's CAS by the report's ref names two `CodeModeInterpreterEnded{SIGSEGV}`"
+pins = "on each nanocode kind, a turn through the whole capsule composition under kata's limits, cells [waiter, wait, text, waiter, wait, text], each waiter's interpreter killed from outside by SIGKILL (the OOM killer's stand-in): the worker reports a completed capsule, each wait's result is `Script error:\nCode Mode's interpreter process ended by SIGKILL`, each later text cell's text reaches the model, the session evidence read back off the rig's CAS by the report's ref names two `CodeModeInterpreterEnded{SIGKILL}`, and no interpreter is left"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -15034,7 +14954,7 @@ binary = "agent_turn_capsule"
 test = "a_worker_turn_whose_cells_end_their_interpreter_ends_no_other_process"
 kind = "host-free"
 layer = "L1"
-pins = "a child of the test binary runs the turn above alone and the kernel reports it exited 0 with that cell passed (red with kata's backend not installed: the child ends by SIGSEGV)"
+pins = "a child of the test binary runs the turn above alone and the kernel reports it exited 0 with that cell passed (would red if an interpreter's death ended the hosting process, or the cells ran in it: exit 101)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"

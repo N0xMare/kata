@@ -9,28 +9,29 @@ description = "Runs the embedded harness's Code Mode interpreter in a confined c
 
 [dependencies]
 # The vendored Code Mode engine: its worker seam (`set_worker_backend`), which
-# this crate fills with a supervisor of an interpreter process, and the worker
-# thread that process runs (`EmbeddedHost`, no backend installed there).
+# this crate fills with a supervisor of an interpreter process, and the host
+# that process runs (`EmbeddedHost`, no backend installed there).
 nanocode-code-mode-engine.workspace = true
 # The frames are JSON: `raw_value` and `rc` carry a cell's stored values
 # (`Arc<RawValue>`) as the engine holds them.
 serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true, features = ["raw_value"] }
 # The interpreter's hardening (parent-death signal, rlimits, dumpable,
-# no-new-privs) and its reads and writes of the socket on descriptor 0, all
-# safe calls; libc for the two calls rustix has no safe form of, `close(2)` on
+# no-new-privs), its reads and writes of the socket on descriptor 0 and the
+# randomness it hands the engine (`getrandom`), all safe calls; libc for the two calls rustix has no safe form of, `close(2)` on
 # an inherited descriptor and `seccomp(2)`, and for the syscall numbers its
 # filter lists.
-rustix = { workspace = true, features = ["thread"] }
+rustix = { workspace = true, features = ["thread", "rand"] }
 libc.workspace = true
 # kata's own seccomp compiler (`sandbox_seccomp::allow_list_program`), which
 # compiles the interpreter's syscall filter.
 kata-types.workspace = true
 # `syscall_filter_digest`, the filter's part of the executor term.
 blake3.workspace = true
-# The interpreter process waits on its engine worker's events and on its
-# parent's frames at once: a current-thread runtime with no I/O or time driver.
-tokio = { workspace = true, features = ["rt", "sync", "macros"] }
+# The interpreter process waits on its host's events, its parent's frames and
+# its cell's wall at once: a current-thread runtime with a time driver (which
+# also serves the engine's timers) and no I/O driver.
+tokio = { workspace = true, features = ["rt", "sync", "macros", "time"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }

@@ -1,37 +1,31 @@
 [package]
 name = "nanocode-code-mode-engine"
-version = "0.6.7"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.97"
 publish = true
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/gakonst/nanocode"
-description = "QuickJS execution worker for Code Mode on native and WASM hosts"
+repository = "https://github.com/nanocodexyz/nanocode"
+description = "JavaScript cell execution for Code Mode on native and WASM hosts"
 autotests = false
 autobenches = false
 
 [dependencies]
-nanocode-platform = { version = "0.6.7", git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-nanocode-sync = { version = "0.6.7", git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-nanocode-tool-contracts = { version = "0.6.7", git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-base64 = { version = "0.22.1" }
-base64-simd = { version = "0.8.0" }
-rquickjs = { version = "0.14.0", features = ["loader"] }
+nanocode-platform = { version = "0.7.0", git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+nanocode-sync = { version = "0.7.0", git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+nanocode-sys = { version = "0.7.0", git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+nanocode-tool-contracts = { version = "0.7.0", git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+djs-embed = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
 serde = { version = "1.0.228", features = ["derive", "rc"] }
-serde_json = { version = "1.0.149", features = ["raw_value"] }
-sha1 = { version = "0.11.0" }
-sha2 = { version = "0.11.0", default-features = false }
-tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+serde_json = { version = "1.0.149", features = ["float_roundtrip", "raw_value"] }
+nanocode-digest = { version = "0.7.0", git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+nanocode-trace = { version = "0.7.0", git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+
+[build-dependencies]
+djs-embed = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { version = "1.48.0", features = ["rt", "sync"] }
-
-[target.'cfg(target_os = "ios")'.dependencies]
-rquickjs = { version = "0.14.0", features = ["bindgen", "loader"] }
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-rquickjs = { version = "0.14.0", features = ["bindgen", "loader"] }
-tokio = { version = "1.48.0", features = ["macros", "sync"] }
+nanocode-executor = { version = "0.7.0", git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -43,6 +37,7 @@ use_self = "warn"
 redundant_clone = "warn"
 large_enum_variant = "allow"
 result_large_err = "allow"
+double_must_use = "allow"
 
 [lib]
 test = false

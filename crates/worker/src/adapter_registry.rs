@@ -96,21 +96,20 @@ mod tests {
 
     /// Building the production registry installs kata's Code Mode limits:
     /// that is how the worker installs them once at start, before any agent
-    /// is built. The engine's own setter is the witness: afterwards it refuses
+    /// is built. The installer itself is the witness: afterwards it refuses
     /// any other limits and names the ones it holds.
     #[test]
     fn the_production_registry_installs_the_code_mode_limits() {
         let _registry = super::production();
         let kata = kata_agent_nanocode::CODE_MODE_LIMITS;
-        let other = nanocode_code_mode_engine::NativeLimits {
+        let other = kata_code_mode_host::CodeModeLimits {
             cell_wall: kata.cell_wall * 2,
             ..kata
         };
-        assert_eq!(
-            nanocode_code_mode_engine::set_native_limits(other),
-            Err(kata),
-            "the engine holds kata's limits"
-        );
+        let installed =
+            kata_code_mode_host::install(other, kata_code_mode_host::Program::this_executable())
+                .map_err(|(limits, _)| limits);
+        assert_eq!(installed, Err(kata), "the process holds kata's limits");
     }
 
     /// Two adapters declaring one kind are refused at construction, not kept

@@ -1,15 +1,24 @@
-//! The nanocode adapter's cells that need Code Mode on the engine's own THREAD
-//! backend: this binary installs no Code Mode limits, so the vendored engine runs
-//! each cell on a thread of this process — the configuration no kata worker runs
+//! The nanocode adapter's cells that need Code Mode on the engine's own
+//! IN-PROCESS host: this binary installs no Code Mode limits, so the vendored
+//! engine's embedded host runs each cell inline on the task that reads its
+//! events (MEASURED at 8ec3b215, `EmbeddedHost::read_event`; at 2ac77424 it ran
+//! each on a QuickJS thread of its own), a task kata's platform host spawns on
+//! the tokio runtime driving the turn — the configuration no kata worker runs
 //! (every worker installs kata's limits, whose backend runs each cell in an
-//! interpreter process: `nanocode_qualification`, which runs under them).
+//! interpreter process: `nanocode_qualification`, which runs under them). The
+//! cells run a multi-thread runtime, so a cell holding one worker leaves the
+//! turn's own tasks the others, and each ends by shutting its runtime down
+//! in the background ([`on_a_multi_thread_runtime`]): a worker still inside
+//! the step would otherwise hold the runtime's drop, and the cell, until the
+//! step ends.
 //!
-//! What only the thread backend can still produce is a cancel nanocode does
+//! What only the in-process host can still produce is a cancel nanocode does
 //! NOT confirm: a cell inside one long native step
-//! ([`quickjs_threads::A_LONG_NATIVE_STEP`]) holds its thread past the
+//! ([`quickjs_threads::A_LONG_NATIVE_STEP`]) holds its worker thread past the
 //! interrupt, and nanocode's turn waits on it (MEASURED at 2ac77424, lane
-//! ur-u4u5). Behind kata's backend the cancel's terminate kills the step's
-//! interpreter process, so nanocode confirms the same cancel
+//! ur-u4u5, and again at 8ec3b215). Behind kata's backend the cancel's
+//! terminate kills the step's interpreter process, so nanocode confirms the
+//! same cancel
 //! (`nanocode_qualification::a_cancel_during_a_native_step_is_confirmed_behind_kata_backend`).
 //! The adapter's classification of an unconfirmed stop (`unconfirmed_stop`:
 //! ambiguous at the crossed class, never `Cancelled`) is the same code on both
@@ -17,9 +26,8 @@
 //! `CancellationUnacknowledged` rows (`crates/agent/tests/qualification_matrix.rs`).
 //!
 //! The witnesses do not share the adapter's code: the mock's own log, the
-//! toolhost double's own log, and the kernel's account of this process's
-//! QuickJS threads (`nanocode-code-mode-quickjs`, cut to the 15-byte `comm`
-//! `nanocode-code-m`).
+//! toolhost double's own log, and the kernel's account of this process's tokio
+//! worker threads ([`quickjs_threads::runtime_worker_threads`]).
 
 #[path = "fixtures/mock_provider.rs"]
 #[allow(dead_code)]
@@ -68,42 +76,67 @@ fn anthropic_prompt(text: &str) -> Prompt {
     prompt
 }
 
-/// The CPU time, in clock ticks, of every QuickJS thread of this process,
+/// The CPU time, in clock ticks, of each tokio worker thread of this process,
 /// read off `/proc`.
-fn quickjs_cpu_ticks() -> u64 {
-    quickjs_threads::quickjs_threads()
+fn worker_cpu_ticks() -> std::collections::BTreeMap<u32, u64> {
+    quickjs_threads::runtime_worker_threads()
         .into_iter()
-        .filter_map(quickjs_threads::cpu_ticks)
-        .sum()
+        .filter_map(|tid| Some((tid, quickjs_threads::cpu_ticks(tid)?)))
+        .collect()
 }
 
-/// A QuickJS thread of this process burns CPU over the next second.
+/// Runs `cell` on a multi-thread tokio runtime of four workers and shuts the
+/// runtime down without waiting for them, as a thread nobody joins was left
+/// at 2ac77424: a worker held inside a native step past the cell's end keeps
+/// the process, not the cell, running.
+fn on_a_multi_thread_runtime(cell: impl std::future::Future<Output = ()>) {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .expect("a multi-thread tokio runtime");
+    runtime.block_on(cell);
+    runtime.shutdown_background();
+}
+
+/// One tokio worker thread of this process is held busy over the next second:
+/// it burns at least half of it on CPU, as a cell inside a native step does,
+/// which an idle runtime's housekeeping does not.
 async fn assert_a_code_mode_cell_runs(path: &str) {
-    let before = quickjs_cpu_ticks();
+    let before = worker_cpu_ticks();
     tokio::time::sleep(Duration::from_millis(1_000)).await;
-    let burned = quickjs_cpu_ticks().saturating_sub(before);
+    let burned = worker_cpu_ticks()
+        .into_iter()
+        .map(|(tid, after)| after.saturating_sub(before.get(&tid).copied().unwrap_or(after)))
+        .max()
+        .unwrap_or(0);
     assert!(
-        burned >= 10,
-        "{path}: no thread named for nanocode's QuickJS host burned CPU while its cell spins \
-         ({burned} ticks): the witness sees no cell"
+        burned >= 50,
+        "{path}: no tokio worker thread burned half a second of CPU while the cell sorts \
+         ({burned} ticks at most): the witness sees no cell"
     );
 }
 
 /// **A cancel nanocode does not confirm is not reported as a cancel.** The
 /// Anthropic model starts a Code Mode cell inside one long native step
 /// ([`quickjs_threads::A_LONG_NATIVE_STEP`]), which no interrupt reaches.
-/// Once the kernel's account shows its QuickJS thread burning CPU, the
+/// Once the kernel's account shows a worker thread held burning CPU, the
 /// operator cancels; that thread burns CPU through the second after the
 /// cancel too, so nanocode did not stop the cell it was asked to stop
-/// (MEASURED at 2ac77424: its turn waits on the cell and confirms nothing).
+/// (MEASURED at 2ac77424 and at 8ec3b215: its turn waits on the cell and
+/// confirms nothing).
 /// When the 5 s grace expires the turn is ambiguous at `ModelTokens`, naming
 /// the unconfirmed stop, `close` reports no acknowledged cancel, and no second
 /// model request was made.
 ///
 /// **Would red if:** an unconfirmed stop were reported as a cancel (watched:
 /// `Cancelled`).
-#[tokio::test]
-async fn an_anthropic_cancel_nanocode_does_not_confirm_is_ambiguous() {
+#[test]
+fn an_anthropic_cancel_nanocode_does_not_confirm_is_ambiguous() {
+    on_a_multi_thread_runtime(an_anthropic_cancel_nanocode_does_not_confirm());
+}
+
+async fn an_anthropic_cancel_nanocode_does_not_confirm() {
     let mock = MockProvider::start(vec![
         claude_code_reply("r1", quickjs_threads::A_LONG_NATIVE_STEP),
         claude_text_reply("must never be asked for"),
@@ -148,7 +181,8 @@ async fn an_anthropic_cancel_nanocode_does_not_confirm_is_ambiguous() {
 /// call in flight. The operator's cancel fires once the kernel's account sees
 /// the cell's QuickJS thread burn CPU (the cancel lands inside the step).
 /// MEASURED at 2ac77424 (lane ur-u4u5, this cell's shape and one whose cell
-/// yielded before the sort with the next model request stalled): nanocode
+/// yielded before the sort with the next model request stalled), and at
+/// 8ec3b215 in this cell's shape: nanocode
 /// confirms no cancel while a cell is inside such a step, and `prompt` returns
 /// about 10.1 s after the cancel (the 100 ms poll, the 5 s grace, then the turn
 /// end's shutdown waiting out its own 5 s on the cell). The one model request
@@ -160,8 +194,12 @@ async fn an_anthropic_cancel_nanocode_does_not_confirm_is_ambiguous() {
 /// **Would red if:** the grace's expiry on a stop the token asked for were read
 /// as the vendor confirming it (watched: `unconfirmed_stop` mapping a token
 /// stop to `Cancelled`).
-#[tokio::test]
-async fn an_unconfirmed_cancel_is_ambiguous_at_the_crossed_class() {
+#[test]
+fn an_unconfirmed_cancel_is_ambiguous_at_the_crossed_class() {
+    on_a_multi_thread_runtime(an_unconfirmed_cancel());
+}
+
+async fn an_unconfirmed_cancel() {
     let mock = MockProvider::start(vec![code_reply(
         "r1",
         &format!(

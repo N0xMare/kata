@@ -1082,42 +1082,55 @@ async fn nanocode_cells_through_the_worker(
     kind: kata_types::agent::AdapterKind,
     cells: &[&str],
 ) -> (Vec<serde_json::Value>, kata_types::agent::SessionEvidence) {
+    let replies = (1..).zip(cells);
+    let script = match kind {
+        kata_types::agent::AdapterKind::NanocodeOpenai => replies
+            .map(|(cell, source)| {
+                mock_provider::code_reply(
+                    &format!("r{cell}"),
+                    source,
+                    mock_provider::usage(1, 0, 1),
+                )
+            })
+            .chain([mock_provider::message_reply(
+                "done",
+                "DONE",
+                mock_provider::usage(1, 0, 1),
+            )])
+            .collect(),
+        kata_types::agent::AdapterKind::NanocodeAnthropic => replies
+            .map(|(cell, source)| mock_provider::claude_code_reply(&format!("r{cell}"), source))
+            .chain([mock_provider::claude_text_reply("DONE")])
+            .collect(),
+    };
+    let mock = mock_provider::MockProvider::start(script).await;
+    let evidence = nanocode_turn_through_the_worker(kind, &mock).await;
+    (mock.requests(), evidence)
+}
+
+/// One `kind` nanocode turn through the whole capsule composition under
+/// kata's Code Mode limits, over the toolhost double, its model `mock`: the
+/// session evidence the worker published, read back off the rig's CAS by the
+/// report's ref and decoded as the wire type.
+async fn nanocode_turn_through_the_worker(
+    kind: kata_types::agent::AdapterKind,
+    mock: &mock_provider::MockProvider,
+) -> kata_types::agent::SessionEvidence {
     const TOKEN: &str = "sk-nanocode-limit-record-7e20";
     kata_agent_nanocode::install_code_mode_limits();
     let rig = rig();
     let credentials = kata_worker::agent_credential::AgentCredentialSource::for_test(
         std::collections::BTreeMap::from([("KATA_FIXTURE_TOKEN".to_owned(), TOKEN.to_owned())]),
     );
-    let replies = (1..).zip(cells);
-    let (script, adapter, model) = match kind {
-        kata_types::agent::AdapterKind::NanocodeOpenai => (
-            replies
-                .map(|(cell, source)| {
-                    mock_provider::code_reply(
-                        &format!("r{cell}"),
-                        source,
-                        mock_provider::usage(1, 0, 1),
-                    )
-                })
-                .chain([mock_provider::message_reply(
-                    "done",
-                    "DONE",
-                    mock_provider::usage(1, 0, 1),
-                )])
-                .collect(),
-            kata_agent_nanocode::NanocodeAdapter::openai(),
-            "gpt-6-luna",
-        ),
+    let (adapter, model) = match kind {
+        kata_types::agent::AdapterKind::NanocodeOpenai => {
+            (kata_agent_nanocode::NanocodeAdapter::openai(), "gpt-6-luna")
+        }
         kata_types::agent::AdapterKind::NanocodeAnthropic => (
-            replies
-                .map(|(cell, source)| mock_provider::claude_code_reply(&format!("r{cell}"), source))
-                .chain([mock_provider::claude_text_reply("DONE")])
-                .collect(),
             kata_agent_nanocode::NanocodeAdapter::anthropic(),
             "claude-sonnet-4-6",
         ),
     };
-    let mock = mock_provider::MockProvider::start(script).await;
     let url = match kind {
         kata_types::agent::AdapterKind::NanocodeAnthropic => format!("{}/messages", mock.url),
         kata_types::agent::AdapterKind::NanocodeOpenai => mock.url.clone(),
@@ -1194,8 +1207,7 @@ async fn nanocode_cells_through_the_worker(
         evidence_ref.size_bytes(),
     )
     .expect("the evidence artifact reads");
-    let evidence = serde_json::from_slice(&bytes).expect("the blob decodes as SessionEvidence");
-    (mock.requests(), evidence)
+    serde_json::from_slice(&bytes).expect("the blob decodes as SessionEvidence")
 }
 
 /// The limits a published evidence record names, in order.
@@ -1212,21 +1224,33 @@ fn limits_in(evidence: &kata_types::agent::SessionEvidence) -> Vec<&str> {
         .collect()
 }
 
-/// **A Code Mode limit hit past nanocode's visible budget reaches the
-/// worker's published evidence on the Responses kind.** A `nanocode_openai`
-/// turn through the whole capsule composition: the model's one cell writes a
-/// 60,000-byte text, then allocates past kata's heap limit. The request after
-/// it hands the model the cell's result with its `Script error:` dropped
-/// (`[omitted 1 text items ...]` its last text), and the guard's report of the
-/// memory limit as an output of its own. The session evidence the worker
-/// published, read back off the CAS by its ref, names one
-/// `CodeModeLimit{memory}`.
+/// The engine's error for a cell that ran out of its heap, as the model is
+/// told it (`Script error:` and the engine's message).
+const OUT_OF_MEMORY: &str = "Script error:\nScript stopped: the cell ran out of memory.";
+
+/// kata's report of its heap limit, a Code Mode notification the interpreter
+/// sends before the cell's error.
+const MEMORY_REPORT: &str = "Code Mode cell exceeded its 268435456-byte memory limit";
+
+/// **A Code Mode limit hit past nanocode's visible budget reaches the model
+/// and the worker's published evidence on the Responses kind.** A
+/// `nanocode_openai` turn through the whole capsule composition: the model's
+/// one cell writes a 60,000-byte text, then allocates past kata's heap limit.
+/// MEASURED at 8ec3b215: the request after it hands the model the cell's
+/// result as its header and ONE text, nanocode's join of the cell's text and
+/// its `Script error:` middle-truncated to its 10,000-token budget (`Warning:
+/// truncated output (original token count: 15015)` first, the engine's
+/// out-of-memory error last), and the engine's report of the memory limit as
+/// an output of its own. The session evidence the worker published, read back
+/// off the CAS by its ref, names one `CodeModeLimit{memory}`.
 ///
-/// **Would red if:** the limit were read off the visible result (the record
-/// is missing from the durable evidence), or the worker published the
-/// evidence without the adapter's limit records.
+/// **Would red if:** the limit were read off the visible result alone and
+/// the worker published the evidence without the adapter's limit records (no
+/// `memory` record), or nanocode's truncation dropped or cut the error again
+/// (the text does not end with it).
 #[tokio::test]
-async fn a_limit_hit_past_the_visible_budget_is_in_the_published_evidence_on_the_responses_kind() {
+async fn a_limit_hit_past_the_visible_budget_reaches_the_model_and_the_published_evidence_on_the_responses_kind()
+ {
     let (requests, evidence) = nanocode_cells_through_the_worker(
         kata_types::agent::AdapterKind::NanocodeOpenai,
         &[LONG_TEXT_THEN_ALLOCATE],
@@ -1240,18 +1264,28 @@ async fn a_limit_hit_past_the_visible_budget_is_in_the_published_evidence_on_the
             outputs.len()
         );
     };
-    assert_eq!(
-        result
-            .as_array()
-            .and_then(|items| items.last())
-            .and_then(|item| item["text"].as_str()),
-        Some("[omitted 1 text items ...]"),
-        "the cell's script error is past nanocode's visible budget"
+    let texts: Vec<&str> = result
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|item| item["text"].as_str())
+        .collect();
+    let [header, joined] = texts.as_slice() else {
+        panic!("the result is its header and one joined text: {texts:.400?}");
+    };
+    assert!(
+        header.starts_with("Script failed")
+            && joined.starts_with("Warning: truncated output (original token count: ")
+            && joined.contains(" tokens truncated")
+            && joined.ends_with(&format!("x\n{OUT_OF_MEMORY}"))
+            && !joined.contains("allocated"),
+        "the cell failed and its truncated text ends with its error: {}",
+        &joined[joined.len().saturating_sub(200)..]
     );
     assert_eq!(
         *report,
-        serde_json::json!("Code Mode cell exceeded its 268435456-byte memory limit"),
-        "the model is handed the guard's report"
+        serde_json::json!(MEMORY_REPORT),
+        "the model is handed the engine's report"
     );
     assert_eq!(limits_in(&evidence), ["memory"], "{evidence:?}");
 }
@@ -1261,7 +1295,9 @@ async fn a_limit_hit_past_the_visible_budget_is_in_the_published_evidence_on_the
 /// model (MEASURED RESIDUAL).** The same turn as `nanocode_anthropic`: the
 /// request after the cell hands the model a `tool_result` whose visible blocks
 /// end with `[<n> more text blocks omitted]`, the cell's out-of-memory error
-/// and the guard's report among the dropped. The session evidence the worker
+/// and kata's report of the limit among the dropped (MEASURED at 8ec3b215:
+/// nanocode's Messages kind still drops whole blocks past its 12,000-token
+/// budget, where its Responses kind now joins and middle-truncates them). The session evidence the worker
 /// published, read back off the CAS by its ref, names one
 /// `CodeModeLimit{memory}` all the same.
 ///
@@ -1289,9 +1325,8 @@ async fn a_limit_hit_past_the_visible_budget_is_in_the_published_evidence_on_the
     assert_eq!(limits_in(&evidence), ["memory"], "{evidence:?}");
 }
 
-/// A cell that fills the heap with small objects until QuickJS, unable to
-/// allocate even its own out-of-memory error, throws a bare `null`, which the
-/// bootstrap cannot report either.
+/// A cell that fills the heap with small objects until djs stops it: a heap
+/// hit, which no script can catch.
 const SMALL_OBJECT_FLOOD: &str =
     "const objects = [];\nfor (;;) objects.push({ i: objects.length });";
 
@@ -1311,34 +1346,66 @@ const CELLS_AFTER_HEAP_HITS: [&str; 5] = [
     HALF_THE_HEAP,
 ];
 
-/// The text the model must be told last for each of [`CELLS_AFTER_HEAP_HITS`]:
-/// the guard's memory message for a flood, the cell's own text otherwise.
-const TOLD_AFTER_HEAP_HITS: [&str; 5] = [
-    "Code Mode cell exceeded its 268435456-byte memory limit",
-    "allocated 128 MiB",
-    "the next cell ran",
-    "Code Mode cell exceeded its 268435456-byte memory limit",
-    "allocated 128 MiB",
+/// The text each of [`CELLS_AFTER_HEAP_HITS`] must tell the model: `None` for
+/// a flood (its result is the engine's out-of-memory error, and kata's report
+/// beside it), the cell's own text otherwise.
+const TOLD_AFTER_HEAP_HITS: [Option<&str>; 5] = [
+    None,
+    Some("allocated 128 MiB"),
+    Some("the next cell ran"),
+    None,
+    Some("allocated 128 MiB"),
 ];
+
+/// Every text `request` handed the model for cell `cell` of a `kind` turn:
+/// on the Responses kind every output of the cell's call, its result's texts
+/// first, then each notification, an output of its own; on the Messages
+/// kind its `tool_result`'s texts.
+fn told_for_cell(
+    kind: kata_types::agent::AdapterKind,
+    request: &serde_json::Value,
+    cell: usize,
+) -> Vec<String> {
+    match kind {
+        kata_types::agent::AdapterKind::NanocodeOpenai => {
+            mock_provider::call_outputs(request, &format!("call_r{cell}"))
+                .into_iter()
+                .flat_map(|output| match output {
+                    serde_json::Value::String(text) => vec![text],
+                    items => items
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|item| item["text"].as_str().map(str::to_owned))
+                        .collect(),
+                })
+                .collect()
+        }
+        kata_types::agent::AdapterKind::NanocodeAnthropic => {
+            mock_provider::tool_result_texts(request, &format!("toolu_r{cell}")).unwrap_or_default()
+        }
+    }
+}
 
 /// **A nanocode turn whose cells hit the heap completes through the worker,
 /// and the cells after each hit run.** On each kind, a turn through the whole
 /// capsule composition under kata's Code Mode limits: the model's first cell
-/// floods the heap (the hit QuickJS throws as a bare `null`), its second
-/// allocates 128 MiB, half the heap limit, its third writes a text, its fourth
-/// floods the heap again and its fifth allocates 128 MiB again. The worker
-/// reports a completed capsule; the model's last request carries every cell's
-/// result, each flood's failed with the guard's memory message and each other
-/// cell's completed with its own text; and the session evidence the worker
-/// published, read back off the rig's CAS by the report's ref, names two
-/// `CodeModeLimit{memory}`. The process this runs in stands for the node hosting
-/// the worker (the child twin below reads its exit status).
+/// floods the heap, its second allocates 128 MiB, half the heap limit, its
+/// third writes a text, its fourth floods the heap again and its fifth
+/// allocates 128 MiB again. The worker reports a completed capsule; the
+/// model's last request carries every cell's result, MEASURED at 8ec3b215:
+/// each flood's failed with the engine's `Script stopped: the cell ran out of
+/// memory.` and kata's report of the limit beside it (on the Responses kind
+/// an output of its own), each other cell's completed with its own text; and
+/// the session evidence the worker published, read back off the rig's CAS by
+/// the report's ref, names two `CodeModeLimit{memory}`. The process this runs
+/// in stands for the node hosting the worker (the child twin below reads its
+/// exit status).
 ///
-/// MEASURED before each cell had a runtime of its own: every cell after the
-/// first flood failed to the model with `failed to create a fresh embedded
-/// QuickJS context: Allocation failed while creating object`, on both kinds;
-/// under a heap left with other headroom the engine's third cell aborts the
-/// process instead (`code_mode_limits::heap_hits_end_no_process`).
+/// **Would red if:** a heap hit left the heap it filled to the next cell (the
+/// 128 MiB cell after a flood fails with the out-of-memory error), a heap hit
+/// failed the turn instead of the cell (no completed capsule), or the adapter
+/// did not record a limit kata reported (fewer than two `memory` records).
 #[tokio::test]
 async fn a_turn_whose_cells_hit_the_heap_completes_and_its_later_cells_run() {
     for kind in [
@@ -1350,36 +1417,22 @@ async fn a_turn_whose_cells_hit_the_heap_completes_and_its_later_cells_run() {
         assert_eq!(requests.len(), 6, "{kind:?}: one model call per response");
         let last = &requests[5];
         for (cell, told) in (1..).zip(TOLD_AFTER_HEAP_HITS) {
-            let texts: Vec<String> = match kind {
-                kata_types::agent::AdapterKind::NanocodeOpenai => {
-                    let output = mock_provider::call_outputs(last, &format!("call_r{cell}"))
-                        .into_iter()
-                        .next()
-                        .expect("the model was told the cell");
-                    match output {
-                        serde_json::Value::String(text) => vec![text],
-                        items => items
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|item| item["text"].as_str().map(str::to_owned))
-                            .collect(),
-                    }
-                }
-                kata_types::agent::AdapterKind::NanocodeAnthropic => {
-                    mock_provider::tool_result_texts(last, &format!("toolu_r{cell}"))
-                        .expect("the model was told the cell")
-                }
-            };
-            let header = if told.ends_with("memory limit") {
-                "Script failed"
-            } else {
-                "Script completed"
+            let texts = told_for_cell(kind, last, cell);
+            let (header, told) = match told {
+                None => (
+                    "Script failed",
+                    texts.iter().any(|text| text.ends_with(OUT_OF_MEMORY))
+                        && texts.iter().any(|text| text == MEMORY_REPORT),
+                ),
+                Some(own) => (
+                    "Script completed",
+                    texts.iter().any(|text| text == own)
+                        && !texts.iter().any(|text| text.contains("memory")),
+                ),
             };
             assert!(
-                texts.first().is_some_and(|first| first.starts_with(header))
-                    && texts.iter().any(|text| text.ends_with(told)),
-                "{kind:?}: cell {cell} told the model {told:?}: {texts:?}"
+                texts.first().is_some_and(|first| first.starts_with(header)) && told,
+                "{kind:?}: cell {cell} told the model: {texts:?}"
             );
         }
         assert_eq!(
@@ -1390,78 +1443,224 @@ async fn a_turn_whose_cells_hit_the_heap_completes_and_its_later_cells_run() {
     }
 }
 
-/// A model-written flood of bound functions, which under kata's 256 MiB heap
-/// meets QuickJS 0.16.2's out-of-memory defect in `Function.prototype.bind`
-/// on the Messages kind (`kata-agent-nanocode`'s
-/// `code_mode_interpreter_through_adapter.rs`): a SIGSEGV of the process the
-/// cell runs in.
-const BIND_FLOOD: &str = "const fns = [];\nfor (;;) fns.push(Math.max.bind(null, fns.length));";
+/// A cell that yields at 200 ms and then waits a minute on a timer: running,
+/// with its interpreter process live, when the model's next request arrives.
+const WAITER: &str = "// @exec: {\"yield_time_ms\": 200}\n\
+     await new Promise((resolve) => setTimeout(resolve, 60000));\n\
+     text(\"the timer fired\");";
 
-/// The model's cells, in order: a text, a bind flood, a text, a bind flood.
-const CELLS_ENDING_THEIR_INTERPRETER: [&str; 4] = [
-    "text(\"a cell ran\");",
-    BIND_FLOOD,
-    "text(\"a cell ran\");",
-    BIND_FLOOD,
-];
+/// A cell that states it ran.
+const RAN: &str = "text(\"a cell ran\");";
 
-/// **A nanocode turn whose cells end their interpreter process completes
-/// through the worker, and the published evidence records each end.** A
-/// `nanocode_anthropic` turn through the whole capsule composition under
-/// kata's Code Mode limits: the model's cells are a text, a bind flood, a
-/// text and a bind flood. Each flood's interpreter process ends by SIGSEGV;
-/// the worker reports a completed capsule; the model's last request carries
-/// each flood's result naming the end and each text cell's own text; and the
-/// session evidence the worker published, read back off the rig's CAS by the
-/// report's ref, names two `CodeModeInterpreterEnded{SIGSEGV}`. The process this
-/// runs in stands for the node hosting the worker (the child twin below reads
-/// its exit status).
-#[tokio::test]
-async fn a_turn_whose_cells_end_their_interpreter_completes_and_records_each_end() {
-    let (requests, evidence) = nanocode_cells_through_the_worker(
-        kata_types::agent::AdapterKind::NanocodeAnthropic,
-        &CELLS_ENDING_THEIR_INTERPRETER,
-    )
-    .await;
-    assert_eq!(requests.len(), 5, "one model call per response");
-    let last = &requests[4];
-    let report = format!("{}SIGSEGV", kata_code_mode_host::ENDED_BY);
-    for (cell, told) in [
-        (1, "a cell ran"),
-        (2, report.as_str()),
-        (3, "a cell ran"),
-        (4, report.as_str()),
-    ] {
-        let texts = mock_provider::tool_result_texts(last, &format!("toolu_r{cell}"))
-            .expect("the model was told the cell");
-        assert!(
-            texts.iter().any(|text| text.contains(told)),
-            "cell {cell} told the model {told:?}: {texts:?}"
-        );
-    }
-    let ended: Vec<_> = evidence
-        .events
-        .iter()
-        .filter(|event| {
-            matches!(
-                event,
-                kata_types::agent::SessionEvidenceEvent::CodeModeInterpreterEnded { .. }
-            )
-        })
-        .collect();
-    let segv = kata_types::agent::SessionEvidenceEvent::CodeModeInterpreterEnded {
-        signal: Some("SIGSEGV".into()),
-    };
-    assert_eq!(ended, [&segv, &segv], "{evidence:?}");
+/// A Messages stream whose content is one Code Mode `wait` call on cell
+/// `cell_id`.
+fn claude_wait_reply(id: &str, cell_id: &str) -> mock_provider::Reply {
+    let input = serde_json::json!({"cell_id": cell_id}).to_string();
+    mock_provider::Reply::Events(vec![
+        serde_json::json!({
+            "type": "message_start",
+            "message": {
+                "id": format!("msg_{id}"), "type": "message", "role": "assistant",
+                "model": "claude-mock", "content": [], "stop_reason": null,
+                "stop_sequence": null,
+                "usage": {"input_tokens": 10, "output_tokens": 1},
+            },
+        }),
+        serde_json::json!({
+            "type": "content_block_start", "index": 0,
+            "content_block": {"type": "tool_use", "id": format!("toolu_{id}"), "name": "wait", "input": {}},
+        }),
+        serde_json::json!({
+            "type": "content_block_delta", "index": 0,
+            "delta": {"type": "input_json_delta", "partial_json": input},
+        }),
+        serde_json::json!({"type": "content_block_stop", "index": 0}),
+        serde_json::json!({
+            "type": "message_delta",
+            "delta": {"stop_reason": "tool_use", "stop_sequence": null},
+            "usage": {"output_tokens": 3},
+        }),
+        serde_json::json!({"type": "message_stop"}),
+    ])
 }
 
-/// **RED-first twin, in a CHILD: a worker turn whose cells end their
+/// The model's replies for a `kind` turn whose cells are, in order, a
+/// [`WAITER`], a `wait` on it held on `first` (cell 1), [`RAN`], a second
+/// [`WAITER`], a `wait` on it held on `second` (cell 3), [`RAN`], then the
+/// turn's answer: seven model calls.
+fn cells_ending_their_interpreter(
+    kind: kata_types::agent::AdapterKind,
+    first: &mock_provider::Gate,
+    second: &mock_provider::Gate,
+) -> Vec<mock_provider::Reply> {
+    let gated = |gate: &mock_provider::Gate, reply| {
+        mock_provider::Reply::Gated(gate.clone(), Box::new(reply))
+    };
+    match kind {
+        kata_types::agent::AdapterKind::NanocodeOpenai => {
+            let code = |id: &str, source| {
+                mock_provider::code_reply(id, source, mock_provider::usage(1, 0, 1))
+            };
+            let wait = |id: &str, cell| {
+                mock_provider::wait_reply(id, cell, false, mock_provider::usage(1, 0, 1))
+            };
+            vec![
+                code("r1", WAITER),
+                gated(first, wait("r2", "1")),
+                code("r3", RAN),
+                code("r4", WAITER),
+                gated(second, wait("r5", "3")),
+                code("r6", RAN),
+                mock_provider::message_reply("r7", "DONE", mock_provider::usage(1, 0, 1)),
+            ]
+        }
+        kata_types::agent::AdapterKind::NanocodeAnthropic => vec![
+            mock_provider::claude_code_reply("r1", WAITER),
+            gated(first, claude_wait_reply("r2", "1")),
+            mock_provider::claude_code_reply("r3", RAN),
+            mock_provider::claude_code_reply("r4", WAITER),
+            gated(second, claude_wait_reply("r5", "3")),
+            mock_provider::claude_code_reply("r6", RAN),
+            mock_provider::claude_text_reply("DONE"),
+        ],
+    }
+}
+
+/// How long [`kill_the_waiter`] waits, in real time, for the kernel to list
+/// the waiter's interpreter process alone.
+const WAITER_LISTED_BOUND: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Once `mock` has recorded `requests` model requests (the waiter has
+/// yielded, so its cell runs), kills by SIGKILL the one interpreter process
+/// the kernel lists of this one, the waiter's (an earlier cell's is reaped
+/// when its host drops, so the listing is awaited until it holds exactly
+/// one), then opens `killed`, letting the model's `wait` go out.
+async fn kill_the_waiter(
+    mock: &mock_provider::MockProvider,
+    requests: usize,
+    killed: &mock_provider::Gate,
+) {
+    mock.wait_for_requests(requests).await;
+    let alone = async {
+        loop {
+            let listed = quickjs_threads::interpreters();
+            if listed.len() == 1 {
+                return listed;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    };
+    let listed = tokio::time::timeout(WAITER_LISTED_BOUND, alone)
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "the waiter's interpreter was not listed alone within {WAITER_LISTED_BOUND:?}: \
+                 {:?}",
+                quickjs_threads::interpreters()
+            )
+        });
+    let pid = listed.first().copied().expect("one interpreter");
+    let pid =
+        rustix::process::Pid::from_raw(i32::try_from(pid).expect("a pid")).expect("a nonzero pid");
+    rustix::process::kill_process(pid, rustix::process::Signal::KILL)
+        .expect("kill the waiter's interpreter");
+    killed.open();
+}
+
+/// **A nanocode turn whose cells' interpreter processes are killed while they
+/// run completes through the worker, and the published evidence records each
+/// end.** On each kind, a turn through the whole capsule composition under
+/// kata's Code Mode limits: the model's cells are a waiter, a `wait` on it, a
+/// text, a second waiter, a `wait` on it and a text. While each waiter runs,
+/// this test kills its interpreter process (the one the kernel lists) by
+/// SIGKILL, the signal the kernel's OOM killer delivers (every interpreter
+/// runs at `oom_score_adj` 1000, the first it picks); MEASURED at 8ec3b215, no
+/// cell-reachable way to end a djs interpreter by a signal is known (a bind
+/// flood, which ended QuickJS's by SIGSEGV, is a plain heap hit under djs:
+/// `kata-agent-nanocode`'s `code_mode_interpreter_through_adapter.rs`), so the
+/// end comes from outside. The worker reports a completed capsule; each
+/// `wait`'s result carries the cell's error naming the end (`Script
+/// error:\nCode Mode's interpreter process ended by SIGKILL`) and each text
+/// cell after it its own text; the session evidence the worker published,
+/// read back off the rig's CAS by the report's ref, names two
+/// `CodeModeInterpreterEnded{SIGKILL}`; and once the worker returned the kernel
+/// lists no interpreter process of this one. The process this runs in stands
+/// for the node hosting the worker (the child twin below reads its exit
+/// status).
+///
+/// **Would red if:** the supervisor did not report an interpreter that ended
+/// while its cell ran (no record), the worker published the evidence without
+/// the adapter's records of it, an interpreter's end failed the turn instead
+/// of the cell (no completed capsule) or ended Code Mode for the turn (the
+/// text cell after it fails), or the cells ran in this process (no interpreter
+/// is listed: the bounded listing fails).
+#[tokio::test]
+async fn a_turn_whose_cells_end_their_interpreter_completes_and_records_each_end() {
+    let error = format!("Script error:\n{}SIGKILL", kata_code_mode_host::ENDED_BY);
+    for kind in [
+        kata_types::agent::AdapterKind::NanocodeOpenai,
+        kata_types::agent::AdapterKind::NanocodeAnthropic,
+    ] {
+        let (first, second) = (
+            mock_provider::Gate::default(),
+            mock_provider::Gate::default(),
+        );
+        let mock = mock_provider::MockProvider::start(cells_ending_their_interpreter(
+            kind, &first, &second,
+        ))
+        .await;
+        let (evidence, ()) = tokio::join!(nanocode_turn_through_the_worker(kind, &mock), async {
+            kill_the_waiter(&mock, 2, &first).await;
+            kill_the_waiter(&mock, 5, &second).await;
+        });
+        let requests = mock.requests();
+        assert_eq!(requests.len(), 7, "{kind:?}: one model call per response");
+        for (request, cell, told) in [
+            (1, 1, "Script running with cell ID 1"),
+            (2, 2, error.as_str()),
+            (3, 3, "a cell ran"),
+            (4, 4, "Script running with cell ID 3"),
+            (5, 5, error.as_str()),
+            (6, 6, "a cell ran"),
+        ] {
+            let texts = told_for_cell(kind, &requests[request], cell);
+            assert!(
+                texts.iter().any(|text| text.starts_with(told)),
+                "{kind:?}: call r{cell} told the model {told:?}: {texts:?}"
+            );
+        }
+        let ended: Vec<_> = evidence
+            .events
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    kata_types::agent::SessionEvidenceEvent::CodeModeInterpreterEnded { .. }
+                )
+            })
+            .collect();
+        let killed = kata_types::agent::SessionEvidenceEvent::CodeModeInterpreterEnded {
+            signal: Some("SIGKILL".into()),
+        };
+        assert_eq!(ended, [&killed, &killed], "{kind:?}: {evidence:?}");
+        assert!(
+            quickjs_threads::interpreters().is_empty(),
+            "{kind:?}: every interpreter process was reaped: {:?}",
+            quickjs_threads::interpreters()
+        );
+    }
+}
+
+/// **Twin, in a CHILD: a worker turn whose cells end their
 /// interpreter process ends no other process.** A child of this binary runs
 /// `a_turn_whose_cells_end_their_interpreter_completes_and_records_each_end`
 /// alone, and the kernel reports it exited 0 with that cell passed.
 ///
-/// **Would red if:** the cells ran in the process that hosts the worker
-/// (watched, with kata's backend not installed: the child ends by SIGSEGV).
+/// **Would red if:** an interpreter's death took down the process that
+/// hosts the worker (the child ends by its signal, or by the panic of a
+/// supervisor that met its interpreter's end unprepared: exit status 101), or
+/// the cells ran in that process (no interpreter is listed to kill: the
+/// bounded listing panics, exit status 101).
 #[test]
 fn a_worker_turn_whose_cells_end_their_interpreter_ends_no_other_process() {
     let output = std::process::Command::new(std::env::current_exe().expect("this test binary"))
@@ -1486,15 +1685,15 @@ fn a_worker_turn_whose_cells_end_their_interpreter_ends_no_other_process() {
     );
 }
 
-/// **RED-first twin, in a CHILD: a worker turn whose cells hit the heap ends
+/// **Twin, in a CHILD: a worker turn whose cells hit the heap ends
 /// no process.** A child of this binary runs
 /// `a_turn_whose_cells_hit_the_heap_completes_and_its_later_cells_run` alone,
 /// and the kernel reports it exited 0 with that cell passed.
 ///
-/// **Would red if:** a cell after a heap hit ran in the runtime the hit filled:
-/// MEASURED, the child's turn failed (exit status 101) on the second cell's
-/// `failed to create a fresh embedded QuickJS context`; a process abort, which
-/// the engine-level twin measured, ends the child by its signal.
+/// **Would red if:** a heap hit ended the process that hosts the worker (the
+/// child ends by its signal: an engine that aborted on an allocation failure,
+/// as QuickJS's did, inside that process), or a cell after a heap hit ran in
+/// the heap the hit filled (the child's turn fails, exit status 101).
 #[test]
 fn a_worker_turn_whose_cells_hit_the_heap_ends_no_process() {
     let output = std::process::Command::new(std::env::current_exe().expect("this test binary"))
@@ -2206,21 +2405,60 @@ async fn a_nanocode_turn_on(
     (result, witness)
 }
 
-/// The CPU time the kernel charged this process's Code Mode interpreter
-/// processes over the next second, in clock ticks, and the interpreters
-/// listed at its start.
-async fn interpreter_ticks_over_a_second() -> (u64, std::collections::BTreeSet<u32>) {
-    let listed = quickjs_threads::interpreters();
-    let ticks = || {
-        listed
+/// What the kernel charged over one second after a turn: the CPU time, in
+/// clock ticks, of this process's Code Mode interpreter processes listed at
+/// its start, and of this process itself (every thread of it; a child's time
+/// is not this process's own).
+struct TicksOverASecond {
+    interpreters: std::collections::BTreeSet<u32>,
+    interpreters_burned: u64,
+    this_process_burned: u64,
+}
+
+/// [`TicksOverASecond`], read now.
+async fn ticks_over_a_second() -> TicksOverASecond {
+    let interpreters = quickjs_threads::interpreters();
+    let in_interpreters = || {
+        interpreters
             .iter()
             .copied()
             .filter_map(quickjs_threads::process_cpu_ticks)
             .sum::<u64>()
     };
-    let before = ticks();
+    let this_process = || quickjs_threads::process_cpu_ticks(std::process::id()).unwrap_or(0);
+    let before = (in_interpreters(), this_process());
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    (ticks().saturating_sub(before), listed)
+    TicksOverASecond {
+        interpreters_burned: in_interpreters().saturating_sub(before.0),
+        this_process_burned: this_process().saturating_sub(before.1),
+        interpreters,
+    }
+}
+
+/// The CPU time a cell spinning in this process for the whole of a
+/// [`ticks_over_a_second`] second is charged at least half of: 50 ticks of
+/// the 100 the kernel counts a second in (`/proc`'s `USER_HZ`, 100 on Linux).
+/// An idle test process is charged a few; a cell spinning in one of its
+/// threads, a whole second's worth.
+const SPIN_IN_THIS_PROCESS_TICKS: u64 = 50;
+
+/// The times nanocode re-sends a Responses call whose connection dropped,
+/// whatever the endpoint's `max_attempts`: MEASURED at 8ec3b215, five (its
+/// `STREAM_MAX_RETRIES`), 200 ms × 2ⁿ apart, 6.2 s in all.
+const RESPONSES_RECONNECTS: usize = 5;
+
+/// The mock's answers to a Responses call that fails transiently while a cell
+/// runs: its connection dropped 500 ms after it arrives, and each of
+/// nanocode's [`RESPONSES_RECONNECTS`] re-sends of it dropped at once. The turn
+/// ends about 7 s after the call, its transient failure past them.
+fn a_call_its_connection_drops() -> impl Iterator<Item = mock_provider::Reply> {
+    std::iter::once(mock_provider::Reply::DropAfter(
+        std::time::Duration::from_millis(500),
+    ))
+    .chain(std::iter::repeat_n(
+        mock_provider::Reply::Drop,
+        RESPONSES_RECONNECTS,
+    ))
 }
 
 /// **No nanocode Code Mode cell outlives the harness's shutdown, one inside a
@@ -2228,41 +2466,49 @@ async fn interpreter_ticks_over_a_second() -> (u64, std::collections::BTreeSet<u
 /// worker publishes a turn's session evidence only when the turn completes,
 /// and a cell could outlive the shutdown only on a turn that does not:
 /// nanocode detaches a failed turn's cells. Two turns, each a cell that yields
-/// at 100 ms and waits 100 ms on a timer, and a next model request that fails
-/// 500 ms after it arrives, so each turn is ambiguous with its cell running:
+/// at 100 ms and waits 100 ms on a timer, and a next model request whose
+/// connection drops 500 ms after it arrives, as do nanocode's re-sends of it
+/// ([`a_call_its_connection_drops`]), so each turn ends a transient provider
+/// failure about 7 s in with its cell running:
 ///
 /// * the cell then spins in JavaScript;
 /// * the cell then runs one long default-comparator sort, a native step no
-///   interrupt reaches ([`quickjs_threads::A_LONG_NATIVE_STEP`]).
+///   interrupt reaches ([`quickjs_threads::A_LONG_NATIVE_STEP`]; MEASURED at
+///   8ec3b215 on djs, 1.1 s for 8,000 references, so about 35 s for its
+///   200,000, past the turn's end, the shutdown's grace and the witness's
+///   second).
 ///
 /// Either way the shutdown's terminate kills the cell's interpreter process
 /// and reaps it before the live-worker count is read: the refusal names no
-/// live Code Mode worker, and the kernel lists no interpreter process of this
-/// one once the worker returned, so none burns CPU.
+/// live Code Mode worker, the kernel lists no interpreter process of this one
+/// once the worker returned, so none burns CPU, and this process itself is
+/// charged under half a second of CPU over the next second, so no cell spins
+/// in it either.
 ///
 /// Each refusal is read as the main stores it: its `worker_reason` off the
 /// acceptance transition, through the real accept path and a second raw
 /// handle ([`durable_worker_reason`]).
 ///
-/// **Would red if:** the cells ran in this process (watched, with kata's
-/// backend not installed: a QuickJS thread runs in this process after the
-/// first turn), or the supervisor released the live-worker count before the
-/// reap.
+/// **Would red if:** the cells ran in this process (with kata's backend not
+/// installed, nanocode's embedded host runs a cell inline on a tokio runtime
+/// thread of this one, which the spin or the sort holds past the turn: this
+/// process is charged that second), or the supervisor released the
+/// live-worker count before the reap (the refusal names a live worker), or the
+/// shutdown left an interpreter running (one is listed).
 #[tokio::test]
 async fn no_nanocode_cell_outlives_the_shutdown_a_native_step_included() {
     let turn = |tail: &str, seed: u8| {
         a_nanocode_turn(
-            vec![
-                mock_provider::code_reply(
-                    "r1",
-                    &format!(
-                        "// @exec: {{\"yield_time_ms\": 100}}\n\
-                         await new Promise((resolve) => setTimeout(resolve, 100));\n{tail}"
-                    ),
-                    mock_provider::usage(1, 0, 1),
+            std::iter::once(mock_provider::code_reply(
+                "r1",
+                &format!(
+                    "// @exec: {{\"yield_time_ms\": 100}}\n\
+                     await new Promise((resolve) => setTimeout(resolve, 100));\n{tail}"
                 ),
-                mock_provider::Reply::DropAfter(std::time::Duration::from_millis(500)),
-            ],
+                mock_provider::usage(1, 0, 1),
+            ))
+            .chain(a_call_its_connection_drops())
+            .collect(),
             seed,
         )
     };
@@ -2273,16 +2519,23 @@ async fn no_nanocode_cell_outlives_the_shutdown_a_native_step_included() {
         let refused = turn(tail, seed)
             .await
             .expect_err("a turn whose model request failed is a refusal");
-        let (burned, listed) = interpreter_ticks_over_a_second().await;
+        let ticks = ticks_over_a_second().await;
         assert!(
-            listed.is_empty() && burned == 0,
-            "{tail}: interpreter processes {listed:?} burned {burned} ticks after the turn"
+            ticks.interpreters.is_empty() && ticks.interpreters_burned == 0,
+            "{tail}: interpreter processes {:?} burned {} ticks after the turn",
+            ticks.interpreters,
+            ticks.interpreters_burned
         );
         assert!(
-            quickjs_threads::quickjs_threads().is_empty(),
-            "a QuickJS thread runs in this process"
+            ticks.this_process_burned < SPIN_IN_THIS_PROCESS_TICKS,
+            "{tail}: this process burned {} ticks in the second after the turn: a cell runs in it",
+            ticks.this_process_burned
         );
         let reason = durable_worker_reason(&refused);
+        assert!(
+            reason.contains("the model provider failed the turn (transient)"),
+            "{tail}: the turn is a transient provider failure: {reason}"
+        );
         assert!(
             !reason.contains("code_mode_workers_live"),
             "{tail}: the refusal names a live worker: {reason}"
@@ -2312,8 +2565,9 @@ fn assert_the_kill_all_went_unanswered(witness: &toolhost_double::DoubleWitness,
 /// model's first request starts a cell that yields at 100 ms, waits 100 ms on a
 /// timer and then runs one long native sort
 /// ([`quickjs_threads::A_LONG_NATIVE_STEP`]); the next request's connection
-/// drops 500 ms after it arrives, so the turn ends a transient provider failure
-/// with the sort running, and the
+/// drops 500 ms after it arrives, as do nanocode's re-sends of it
+/// ([`a_call_its_connection_drops`]), so the turn ends a transient provider
+/// failure with the sort running, and the
 /// toolhost double never answers the turn end's `KillAll`. The `worker_reason`
 /// read off the acceptance transition through a second raw handle
 /// ([`durable_worker_reason`]) names `kill_all: unconfirmed` and no live Code
@@ -2326,8 +2580,8 @@ fn assert_the_kill_all_went_unanswered(witness: &toolhost_double::DoubleWitness,
 /// (watched: the reason names no `kill_all`).
 #[tokio::test]
 async fn a_failed_nanocode_turn_names_its_unanswered_kill_all_in_the_refusal() {
-    let mock = mock_provider::MockProvider::start(vec![
-        mock_provider::code_reply(
+    let mock = mock_provider::MockProvider::start(
+        vec![mock_provider::code_reply(
             "r1",
             &format!(
                 "// @exec: {{\"yield_time_ms\": 100}}\n\
@@ -2335,9 +2589,11 @@ async fn a_failed_nanocode_turn_names_its_unanswered_kill_all_in_the_refusal() {
                 quickjs_threads::A_LONG_NATIVE_STEP
             ),
             mock_provider::usage(1, 0, 1),
-        ),
-        mock_provider::Reply::DropAfter(std::time::Duration::from_millis(500)),
-    ])
+        )]
+        .into_iter()
+        .chain(a_call_its_connection_drops())
+        .collect(),
+    )
     .await;
     let (result, witness) = a_nanocode_turn_on(NanocodeTurn {
         mock: &mock,
@@ -2351,10 +2607,12 @@ async fn a_failed_nanocode_turn_names_its_unanswered_kill_all_in_the_refusal() {
     })
     .await;
     let refusal = result.expect_err("a turn whose model request failed is a refusal");
-    let (burned, listed) = interpreter_ticks_over_a_second().await;
+    let ticks = ticks_over_a_second().await;
     assert!(
-        listed.is_empty() && burned == 0,
-        "interpreter processes {listed:?} burned {burned} ticks after the turn"
+        ticks.interpreters.is_empty() && ticks.interpreters_burned == 0,
+        "interpreter processes {:?} burned {} ticks after the turn",
+        ticks.interpreters,
+        ticks.interpreters_burned
     );
     assert_the_kill_all_went_unanswered(&witness, 1);
     let stored = durable_worker_reason(&refusal);
@@ -2758,13 +3016,18 @@ impl NanocodeKind {
         }
     }
 
-    /// The requests the kind's client sends for one call whose every attempt
-    /// fails transiently: the Messages client makes five whatever kata asks
-    /// (nanocode 2ac77424).
+    /// The requests the kind's client sends for one call every attempt of
+    /// which is answered [`Self::server_error`], MEASURED at 8ec3b215: the
+    /// Responses client makes [`RESPONSES_ATTEMPTS`], then re-sends the call
+    /// [`RESPONSES_RECONNECTS`] times, each again for [`RESPONSES_ATTEMPTS`];
+    /// the Messages client makes one, the error's `retry-after` past the
+    /// minute it waits.
     fn transient_attempts(self) -> usize {
         match self {
-            Self::OpenAi | Self::OpenAiWebSocket => RESPONSES_ATTEMPTS.get() as usize,
-            Self::Anthropic => 5,
+            Self::OpenAi | Self::OpenAiWebSocket => {
+                RESPONSES_ATTEMPTS.get() as usize * (1 + RESPONSES_RECONNECTS)
+            }
+            Self::Anthropic => 1,
         }
     }
 
@@ -2790,17 +3053,29 @@ impl NanocodeKind {
         mock_provider::Reply::Status(400, body)
     }
 
-    /// A 529 overload, in the kind's error shape.
-    fn overloaded(self) -> mock_provider::Reply {
-        let body = match self {
-            Self::OpenAi | Self::OpenAiWebSocket => serde_json::json!({"error": {
-                "message": "mock overloaded", "type": "server_is_overloaded", "param": null, "code": null,
-            }}),
-            Self::Anthropic => serde_json::json!({"type": "error", "error": {
-                "type": "overloaded_error", "message": "mock overloaded",
-            }}),
-        };
-        mock_provider::Reply::Status(529, body)
+    /// A 500 server error, in the kind's error shape: transient to both
+    /// clients, and not a status either waits out. On the Messages kind it
+    /// asks to be retried in 61 s, past the minute nanocode's Messages client
+    /// waits before a re-send (MEASURED at 8ec3b215: it otherwise re-sends it
+    /// eleven times in all, about 180 s of backoff), so the client fails the
+    /// call at once.
+    fn server_error(self) -> mock_provider::Reply {
+        match self {
+            Self::OpenAi | Self::OpenAiWebSocket => mock_provider::Reply::Status(
+                500,
+                serde_json::json!({"error": {
+                    "message": "mock server error", "type": "server_error", "param": null,
+                    "code": null,
+                }}),
+            ),
+            Self::Anthropic => mock_provider::Reply::StatusWith(
+                500,
+                vec![("retry-after", "61".to_owned())],
+                serde_json::json!({"type": "error", "error": {
+                    "type": "api_error", "message": "mock server error",
+                }}),
+            ),
+        }
     }
 
     /// A reply whose Code Mode cell runs `true` in the capsule.
@@ -2929,31 +3204,71 @@ fn durable_payload(
         .expect("the transition payload is JSON")
 }
 
-/// **A nanocode turn its provider REFUSED is PROVEN NOT PERFORMED, charged
-/// nothing, and names the provider's reason, on either kind and on both
-/// Responses transports.** The mock answers the turn's one request 400,
-/// refusing it for credit: an HTTP 400, or on the WebSocket the `error` event
-/// stating the status. Through the real accept path and a second raw handle,
-/// the attempt's durable record holds the verdict `proven_not_performed`, the
-/// class `refused`, the authoritative `0` as its charge, and the provider's
-/// error type and message in the worker's reason; the mock's own log holds the
-/// one request.
+/// The provider's words for an account past its quota, in the Responses
+/// error shape: `insufficient_quota`, a code nanocode reads as terminal.
+const QUOTA_REFUSAL: &str =
+    "You exceeded your current quota, please check your plan and billing details.";
+
+/// **A nanocode turn its provider REFUSED is PROVEN NOT PERFORMED and names the
+/// provider's reason, on either kind and on both Responses transports; it is
+/// charged NOTHING when the refused request was sent once, and an UNKNOWN
+/// charge, never zero, when nanocode re-sent it.** The mock answers the turn's
+/// request refusing it: a 400 for credit over HTTP on either kind; over the
+/// WebSocket, an `error` event stating a 400 for credit, which nanocode re-sends
+/// on a new socket [`RESPONSES_RECONNECTS`] times (MEASURED at 8ec3b215: its
+/// `reconnectable` reads every `error` event without a terminal code so, and
+/// the mock answers each re-send the same), and one stating a 429
+/// `insufficient_quota`, which it does not. Through the real accept path and a
+/// second raw handle, the attempt's durable record holds the verdict
+/// `proven_not_performed`, the class `refused`, the charge (the authoritative
+/// `0`, or `unavailable` after a re-send: a re-sent request is no proof that
+/// nothing billed), and the provider's status, error type and message in the
+/// worker's reason; the mock's own log holds the request and its re-sends.
 ///
 /// **Would red if:** the turn were classified by the bytes that left (watched,
 /// with the adapter's provider-failure arm removed — the earlier
 /// classification: `proven_ambiguous`, no class, an `Unavailable` charge), or a
 /// refusal of the one request were charged as unknown (watched, with
 /// `Observed::failed_turn_charge`'s `Nothing` arm removed: an `Unavailable`
-/// charge), or the WebSocket's error event went unread (the WebSocket row
-/// `proven_ambiguous`).
+/// charge), or a re-sent one charged zero, or the WebSocket's error event went
+/// unread (the WebSocket rows `proven_ambiguous`).
 #[tokio::test]
-async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_nothing() {
-    for kind in [
-        NanocodeKind::OpenAi,
-        NanocodeKind::OpenAiWebSocket,
-        NanocodeKind::Anthropic,
+async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_nothing_unless_resent()
+ {
+    let quota = serde_json::json!({"type": "error", "status": 429, "error": {
+        "type": "insufficient_quota", "code": "insufficient_quota", "param": null,
+        "message": QUOTA_REFUSAL,
+    }});
+    for (kind, replies, reason, charged) in [
+        (
+            NanocodeKind::OpenAi,
+            vec![NanocodeKind::OpenAi.credit_refusal()],
+            format!("HTTP 400 invalid_request_error: {CREDIT_REFUSAL}"),
+            serde_json::json!({"quality": "authoritative", "micro_usd": 0}),
+        ),
+        (
+            NanocodeKind::OpenAiWebSocket,
+            vec![NanocodeKind::OpenAiWebSocket.credit_refusal(); 1 + RESPONSES_RECONNECTS],
+            format!("HTTP 400 invalid_request_error: {CREDIT_REFUSAL}"),
+            serde_json::json!({
+                "backend": "nanocode_openai", "model": "gpt-6-luna", "quality": "unavailable",
+            }),
+        ),
+        (
+            NanocodeKind::OpenAiWebSocket,
+            vec![mock_provider::Reply::Events(vec![quota])],
+            format!("HTTP 429 insufficient_quota (insufficient_quota): {QUOTA_REFUSAL}"),
+            serde_json::json!({"quality": "authoritative", "micro_usd": 0}),
+        ),
+        (
+            NanocodeKind::Anthropic,
+            vec![NanocodeKind::Anthropic.credit_refusal()],
+            format!("HTTP 400 invalid_request_error: {CREDIT_REFUSAL}"),
+            serde_json::json!({"quality": "authoritative", "micro_usd": 0}),
+        ),
     ] {
-        let mock = mock_provider::MockProvider::start(vec![kind.credit_refusal()]).await;
+        let sent = replies.len();
+        let mock = mock_provider::MockProvider::start(replies).await;
         let (result, _witness) = a_provider_turn(kind, &mock, CapsuleNetwork::Offline, "a").await;
         let refusal = result.expect_err("a refused turn is a refusal");
         let payload = durable_payload(&refusal);
@@ -2966,33 +3281,35 @@ async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_no
             "{kind:?}: {payload}"
         );
         assert_eq!(
-            payload["terminal_charge"]["token_usage"]["cost"],
-            serde_json::json!({"quality": "authoritative", "micro_usd": 0}),
-            "{kind:?}: a refused request billed nothing: {payload}"
+            payload["terminal_charge"]["token_usage"]["cost"], charged,
+            "{kind:?}: {payload}"
         );
-        let reason = payload["worker_reason"]
+        let stored = payload["worker_reason"]
             .as_str()
             .expect("the worker's reason");
         assert!(
-            reason.contains("HTTP 400 invalid_request_error") && reason.contains(CREDIT_REFUSAL),
-            "{kind:?}: the provider's own type and message: {reason}"
+            stored.contains(&reason),
+            "{kind:?}: the provider's own status, type and message: {stored}"
         );
         assert_eq!(
             mock.requests().len(),
-            1,
-            "{kind:?}: a refusal is not re-sent"
+            sent,
+            "{kind:?}: the request and nanocode's re-sends of it"
         );
     }
 }
 
 /// **A TRANSIENT provider failure past the harness's retries is PROVEN NOT
 /// PERFORMED, its charge unknown, and a fresh attempt takes the provider's
-/// next answer, on either kind.** Every attempt the kind's client makes for the
-/// first call is answered 529 overloaded. The first attempt's durable record
-/// holds `proven_not_performed`, the class `transient` and an `Unavailable`
-/// charge (no call completed, and a transient failure is no proof that nothing
-/// billed). A second attempt — a fresh capsule from the same base, as the
-/// stage's failure retry dispatches (`failure_retry_oci::
+/// next answer, on either kind.** The first call is answered 500, a status
+/// nanocode does not wait out (MEASURED at 8ec3b215: a 429, 502, 503, 504 or
+/// 529 each client retries for up to 600 s, `nanocode_http`'s `PATIENCE`), every
+/// time the kind's client sends it ([`NanocodeKind::transient_attempts`]). The
+/// first attempt's durable record holds `proven_not_performed`, the class
+/// `transient` and an `Unavailable` charge (no call completed, and a transient
+/// failure is no proof that nothing billed). A second attempt — a fresh
+/// capsule from the same base, as the stage's failure retry dispatches
+/// (`failure_retry_oci::
 /// a_transient_provider_failure_is_rerun_on_the_same_agent_and_completes`) —
 /// against the same mock completes on its next answer.
 ///
@@ -3003,10 +3320,15 @@ async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_no
 async fn a_transient_nanocode_failure_is_not_performed_and_a_fresh_attempt_completes() {
     for kind in NANOCODE_KINDS {
         let attempts = kind.transient_attempts();
-        let mut script = vec![kind.overloaded(); attempts];
+        let mut script = vec![kind.server_error(); attempts];
         script.push(kind.answers());
         let mock = mock_provider::MockProvider::start(script).await;
         let (first, _witness) = a_provider_turn(kind, &mock, CapsuleNetwork::Offline, "a").await;
+        assert_eq!(
+            mock.requests().len(),
+            attempts,
+            "{kind:?}: the harness's retries"
+        );
         let refusal = first.expect_err("a transient failure is a refusal");
         let payload = durable_payload(&refusal);
         assert_eq!(
@@ -3024,13 +3346,8 @@ async fn a_transient_nanocode_failure_is_not_performed_and_a_fresh_attempt_compl
         assert!(
             payload["worker_reason"]
                 .as_str()
-                .is_some_and(|reason| reason.contains("HTTP 529")),
+                .is_some_and(|reason| reason.contains("HTTP 500")),
             "{kind:?}: {payload}"
-        );
-        assert_eq!(
-            mock.requests().len(),
-            attempts,
-            "{kind:?}: the harness's retries"
         );
         let (second, _witness) = a_provider_turn(kind, &mock, CapsuleNetwork::Offline, "b").await;
         let completed = second.unwrap_or_else(|refusal| {

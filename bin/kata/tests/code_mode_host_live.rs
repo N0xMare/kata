@@ -1,18 +1,19 @@
-//! A defect model output reaches ends only the process it runs in, and that
+//! A process that ends under model-written code ends only itself, and that
 //! process is never the main — proved on a REAL node, live, each cell running a
 //! `nanocode_anthropic` stage in a real rootless capsule (the static
 //! `kata-toolhost` its init), its model a mock Messages provider on the
 //! loopback: no model budget.
 //!
-//! * A model-written Code Mode cell that crashes QuickJS ends only its
-//!   interpreter process, never the process hosting the worker — here an
-//!   external `kata-worker` daemon over `local_socket`. The model's first cell
-//!   is a flood of bound functions (`fns.push(Math.max.bind(null,
-//!   fns.length))`), which under kata's 256 MiB Code Mode heap meets QuickJS
-//!   0.16.2's out-of-memory defect in `Function.prototype.bind`: a SIGSEGV of
-//!   the process the cell runs in. kata runs every cell in an interpreter
+//! * A Code Mode cell's interpreter process that is killed while its cell runs
+//!   ends only itself, never the process hosting the worker — here an external
+//!   `kata-worker` daemon over `local_socket`. The model's first cell waits on
+//!   a timer, and this test kills that cell's interpreter by SIGKILL, as the
+//!   kernel's OOM killer would (an interpreter runs at `oom_score_adj` 1000).
+//!   No cell-reachable way to end a djs interpreter by a signal is known (under
+//!   QuickJS a bind flood ended it by SIGSEGV; under djs it is a heap hit), so
+//!   the end comes from outside. kata runs every cell in an interpreter
 //!   process, a confined child of the hosting process (`kata_code_mode_host`),
-//!   so the crash ends that child; the cell fails to the model naming the
+//!   so the end is that child's; the cell fails to the model naming the
 //!   signal. The model's second cell runs in a fresh interpreter, and the turn
 //!   completes.
 //! * A crash in the harness itself (`operational.after_first_provider_event`)
@@ -27,7 +28,7 @@
 //! `/proc`, cgroup membership off `/proc/<pid>/cgroup`, the stage's
 //! `event_accepted|completed` transition through a second read-only SQLite
 //! handle on `operational.db`, the mock provider's OWN log of the requests it
-//! received (the second carries the flood's result naming `SIGSEGV`, the third
+//! received (the second carries the killed cell's result naming `SIGKILL`, the third
 //! the next cell's text), and `/proc` for any interpreter the hosting process
 //! left alive (a child of it, by the parent in its `stat`, whose command line
 //! ends in kata's interpreter filter) and for any child of it left a zombie (an
@@ -73,20 +74,20 @@ use agent_change_rig::{
     provision_provider_with_toolhost, raw_db,
 };
 
-/// The model's first cell: a flood of bound functions, which meets QuickJS's
-/// out-of-memory defect in `Function.prototype.bind` on the Messages kind.
-const BIND_FLOOD: &str = "const fns = [];\nfor (;;) fns.push(Math.max.bind(null, fns.length));";
+/// The model's first cell: it waits on a timer far longer than the test takes
+/// to kill its interpreter, inside the Messages kind's 10 s default yield.
+const WAITING: &str = "await new Promise((resolve) => setTimeout(resolve, 60000));";
 
-/// The model's second cell, after the flood ended its interpreter: one text,
-/// which only a fresh interpreter process can run.
-const AFTER_FLOOD: &str = "text(\"the next cell ran\");";
+/// The model's second cell, after the first one's interpreter was killed: one
+/// text, which only a fresh interpreter process can run.
+const AFTER_KILL: &str = "text(\"the next cell ran\");";
 
 /// What the second cell tells the model.
-const AFTER_FLOOD_TEXT: &str = "the next cell ran";
+const AFTER_KILL_TEXT: &str = "the next cell ran";
 
 /// The pack every cell runs: one `nanocode_anthropic` agent stage reading the
 /// workspace, offline.
-const PACK: &str = r#"review = stage(id = "review", agent = "default", prompt = "flood the interpreter", sandbox = "ro")
+const PACK: &str = r#"review = stage(id = "review", agent = "default", prompt = "wait in a cell", sandbox = "ro")
 workflow("code-mode-host", root = [review], sandbox_profiles = {"ro": sandbox_profile(workspace = "ro", net = "offline")})
 "#;
 
@@ -97,8 +98,8 @@ const AGENTS: &str = "[agents.default]\nadapter = \"nanocode_anthropic\"\n\
      credential = { mode = \"api_key\", source = \"env:ANTHROPIC_API_KEY\" }\n";
 
 /// The mock Messages provider, served by a runtime of its own so the blocking
-/// rig below never starves it: one reply carrying the flood as a Code Mode
-/// cell, one carrying the cell after it, then the turn's final text.
+/// rig below never starves it: one reply carrying the waiting Code Mode cell,
+/// one carrying the cell after it, then the turn's final text.
 struct Model {
     mock: mock_provider::MockProvider,
     _runtime: tokio::runtime::Runtime,
@@ -107,8 +108,8 @@ struct Model {
 impl Model {
     fn start() -> Self {
         Self::replying(vec![
-            mock_provider::claude_code_reply("r1", BIND_FLOOD),
-            mock_provider::claude_code_reply("r2", AFTER_FLOOD),
+            mock_provider::claude_code_reply("r1", WAITING),
+            mock_provider::claude_code_reply("r2", AFTER_KILL),
             mock_provider::claude_text_reply("the interpreter ended; the turn goes on"),
         ])
     }
@@ -145,7 +146,7 @@ fn assert_alive(what: &str, pid: u32, log: &Path) {
     let state = process_state(pid);
     assert!(
         state.is_some_and(|state| state != 'Z'),
-        "{TEST}: the {what} (pid {pid}) is not alive after the flood (state {state:?}); its log \
+        "{TEST}: the {what} (pid {pid}) is not alive after the cell (state {state:?}); its log \
          is {}:\n{}",
         log.display(),
         std::fs::read_to_string(log).unwrap_or_default()
@@ -268,10 +269,10 @@ fn run_to_terminal(main: &Main, root: &Path, host: &str, host_pid: u32, host_log
     }
 }
 
-/// What both cells assert once the run completed: the hosting process alive,
-/// the stage completed in the raw ledger, the model told the flood's end and
-/// the next cell's text, and no interpreter the hosting process started left
-/// alive or unreaped.
+/// What the cell asserts once the run completed: the hosting process alive,
+/// the stage completed in the raw ledger, the model told the killed
+/// interpreter's end and the next cell's text, and no interpreter the hosting
+/// process started left alive or unreaped.
 fn assert_contained(model: &Model, data: &Path, execution: &str, host: &str, pid: u32, log: &Path) {
     assert_alive(host, pid, log);
     let completed: i64 = raw_db(data)
@@ -289,17 +290,17 @@ fn assert_contained(model: &Model, data: &Path, execution: &str, host: &str, pid
     let requests = model.mock.requests();
     assert_eq!(requests.len(), 3, "{TEST}: one model request per reply");
     let told = mock_provider::tool_result_texts(&requests[1], "toolu_r1")
-        .expect("the second request carries the flood's result");
+        .expect("the second request carries the killed cell's result");
     assert!(
         told.iter()
-            .any(|text| text.contains("Code Mode's interpreter process ended by SIGSEGV")),
+            .any(|text| text.contains("Code Mode's interpreter process ended by SIGKILL")),
         "{TEST}: the model was told the interpreter's end: {told:?}"
     );
     let next = mock_provider::tool_result_texts(&requests[2], "toolu_r2")
         .expect("the third request carries the next cell's result");
     assert!(
-        next.iter().any(|text| text.contains(AFTER_FLOOD_TEXT)),
-        "{TEST}: the cell after the flood ran: {next:?}"
+        next.iter().any(|text| text.contains(AFTER_KILL_TEXT)),
+        "{TEST}: the cell after the kill ran: {next:?}"
     );
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
@@ -317,22 +318,21 @@ fn assert_contained(model: &Model, data: &Path, execution: &str, host: &str, pid
     }
 }
 
-/// **The `local_socket` worker daemon survives a model-written cell that
-/// crashes QuickJS.** The worker is an external `kata-worker` daemon, so the
-/// interpreter is the daemon's child: the flood ends that child by SIGSEGV, the
-/// next cell runs in a fresh one, the turn completes, and the daemon (and the
-/// main) are alive, read off `/proc`.
+/// **The `local_socket` worker daemon survives its cell's interpreter killed
+/// mid-cell.** The worker is an external `kata-worker` daemon, so the
+/// interpreter is the daemon's child: once the kernel lists it, this test kills
+/// it by SIGKILL while its cell waits, the cell fails to the model naming the
+/// signal, the next cell runs in a fresh interpreter, the turn completes, and
+/// the daemon (and the main) are alive, read off `/proc`.
 ///
-/// **Would red if:** the cells ran in the hosting process (watched, with
-/// kata's process backend not installed: the daemon dies by SIGSEGV mid-turn),
-/// the supervisor read the interpreter's end without reaping it (watched: a
-/// zombie child of the daemon), or the turn left the next cell's interpreter
-/// running (watched, with the supervisor keeping its interpreter at its end
-/// and the interpreter arming no parent-death signal: a live interpreter child
-/// of the daemon).
+/// **Would red if:** the cells ran in the hosting process (no interpreter child
+/// to kill: the waiting cell runs 60 s and the model is told no end), the
+/// supervisor read the interpreter's end without reaping it (a zombie child of
+/// the daemon), or the turn left the next cell's interpreter running (a live
+/// interpreter child of the daemon).
 #[test]
 #[ignore = "live end-to-end smoke; KATA_SANDBOX_REQUIRE_LIVE=1 just oci-live-smoke"]
-fn a_bind_flood_ends_only_its_interpreter_under_the_worker_daemon_live() {
+fn a_killed_interpreter_ends_only_itself_under_the_worker_daemon_live() {
     let model = Model::start();
     let root = node_root();
     let fixture = fixture_repo(root.path());
@@ -351,6 +351,28 @@ fn a_bind_flood_ends_only_its_interpreter_under_the_worker_daemon_live() {
     .start_worker_with(&[]);
     assert_door_open(Harness::AnthropicMock, "worker daemon", &node.worker.log);
     let pid = node.worker.pid;
+    // The OOM killer's stand-in: the first interpreter the daemon starts is
+    // the waiting cell's, killed a second after the kernel lists it (its
+    // `Ready` and the cell's `Start` take milliseconds; the cell waits 60 s).
+    let killer = std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(240);
+        while Instant::now() < deadline {
+            if let Some((interpreter, _)) = interpreters_left_by(pid)
+                .into_iter()
+                .find(|(_, state)| *state != 'Z')
+            {
+                std::thread::sleep(Duration::from_secs(1));
+                let killed = std::process::Command::new("kill")
+                    .args(["-KILL", &interpreter.to_string()])
+                    .status()
+                    .expect("kill(1) runs");
+                assert!(killed.success(), "{TEST}: kill -KILL {interpreter}");
+                return interpreter;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        panic!("{TEST}: the daemon started no interpreter within 240 s");
+    });
     let execution = run_to_terminal(
         &node.main,
         &node.root_path,
@@ -358,6 +380,7 @@ fn a_bind_flood_ends_only_its_interpreter_under_the_worker_daemon_live() {
         pid,
         &node.worker.log,
     );
+    let victim = killer.join().expect("the killer thread");
     assert_contained(
         &model,
         &node.root_path.join("data"),
@@ -365,6 +388,10 @@ fn a_bind_flood_ends_only_its_interpreter_under_the_worker_daemon_live() {
         "worker daemon",
         pid,
         &node.worker.log,
+    );
+    assert!(
+        stat_of(victim).is_none(),
+        "{TEST}: the killed interpreter {victim} was reaped"
     );
     assert_alive("main", node.main.child.id(), &node.main.log);
 }

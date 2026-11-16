@@ -329,15 +329,16 @@ impl ToolResultStatus {
     }
 }
 
-/// The Code Mode limit a vendored guard's report names: `wall`, `output`,
-/// `memory` or `stack`, or `None` for any other text.
+/// The Code Mode limit a guard's report names: `wall`, `output`, `memory` or
+/// `stack`, or `None` for any other text.
 ///
 /// Just before the error of a cell that failed on its wall, output, memory or
-/// interpreter stack limit, the guard sends its report of that limit as a Code
-/// Mode notification of its own (`vendor/nanocode-code-mode-engine.patch`:
-/// `CellBudget::report`, and `run_worker` for a failure the bootstrap cannot
-/// report), and nanocode emits every notification as a `tool.notification`
-/// event on both kinds, whatever it then shows the model.
+/// interpreter stack limit, a report of that limit is sent as a Code Mode
+/// notification of its own (the heap's by the vendored engine,
+/// `vendor/nanocode-code-mode-engine.patch`: `report_out_of_memory`; the rest
+/// by the interpreter process, `kata_code_mode_host`'s `interpreter`), and
+/// nanocode emits every notification as a `tool.notification` event on both
+/// kinds, whatever it then shows the model.
 /// So the report reaches this fold however much text the cell emitted before
 /// it: nanocode's truncation of the cell's visible result, which drops the
 /// trailing `Script error:` past its budget, never touches the event. The
@@ -345,20 +346,18 @@ impl ToolResultStatus {
 /// record. A report is the whole text, exactly: `Code Mode cell exceeded its
 /// <n> ms wall-time limit`, `Code Mode cell output exceeded its <n>-byte
 /// limit`, `Code Mode cell exceeded its <n>-byte memory limit`, `Code Mode cell
-/// exceeded its <n>-byte interpreter stack limit`.
+/// exceeded its interpreter stack limit` (djs's stack limit is its own, a
+/// slot count, so its report names no size).
 ///
 /// What else reads as a report, stated: a cell whose own `notify` sends one of
-/// those texts (recorded as a hit, though none happened); a cell that throws
-/// an error named and worded as QuickJS's `InternalError: out of memory` or
-/// `RangeError: Maximum call stack size exceeded` (the guard reads a failure
-/// the bootstrap reports off its first line); and a cell that fails outside
-/// the bootstrap's report with its heap within 64 KiB of the limit, whatever
-/// failed. What reads as none: a heap or stack hit the cell catches and
-/// rethrows inside an error of its own, and a heap hit QuickJS throws as a
-/// bare `null` that the bootstrap reports (`Uncaught null`) once the cell's
-/// frames released the heap; each fails to the model as that error and is
-/// recorded nowhere (MEASURED, `tests/code_mode_limits.rs`). This is progress
-/// and evidence, never authority. A cell that
+/// those texts (recorded as a hit, though none happened), and a cell that
+/// throws, uncaught, an error named and worded as djs's `RangeError: Maximum
+/// call stack size exceeded` (the interpreter reads a failure off its first
+/// line). What reads as none: a stack hit the cell catches and rethrows inside
+/// an error of its own, which fails to the model as that error and is recorded
+/// nowhere (`tests/code_mode_limits.rs`). A heap hit is never caught: djs ends
+/// the cell, and the engine reports it. This is progress and evidence, never
+/// authority. A cell that
 /// yielded and failed on a limit while no `wait` observed it has its report
 /// delivered when nanocode ends the turn's cells, which on a completed or
 /// cancelled turn precedes the turn's outcome, so it is recorded then, told to
@@ -381,10 +380,7 @@ fn guard_report(text: &str) -> Option<&'static str> {
         Some("wall")
     } else if rest.strip_suffix("-byte memory limit").is_some_and(limit) {
         Some("memory")
-    } else if rest
-        .strip_suffix("-byte interpreter stack limit")
-        .is_some_and(limit)
-    {
+    } else if rest == "interpreter stack limit" {
         Some("stack")
     } else {
         None
@@ -514,10 +510,10 @@ mod tests {
     }
 
     /// **A guard report names its limit, and nothing else does.** Each of the
-    /// vendored guard's four reports, as a whole text, is its limit; the same
-    /// words with a prefix (as a failed cell's `Script error:`), a suffix, a
-    /// number that is not one, a stack report without `interpreter`, or
-    /// QuickJS's own out-of-memory and stack messages are none.
+    /// four reports, as a whole text, is its limit; the same words with a
+    /// prefix (as a failed cell's `Script error:`), a suffix, a number that is
+    /// not one, the stack report in its old sized form, or an engine's own
+    /// out-of-memory and stack messages are none.
     #[test]
     fn a_guard_report_names_its_limit_and_nothing_else_does() {
         for (text, which) in [
@@ -534,10 +530,14 @@ mod tests {
                 Some("memory"),
             ),
             (
-                "Code Mode cell exceeded its 1048576-byte interpreter stack limit",
+                "Code Mode cell exceeded its interpreter stack limit",
                 Some("stack"),
             ),
-            ("Code Mode cell exceeded its 1048576-byte stack limit", None),
+            (
+                "Code Mode cell exceeded its 1048576-byte interpreter stack limit",
+                None,
+            ),
+            ("Code Mode cell exceeded its stack limit", None),
             ("RangeError: Maximum call stack size exceeded", None),
             (
                 "Script error:\nCode Mode cell exceeded its 300000 ms wall-time limit",

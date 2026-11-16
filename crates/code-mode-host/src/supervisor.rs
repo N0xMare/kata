@@ -24,7 +24,7 @@
 //! [`STDERR_CAP`] bytes and counting the rest; nothing of it reaches the
 //! hosting process's own standard error or log. A cell its interpreter's end
 //! fails, and a cell whose interpreter could not start, carry what it kept
-//! (QuickJS's and glibc's assertion lines, a panic) in their error.
+//! (a panic, glibc's assertion lines) in their error.
 
 use std::collections::{HashMap, VecDeque};
 use std::io::Read;
@@ -39,14 +39,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use nanocode_code_mode_engine::{
-    CELL_EVENT_BYTES, HostCommand, NativeLimits, RuntimeEvent, StartExecution, WorkerBackend,
-    WorkerEnds,
+    Events, HostCommand, RuntimeEvent, StartExecution, WorkerBackend, WorkerEnds,
 };
 use serde_json::{Value, value::RawValue};
-use tokio::sync::mpsc;
 
-use crate::Program;
 use crate::wire::{self, Event, FromInterpreter, ToInterpreter};
+use crate::{CELL_EVENT_BYTES, CodeModeLimits, LiveWorker, Program};
 
 /// How long an interpreter may take to answer `Ready`, after its start or
 /// after a cell's terminal event, before it is killed.
@@ -59,8 +57,8 @@ const READY_WITHIN: Duration = Duration::from_secs(30);
 pub const WALL_GRACE: Duration = Duration::from_secs(5);
 
 /// What a cell may emit past `cell_emitted_bytes` as the supervisor counts it:
-/// the guard's one report of the limit the cell failed on, which the engine
-/// sends uncharged just before the cell's `Error`.
+/// the interpreter's one report of the output limit, which it sends in place
+/// of the event that crossed it, just before the cell's `Error`.
 const REPORT_ALLOWANCE: usize = CELL_EVENT_BYTES + 256;
 
 /// Frames the supervisor's inbox holds before the interpreter's reader (and the
@@ -92,13 +90,16 @@ pub const ENDED_BY: &str = "Code Mode's interpreter process ended by ";
 pub const EXITED_WITH: &str = "Code Mode's interpreter process exited with status ";
 
 /// The backend [`crate::install`] puts behind the engine's seam.
-pub fn backend(limits: NativeLimits, program: Program) -> WorkerBackend {
+pub fn backend(limits: CodeModeLimits, program: Program) -> WorkerBackend {
     let config = Arc::new(Config { limits, program });
-    Box::new(move |ends| start(ends, Arc::clone(&config)))
+    Box::new(move |ends| {
+        let live = LiveWorker::claim(config.limits.live_workers)?;
+        start(ends, live, Arc::clone(&config))
+    })
 }
 
 struct Config {
-    limits: NativeLimits,
+    limits: CodeModeLimits,
     program: Program,
 }
 
@@ -121,14 +122,14 @@ enum Said {
 }
 
 /// Starts the supervisor of one `EmbeddedHost`, and the thread that forwards
-/// the host's commands into the supervisor's inbox.
-fn start(ends: WorkerEnds, config: Arc<Config>) -> Result<(), String> {
+/// the host's commands into the supervisor's inbox. The host counts as live
+/// (`live`) until the supervisor has reaped its interpreter.
+fn start(ends: WorkerEnds, live: LiveWorker, config: Arc<Config>) -> Result<(), String> {
     let WorkerEnds {
         commands,
         events,
         startup,
         stopped,
-        live,
     } = ends;
     let (inbox, received) = std_mpsc::sync_channel(INBOX);
     let forward = inbox.clone();
@@ -159,7 +160,7 @@ fn start(ends: WorkerEnds, config: Arc<Config>) -> Result<(), String> {
             // now does this worker stop counting as live.
             drop(live);
             drop(startup);
-            let _ = stopped.send(());
+            stopped.send();
         })
         .map_err(|error| format!("failed to start Code Mode's supervisor: {error}"))?;
     Ok(())
@@ -221,7 +222,7 @@ enum Step {
 
 struct Supervisor {
     config: Arc<Config>,
-    events: mpsc::UnboundedSender<RuntimeEvent>,
+    events: Events,
     inbox: std_mpsc::SyncSender<Input>,
     interpreter: Option<Interpreter>,
     generation: u64,
@@ -374,6 +375,10 @@ impl Supervisor {
         command
             .args(&self.config.program.args)
             .env_clear()
+            // Its one variable: the empty `TZ` is UTC to the engine's zone
+            // reader, which then opens and stats no zone file (its filter
+            // refuses both), and a cell reads no host's time zone.
+            .env("TZ", "")
             .stdin(Stdio::from(OwnedFd::from(theirs)))
             .stdout(Stdio::null())
             .stderr(Stdio::from(OwnedFd::from(theirs_stderr)));
@@ -442,7 +447,7 @@ impl Supervisor {
         let frame = ToInterpreter::Start {
             execution_id: id,
             source: start.source,
-            tools: start.tools,
+            tools: start.tools.encoded().map(str::to_owned),
             prelude: start.prelude.map(|prelude| prelude.to_string()),
         };
         let Some(bytes) = wire::encode(&frame) else {
@@ -553,7 +558,7 @@ impl Supervisor {
             ));
         }
         let terminal = match &event {
-            Event::Replayed { .. } | Event::Diverged { .. } => {
+            Event::Replayed { .. } | Event::Diverged { .. } | Event::Waiting { .. } => {
                 return self
                     .violation("it sent a journal event of a cell kata journals not".into());
             }
@@ -564,20 +569,11 @@ impl Supervisor {
                 cell.holds -= 1;
                 false
             }
-            Event::Notify { text, .. } => {
-                cell.charged = cell
-                    .charged
-                    .saturating_add(CELL_EVENT_BYTES.saturating_add(text.len()));
-                false
-            }
-            Event::Content { content, .. } => {
-                cell.charged = cell.charged.saturating_add(
-                    CELL_EVENT_BYTES.saturating_add(content_payload_bytes(content)),
-                );
-                false
-            }
-            Event::ToolCall { .. } | Event::Yielded { .. } => {
-                cell.charged = cell.charged.saturating_add(CELL_EVENT_BYTES);
+            Event::Notify { .. }
+            | Event::Content { .. }
+            | Event::ToolCall { .. }
+            | Event::Yielded { .. } => {
+                cell.charged = cell.charged.saturating_add(event.charge());
                 false
             }
             Event::Done { .. } | Event::Error { .. } => true,
@@ -596,7 +592,7 @@ impl Supervisor {
         let Ok(event) = event.decode() else {
             return self.violation("it sent an output item that is not one".to_owned());
         };
-        let _ = self.events.send(event);
+        self.events.send(event);
         if terminal {
             self.phase = Phase::AwaitingReady {
                 fresh: false,
@@ -718,7 +714,7 @@ impl Supervisor {
     /// Ends cell `id` with `report` as a notification, then an `Error` of
     /// `message`.
     fn report(&self, id: u64, report: String, message: String) {
-        let _ = self.events.send(RuntimeEvent::Notify {
+        self.events.send(RuntimeEvent::Notify {
             cell_id: id,
             text: report,
         });
@@ -726,7 +722,7 @@ impl Supervisor {
     }
 
     fn fail(&self, id: u64, message: &str) {
-        let _ = self.events.send(RuntimeEvent::Error {
+        self.events.send(RuntimeEvent::Error {
             cell_id: id,
             message: message.to_owned(),
             stored: std::collections::HashMap::new(),
@@ -836,7 +832,7 @@ fn ended_before_ready(status: Option<ExitStatus>) -> String {
 /// encrypted content). That is all the item admits, and no more than the
 /// engine charges an honest one (its JSON, or a text run's bytes and
 /// separators), so the cap never ends a cell the engine let through.
-fn content_payload_bytes(content: &Value) -> usize {
+pub(crate) fn content_payload_bytes(content: &Value) -> usize {
     fn strings(value: &Value) -> usize {
         match value {
             Value::String(text) => text.len(),

@@ -47,7 +47,7 @@
       toolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
       # pkgsStatic's musl C compiler: kata-toolhost's musl linker, and in the
       # dev shell the `x86_64-linux-musl-gcc` cc-rs looks for when a C
-      # dependency (SQLite, ring, zstd, QuickJS) builds for the musl target.
+      # dependency (SQLite, ring) builds for the musl target.
       muslCc = pkgs.pkgsStatic.stdenv.cc;
       muslCcForCcRs = pkgs.writeShellScriptBin "x86_64-linux-musl-gcc" ''
         exec ${muslCc}/bin/${muslCc.targetPrefix}cc "$@"
@@ -204,12 +204,18 @@
       # hand-maintained dummy-source list.
       kataCargoVendor = pkgs.rustPlatform.importCargoLock {
         lockFile = ./Cargo.lock;
+        # importCargoLock lays out the vendored crates by name-version, so two
+        # packages of one name and version from two sources collide (its `ln`
+        # into the first's read-only directory fails). nanocode 8ec3b215 ships
+        # its own `unicode-normalization` 0.1.25, a rewrite gix cannot take, so
+        # the lock holds the crates.io one gix-utils needs (>= 0.1.19) at 0.1.24.
         # One entry per git rev in Cargo.lock: outputHashes maps a
         # name-version to that package's git REV, so one entry covers every
-        # crate fetched at the same rev (all commonware-*, all nanocode-*).
+        # crate fetched at the same rev (all commonware-*; every package of the
+        # nanocode repository: nanocode-*, djs-*, psh-*).
         outputHashes = {
           "commonware-codec-2026.9.0" = "sha256-VZK1X0Ba+HIC0MBlf+PRzyqiV9nxQFCXG+ZEMHertec=";
-          "nanocode-agent-config-0.6.7" = "sha256-NXV2apHKZ6ctoLD1N2XkE6NYe/JO6+OPOq0ATcMEhRI=";
+          "djs-core-0.0.0" = "sha256-ACAFwr5NaWIDJ7nAp2l4zsoll2DouYjLJ7mf4bJJIAI=";
         };
       };
 

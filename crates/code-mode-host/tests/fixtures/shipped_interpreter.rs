@@ -38,6 +38,7 @@ pub fn a_cell_runs_in(binary: &str) {
     let mut child = Command::new(binary)
         .args(kata_code_mode_host::INTERPRETER_ARGS)
         .env_clear()
+        .env("TZ", "")
         .stdin(Stdio::from(OwnedFd::from(theirs)))
         .stdout(Stdio::null())
         .stderr(Stdio::inherit())
@@ -48,7 +49,6 @@ pub fn a_cell_runs_in(binary: &str) {
         &json!({"Init": {
             "limits": {
                 "memory_bytes": 64 << 20,
-                "max_stack_bytes": 1 << 20,
                 "thread_stack_bytes": 8 << 20,
                 "cell_wall_nanos": 10_000_000_000_u64,
                 "cell_emitted_bytes": 1 << 20,
@@ -67,7 +67,7 @@ pub fn a_cell_runs_in(binary: &str) {
         &json!({"Start": {
             "execution_id": 1,
             "source": "notify(\"from the shipped binary: \" + load(\"k\"));",
-            "tools": [],
+            "tools": ["[]", "[]", "[]"],
             "prelude": null,
         }}),
     );

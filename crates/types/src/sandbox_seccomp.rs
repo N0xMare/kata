@@ -56,7 +56,7 @@
 //! ## The ALLOW-list form, KILL by default
 //!
 //! One process kata runs has a KNOWN syscall set: Code Mode's interpreter, a
-//! re-exec of kata's own binary that runs QuickJS on model-written code
+//! re-exec of kata's own binary that runs djs on model-written code
 //! (`kata_code_mode_host`). For it this module also compiles an ALLOW-list
 //! ([`allow_list_program`]): each listed syscall on the arguments its
 //! [`Admit`] rule lets through (a descriptor, a process id, flags — the

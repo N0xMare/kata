@@ -193,13 +193,13 @@ oci-live-smoke: _workspace-bins
     # git refs, the fake `gh`'s log, the mock's own request log). Every kill is a
     # SIGKILL at a durable park or with the mock holding a model request, never a
     # timer; the panel retry, the agent loop, the cost bound, worker liveness,
-    # model reuse and a provider connection the mock cuts mid-response (PROVEN
-    # AMBIGUOUS, never re-run) ride the same rig. Each cell asserts it fails by name rather
+    # model reuse and a provider response the mock fails mid-turn with a terminal
+    # `response.failed` (PROVEN AMBIGUOUS, never re-run) ride the same rig. Each cell asserts it fails by name rather
     # than skipping when the host cannot prove containment.
     # `code_mode_host_live`: a nanocode stage whose Code Mode
-    # cell crashes QuickJS (a bind flood, mock model, no budget) ends only its
-    # interpreter process under a `local_socket` worker daemon, read alive off
-    # `/proc`; and the harness crash point armed on a `kata serve` that
+    # cell's interpreter is killed mid-cell (SIGKILL, the OOM killer's stand-in;
+    # mock model, no budget) ends only that interpreter process under a
+    # `local_socket` worker daemon, read alive off `/proc`; and the harness crash point armed on a `kata serve` that
     # supervises its node ends only that node — the main alive, the attempt
     # PROVEN AMBIGUOUS, the node's subtree empty, a new node started.
     # `nanocode_interruption_live` is the no-spend twin of `live-nanocode`'s
@@ -2479,7 +2479,7 @@ _containment-preconditions:
 
     # 5b. A musl C compiler: the factory preflight smoke's in-capsule `kata` is the
     #     static `x86_64-unknown-linux-musl` build of this tree, and its C dependencies
-    #     (SQLite, ring, zstd, QuickJS) compile with the compiler cc-rs looks for under
+    #     (SQLite, ring) compile with the compiler cc-rs looks for under
     #     these two names; without one that build cannot start.
     if command -v x86_64-linux-musl-gcc >/dev/null 2>&1 || command -v musl-gcc >/dev/null 2>&1; then
         note "musl cc" "ok — $(command -v x86_64-linux-musl-gcc || command -v musl-gcc)"

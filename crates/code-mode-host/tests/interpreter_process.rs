@@ -10,37 +10,34 @@ use std::time::Duration;
 use std::io::BufRead;
 use std::process::{Command, Stdio};
 
-use common::{MIB, children, eventually, run, state_of, thread_names};
-use kata_code_mode_host::{Program, address_space_limit, install};
-use nanocode_code_mode_engine::{EmbeddedHost, NativeLimits, RuntimeEvent, live_workers};
+use common::{MIB, cell_tools, children, cpu_ticks, eventually, run, state_of};
+use kata_code_mode_host::{CodeModeLimits, Program, address_space_limit, install, live_workers};
+use nanocode_code_mode_engine::{EmbeddedHost, Interrupt, RuntimeEvent};
 
 kata_code_mode_host::interpreter_entry!();
 
-const LIMITS: NativeLimits = NativeLimits {
+const LIMITS: CodeModeLimits = CodeModeLimits {
     memory_bytes: 64 * MIB,
-    max_stack_bytes: MIB,
     thread_stack_bytes: 8 * MIB,
     cell_wall: Duration::from_secs(60),
     cell_emitted_bytes: MIB,
     live_workers: 2,
 };
 
-/// The name the engine gives a worker thread, as the kernel's 15-byte `comm`
-/// keeps it.
-const QUICKJS_THREAD: &str = "nanocode-code-m";
-
 fn installed() {
     install(LIMITS, Program::this_executable()).expect("the only backend this binary installs");
 }
 
-/// **No cell runs in this process.** Two cells run and answer, and while they
-/// do this process has no QuickJS worker thread, and exactly one child: the
-/// interpreter process.
+/// **No cell runs in this process.** Two cells run and answer in exactly one
+/// child, the interpreter process, reaped at `terminate`; the second spins in
+/// JavaScript for 500 ms, and the kernel charges that CPU to the child, not to
+/// this process. The engine runs a cell on the task that polls its host, so
+/// in this process it would be charged here.
 ///
-/// **Would red if:** the backend were not installed, so the engine ran its
-/// worker thread here (watched: a `nanocode-code-m` thread in this process).
+/// **Would red if:** the backend were not installed, so the engine ran the
+/// cells on this process's own runtime (no child; the spin charged here).
 #[tokio::test]
-async fn cells_run_in_one_child_and_no_quickjs_thread_runs_here() {
+async fn cells_run_in_one_child_and_burn_no_cpu_here() {
     installed();
     let mut host = EmbeddedHost::spawn().expect("a host");
     let first = run(&mut host, 1, "notify(\"one\");").await;
@@ -48,24 +45,33 @@ async fn cells_run_in_one_child_and_no_quickjs_thread_runs_here() {
         (first.error, first.notified),
         (None, vec!["one".to_owned()])
     );
+    let listed = children();
+    assert_eq!(listed.len(), 1, "one interpreter process: {listed:?}");
+    let child = listed[0].to_string();
+    let (this_before, child_before) = (
+        cpu_ticks("self").expect("this process's ticks"),
+        cpu_ticks(&child).expect("the interpreter's ticks"),
+    );
     let second = run(
         &mut host,
         2,
-        "notify(String(typeof process) + ' ' + String(typeof require));",
+        "const t0 = Date.now(); while (Date.now() - t0 < 500) {}\n\
+         notify(String(typeof process) + ' ' + String(typeof require));",
     )
     .await;
-    assert_eq!(second.error, None);
-    let threads = thread_names();
-    assert!(
-        !threads.iter().any(|name| name == QUICKJS_THREAD),
-        "a QuickJS worker thread runs in this process: {threads:?}"
-    );
     assert_eq!(
-        children().len(),
-        1,
-        "one interpreter process: {:?}",
-        children()
+        (second.error, second.notified),
+        (None, vec!["undefined undefined".to_owned()])
     );
+    let (this_spent, child_spent) = (
+        cpu_ticks("self").expect("this process's ticks") - this_before,
+        cpu_ticks(&child).expect("the interpreter's ticks") - child_before,
+    );
+    assert!(
+        child_spent >= 30 && this_spent < child_spent / 2,
+        "the 500 ms spin was charged {child_spent} ticks in the interpreter and {this_spent} here"
+    );
+    assert_eq!(children(), listed, "the same one interpreter process");
     host.terminate().await;
     assert!(
         children().is_empty(),
@@ -101,9 +107,10 @@ async fn terminate_kills_a_cell_in_a_native_step_and_reaps_it() {
         7,
         A_LONG_NATIVE_STEP,
         std::collections::HashMap::new(),
-        Vec::new(),
+        cell_tools(&[]),
         None,
         None,
+        Interrupt::new(),
     )
     .expect("the cell starts");
     let event = host.read_event().await.expect("an event");
@@ -146,9 +153,10 @@ async fn spinning(host: &mut EmbeddedHost, id: u64) -> u32 {
         id,
         SPINNER,
         std::collections::HashMap::new(),
-        Vec::new(),
+        cell_tools(&[]),
         None,
         None,
+        Interrupt::new(),
     )
     .expect("the cell starts");
     match host.read_event().await.expect("an event") {
@@ -266,9 +274,12 @@ async fn a_cell_waiting_on_its_tool_survives_its_interpreter_stopped_and_continu
         1,
         "const answer = await tools.probe({}); notify('answered ' + answer);",
         std::collections::HashMap::new(),
-        vec![serde_json::json!({ "name": "probe", "tool_name": "probe", "kind": "function" })],
+        cell_tools(&[
+            serde_json::json!({ "name": "probe", "tool_name": "probe", "kind": "function" }),
+        ]),
         None,
         None,
+        Interrupt::new(),
     )
     .expect("the cell starts");
     let RuntimeEvent::ToolCall { id: tool_call, .. } = host.read_event().await.expect("an event")
@@ -364,10 +375,10 @@ async fn the_kernel_reports_an_interpreter_confined() {
 
 /// **A program that cannot start fails the cell by name, and nothing runs
 /// here instead.** The interpreter's program does not exist: the cell fails
-/// with the supervisor's refusal naming it, and no QuickJS thread ever runs in
-/// this process.
+/// with the supervisor's refusal naming it, and the cell's `notify` never
+/// reaches the host: nothing ran it.
 ///
-/// **Would red if:** the supervisor fell back to a worker thread here.
+/// **Would red if:** the supervisor fell back to running the cell here.
 #[tokio::test]
 async fn a_program_that_cannot_start_fails_the_cell_by_name() {
     let missing = "/nonexistent/kata-code-mode-interpreter";
@@ -389,7 +400,6 @@ async fn a_program_that_cannot_start_fails_the_cell_by_name() {
         "{error}"
     );
     assert!(cell.notified.is_empty());
-    assert!(!thread_names().iter().any(|name| name == QUICKJS_THREAD));
     host.terminate().await;
 }
 
@@ -436,7 +446,7 @@ async fn a_program_that_ends_before_ready_fails_the_cell_by_name() {
 #[tokio::test]
 async fn a_worker_counts_as_live_until_its_interpreter_is_reaped() {
     install(
-        NativeLimits {
+        CodeModeLimits {
             live_workers: 1,
             ..LIMITS
         },
@@ -451,10 +461,10 @@ async fn a_worker_counts_as_live_until_its_interpreter_is_reaped() {
                 "const keep = [];\nfor (let i = 0; i < 48; i++) keep.push(new Uint8Array(1 << 20).fill(1));\n\
                  notify(\"spinning\");\nfor (;;) {}",
                 std::collections::HashMap::new(),
-                Vec::new(),
+                cell_tools(&[]),
                 None,
                 None,
-            )
+                Interrupt::new())
             .expect("the cell starts");
         assert!(matches!(
             first.read_event().await,
@@ -484,9 +494,8 @@ async fn a_worker_counts_as_live_until_its_interpreter_is_reaped() {
 }
 
 /// Limits under which a cell can store and load tens of MiB.
-const ROOMY: NativeLimits = NativeLimits {
+const ROOMY: CodeModeLimits = CodeModeLimits {
     memory_bytes: 256 * MIB,
-    max_stack_bytes: MIB,
     thread_stack_bytes: 8 * MIB,
     cell_wall: Duration::from_secs(60),
     cell_emitted_bytes: 8 * MIB,
@@ -502,8 +511,16 @@ async fn run_stored(
     id: u64,
     source: &str,
 ) -> (Option<String>, Vec<String>) {
-    host.start_cell(id, source, shared.clone(), Vec::new(), None, None)
-        .expect("the cell starts");
+    host.start_cell(
+        id,
+        source,
+        shared.clone(),
+        cell_tools(&[]),
+        None,
+        None,
+        Interrupt::new(),
+    )
+    .expect("the cell starts");
     let mut notified = Vec::new();
     loop {
         let event = tokio::time::timeout(Duration::from_secs(120), host.read_event())
@@ -636,7 +653,7 @@ async fn a_cell_whose_stored_values_do_not_fit_a_frame_fails_by_name() {
 #[tokio::test]
 async fn images_up_to_the_cells_limit_pass_and_past_it_the_engine_ends_the_cell() {
     install(
-        NativeLimits {
+        CodeModeLimits {
             cell_emitted_bytes: MIB,
             ..ROOMY
         },
@@ -680,7 +697,7 @@ async fn images_up_to_the_cells_limit_pass_and_past_it_the_engine_ends_the_cell(
 async fn a_tool_result_too_long_for_a_frame_fails_the_call_by_name() {
     let wall = Duration::from_secs(10);
     install(
-        NativeLimits {
+        CodeModeLimits {
             cell_wall: wall,
             ..ROOMY
         },
@@ -693,10 +710,10 @@ async fn a_tool_result_too_long_for_a_frame_fails_the_call_by_name() {
         1,
         "try { await tools.probe({}); notify('resolved'); } catch (error) { notify(error.message); }",
         std::collections::HashMap::new(),
-        vec![serde_json::json!({ "name": "probe", "tool_name": "probe", "kind": "function" })],
+        cell_tools(&[serde_json::json!({ "name": "probe", "tool_name": "probe", "kind": "function" })]),
         None,
         None,
-    )
+        Interrupt::new())
     .expect("the cell starts");
     let RuntimeEvent::ToolCall { id: tool_call, .. } = host.read_event().await.expect("an event")
     else {

@@ -27,8 +27,9 @@ kata-toolhost-protocol.workspace = true
 nanocode-backend-codex.workspace = true
 nanocode-backend-claude.workspace = true
 nanocode-process-contracts.workspace = true
-# The vendored Code Mode engine (`vendor/nanocode-code-mode-engine`): the library
-# names kata's Code Mode limits as its `NativeLimits`.
+# The vendored Code Mode engine (`vendor/nanocode-code-mode-engine`): its
+# re-export of nanocode's platform (`platform`), on which the adapter installs
+# kata's tokio runtime as nanocode's host (`adapter::platform`).
 nanocode-code-mode-engine.workspace = true
 # Runs every Code Mode cell in an interpreter process, a confined child of the
 # process hosting the worker: `install_code_mode_limits` installs it with the
@@ -51,15 +52,13 @@ tracing.workspace = true
 # adapter builds no `Command` (`crates/agent/tests/adapter_contract.rs` reads these
 # sources).
 tokio = { workspace = true, features = ["io-util", "sync", "rt", "time", "macros"] }
-# `IssuanceMark` is a `tower::Layer` over nanocode's Responses service: the one
-# place every Generation attempt passes on either transport.
-tower.workspace = true
 # `credential` (kata's own login, the one host-side module): the store's state
-# envelope; the effective uid its owner-only checks compare against; and the
+# envelope; the effective uid its owner-only checks compare against (and the
+# kernel randomness nanocode's platform reads, `rand`); and the
 # HTTP client its ChatGPT store reaches the token issuer with, at the version and
 # TLS setup nanocode's own codex client already locks (no feature beyond it).
 serde.workspace = true
-rustix.workspace = true
+rustix = { workspace = true, features = ["rand"] }
 reqwest.workspace = true
 
 [build-dependencies]
@@ -84,9 +83,6 @@ toml.workspace = true
 blake3.workspace = true
 # `credential`'s cells mint unsigned JWTs for the stored ChatGPT login.
 base64.workspace = true
-# `the_anthropic_session_id_is_rederived_from_the_seed` reads the session id
-# nanocode's own telemetry spans name. Already in the tree.
-tracing-subscriber.workspace = true
 
 [lints]
 workspace = true

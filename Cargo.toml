@@ -186,19 +186,25 @@ commonware-conformance  = { git = "https://github.com/commonwarexyz/monorepo", r
 # backend registers over it move between commits. A bump is a deliberate change:
 # `crates/agent-nanocode/tests/nanocode_seam.rs` goes red when it moves the host
 # tool names or leaves `NANOCODE_REV` behind the lockfile, and flake.nix's
-# `nanocode-agent-config` outputHash must be re-hashed (a `nix build .#kata` with
-# the stale one fails and names the new one).
-# Requires rustc 1.97 and a C compiler (QuickJS and zstd build scripts). nanocode
-# pins `async-trait = "=0.1.89"` exactly, which holds every workspace crate's
-# async-trait at that version in Cargo.lock.
+# outputHash for the nanocode repository's rev (keyed by the first of its git
+# packages in the lock, `djs-core` at 8ec3b215) must be re-hashed (a `nix build
+# .#kata` with the stale one fails and names the new one).
+# Requires rustc 1.97 (nanocode's `rust-version`); nanocode's own crates (its
+# JavaScript engine djs, its zstd) build from Rust alone. nanocode pins
+# `async-trait = "=0.1.89"` exactly, which holds every workspace crate's
+# async-trait at that version in Cargo.lock. nanocode's own workspace patches
+# crates.io crates (serde, serde_json, rustls and others) with copies of its own;
+# a `[patch]` binds only the workspace that declares it, so kata builds nanocode
+# against the crates.io releases its lock names.
 # `just nanocode-bump <rev>` moves these three revs, `NANOCODE_REV`, the lock, the
 # vendored engine below and the flake hash together
 # (docs/development/nanocode.md).
-nanocode-backend-codex     = { git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-nanocode-backend-claude    = { git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-nanocode-process-contracts = { git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-# The vendored engine itself, for `crates/agent-nanocode`, which installs its
-# `NativeLimits` (the `[patch]` below routes nanocode's own dependents to it).
+nanocode-backend-codex     = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+nanocode-backend-claude    = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+nanocode-process-contracts = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+# The vendored engine itself, for `crates/code-mode-host`, which fills its
+# worker seam, and `crates/agent-nanocode`, which installs nanocode's platform
+# through it (the `[patch]` below routes nanocode's own dependents to it).
 nanocode-code-mode-engine  = { path = "vendor/nanocode-code-mode-engine" }
 
 # Storage
@@ -428,8 +434,8 @@ double_must_use = "allow"
 # treatment as the lint above.
 assert_is_empty = "allow"
 
-# nanocode's Code Mode engine (`nanocode-code-mode-engine`, the native QuickJS
-# worker) is vendored in-tree with kata's resource-guard patch, and every
+# nanocode's Code Mode engine (`nanocode-code-mode-engine`, the host that runs a
+# cell in djs) is vendored in-tree with kata's seam patch, and every
 # dependency on it from the nanocode git source resolves to that copy. The copy
 # must be exactly upstream at the revs above plus
 # `vendor/nanocode-code-mode-engine.patch`: `just nanocode-vendor-check` refuses

@@ -192,6 +192,7 @@ use kata_types::agent::{AdapterKind, Prompt, SessionEvidence};
 use kata_types::effect::ProviderFailureClass;
 use nanocode_backend_claude::ClaudeError;
 use nanocode_backend_claude::transport::{HttpError, layer};
+use nanocode_backend_codex::client::tower as nanocode_tower;
 use nanocode_backend_codex::transport::{ResponsesAttempt, ResponsesAttemptKind, ResponsesError};
 use nanocode_backend_codex::{NanocodeError, ResponseError, Tools, TurnResult};
 use nanocode_process_contracts::ShellExecutor;
@@ -430,6 +431,9 @@ impl NanocodeSession {
             }
         };
 
+        if let Err(error) = super::platform::install() {
+            return refused(&format!("harness_build_failed: {error}"));
+        }
         let text = prompt.text.as_str();
         match auth {
             HarnessAuth::OpenAi(auth) => {
@@ -803,7 +807,7 @@ impl NanocodeSession {
             self.agent = None;
             drop(agent);
             self.observed
-                .code_mode_workers_live(nanocode_code_mode_engine::live_workers());
+                .code_mode_workers_live(kata_code_mode_host::live_workers());
         }
     }
 
@@ -1362,7 +1366,7 @@ pub(crate) struct IssuanceMarkLayer {
     gate: Arc<TurnGate>,
 }
 
-impl<S> tower::Layer<S> for IssuanceMarkLayer {
+impl<S> nanocode_tower::Layer<S> for IssuanceMarkLayer {
     type Service = IssuanceMark<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
@@ -1380,9 +1384,9 @@ pub(crate) struct IssuanceMark<S> {
     gate: Arc<TurnGate>,
 }
 
-impl<S> tower::Service<ResponsesAttempt> for IssuanceMark<S>
+impl<S> nanocode_tower::Service<ResponsesAttempt> for IssuanceMark<S>
 where
-    S: tower::Service<ResponsesAttempt>,
+    S: nanocode_tower::Service<ResponsesAttempt>,
     S::Error: Into<ResponseError>,
     S::Future: Send + 'static,
     S::Response: 'static,
@@ -1711,6 +1715,7 @@ mod tests {
         refusing: impl nanocode_backend_claude::transport::Layer,
     ) -> NanocodeError {
         use nanocode_backend_claude::{Claude, ClaudeClient, ClaudeEnvironment, ClaudeTools};
+        super::super::platform::install().expect("kata's platform host installs");
         let client = ClaudeClient::with_api_key(
             "http://127.0.0.1:1/v1/messages".to_owned(),
             "sk-ant-unit-not-a-key".to_owned(),
@@ -1762,6 +1767,7 @@ mod tests {
         blocks: Option<Vec<serde_json::Value>>,
     ) -> layer::Request {
         use nanocode_backend_claude::{Claude, ClaudeEnvironment, ClaudeTools};
+        super::super::platform::install().expect("kata's platform host installs");
         let capture = Capture::default();
         let environment = ClaudeEnvironment::new()
             .working_directory(super::WORKSPACE)
@@ -1806,12 +1812,38 @@ mod tests {
         )
     }
 
+    /// nanocode's per-model edits of its default blocks for the model these
+    /// cells drive, `claude-sonnet-4-6` (MEASURED at 8ec3b215, nanocode's
+    /// `instructions::default_system_blocks`), applied to `blocks`, whose
+    /// first block is the upstream block kata sends unedited: the Opus 5.5
+    /// paragraph that closes it removed (nanocode keeps it for
+    /// `claude-opus-5-5` alone), and the total-tokens reminder appended
+    /// (nanocode's `TOTAL_TOKENS_REMINDER_MODELS`). kata's blocks
+    /// ([`super::claude_system_blocks`]) are the same for every model, so they
+    /// make neither edit.
+    fn with_sonnet_edits(mut blocks: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
+        let text = blocks[0]["text"]
+            .as_str()
+            .expect("the upstream block has text")
+            .to_owned();
+        let paragraph = text
+            .find("\n\nDo build original games,")
+            .expect("the upstream block closes with the Opus 5.5 paragraph");
+        blocks[0]["text"] = format!(
+            "{}\n\n<total_tokens>15000000 tokens left</total_tokens>",
+            &text[..paragraph]
+        )
+        .into();
+        blocks
+    }
+
     /// **An API-key Anthropic request's system prompt is nanocode's own
-    /// default, block for block, less only the Claude Agent SDK identity that
-    /// opens it**, both read off the wire nanocode serialized: so kata's copy
-    /// of the Code Mode instructions ([`super::CLAUDE_CODE_MODE`]) is the
-    /// pinned rev's text, and a bump that moves it, or moves the identity off
-    /// the first block, goes red here.
+    /// default, block for block, less the Claude Agent SDK identity that opens
+    /// it and nanocode's per-model edits** ([`with_sonnet_edits`]), both read
+    /// off the wire nanocode serialized: so kata's copy of the Code Mode
+    /// instructions ([`super::CLAUDE_CODE_MODE`]) is the pinned rev's text, and
+    /// a bump that moves it, moves the identity off the first block, or edits
+    /// the defaults for this model in any other way goes red here.
     ///
     /// **Would red if:** kata's blocks kept the identity (watched: the
     /// defaults whole), or its Code Mode copy drifted from nanocode's (watched:
@@ -1827,14 +1859,16 @@ mod tests {
             nanocode_backend_claude::subscription_wire::IDENTITY,
             "nanocode's defaults open with the Agent SDK identity"
         );
-        assert_eq!(kata, defaults[1..]);
+        assert_eq!(with_sonnet_edits(kata), defaults[1..]);
     }
 
-    /// **A subscription request is byte-for-byte the one nanocode sends with
-    /// its own defaults**: its wire puts the Agent SDK identity back after the
-    /// billing line whatever the blocks hold, so kata's blocks change nothing
-    /// on that path: the same headers (the Claude Code betas, user agent and
-    /// session among them) and the same body, the identity in it.
+    /// **A subscription request is the one nanocode sends with its own
+    /// defaults, but for nanocode's per-model edits** ([`with_sonnet_edits`]):
+    /// its wire puts the Agent SDK identity back after the billing line
+    /// whatever the blocks hold, so kata's blocks change nothing else on that
+    /// path: the same headers (the Claude Code betas, user agent and session
+    /// among them) and the same body, the identity in it, but the billing
+    /// line's `cch=` digest, which covers the body the edits change.
     ///
     /// **Would red if:** kata's blocks reached a request nothing restores the
     /// identity in (watched: kata's side sent on an API-key client), or kata's
@@ -1849,15 +1883,34 @@ mod tests {
         let defaults = first_claude_request(subscription(), None).await;
         let kata = first_claude_request(subscription(), Some(super::claude_system_blocks())).await;
         assert_eq!(kata.headers, defaults.headers);
+        let body = |request: &layer::Request| -> serde_json::Value {
+            serde_json::from_slice(&request.body).expect("a JSON Messages body")
+        };
+        let mut sent = body(&kata);
+        let system = sent["system"].as_array_mut().expect("system blocks");
         assert_eq!(
-            String::from_utf8_lossy(&kata.body),
-            String::from_utf8_lossy(&defaults.body)
-        );
-        assert_eq!(
-            system_of(&kata)[1]["text"],
+            system[1]["text"],
             nanocode_backend_claude::subscription_wire::IDENTITY,
             "the subscription wire carries the identity"
         );
+        let edited = with_sonnet_edits(system.split_off(2));
+        system.extend(edited);
+        let without_digest = |mut body: serde_json::Value| {
+            let billing = body["system"][0]["text"]
+                .as_str()
+                .expect("the billing line")
+                .to_owned();
+            let (head, digest) = billing
+                .split_once(" cch=")
+                .expect("the billing line carries its digest");
+            assert!(
+                digest.len() == "00000;".len() && digest.ends_with(';'),
+                "{billing}"
+            );
+            body["system"][0]["text"] = head.into();
+            body
+        };
+        assert_eq!(without_digest(sent), without_digest(body(&defaults)));
     }
 
     /// **kata's own refusal of a Messages request reads as the gate's, and no

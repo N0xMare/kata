@@ -87,8 +87,8 @@ use kata_types::redaction::LiftedSecrets;
 use nanocode_process_contracts::{
     DEFAULT_EXEC_YIELD_MS, DEFAULT_POLL_YIELD_MS, DEFAULT_WRITE_YIELD_MS, ExecCommand,
     ExecCommandResult, FileHost, ForegroundCommand, ForegroundExecutor, ForegroundOutput,
-    MAX_EXEC_YIELD_MS, MAX_POLL_YIELD_MS, ProcessFuture, RunningProcess, ShellExecutor, WriteStdin,
-    effective_token_limit, redact_and_limit,
+    MAX_EXEC_YIELD_MS, MAX_POLL_YIELD_MS, MIN_POLL_YIELD_MS, OutputUnit, ProcessFuture,
+    RunningProcess, ShellExecutor, WriteStdin, effective_token_limit, redact_and_limit_in,
 };
 
 /// The capsule's workspace: the only working directory a harness turn names.
@@ -104,6 +104,13 @@ pub(crate) const NO_TERMINAL: &str = "this sandbox has no terminal; rerun with t
 
 /// Claude's Bash timeout exit status, as `timeout(1)` reports one.
 const TIMEOUT_EXIT: i32 = 124;
+
+/// The shortest wait an `exec_command`, or a `write_stdin` that writes, is
+/// given: nanocode's own executor's floor (a literal `250` beside
+/// `MAX_EXEC_YIELD_MS` in `nanocode-process`, which exports no name for it),
+/// so a model asking for less waits as it would on nanocode's host. An empty
+/// poll's floor is nanocode's `MIN_POLL_YIELD_MS`.
+const MIN_YIELD_MS: u64 = 250;
 
 /// An exec session left running past its yield.
 struct LiveSession {
@@ -357,10 +364,24 @@ impl Seam {
         Ok(())
     }
 
-    /// `requested` clamped to `[_, max]` and to what is left of the turn.
-    fn clamp(&self, requested: u64, max: u64) -> Duration {
+    /// A wait as nanocode's own executor computes it: `requested` clamped to
+    /// `[min, max]`, then raised to the call's `min_wait_ms` when it asks for
+    /// longer (nanocode's `waited`, which skips a `write_stdin` that writes:
+    /// its caller passes `None` there); then cut to what is left of the turn,
+    /// which no floor outlasts.
+    fn clamp(&self, requested: u64, min: u64, max: u64, min_wait_ms: Option<u64>) -> Duration {
         let left = self.turn_deadline.saturating_duration_since(Instant::now());
-        Duration::from_millis(requested.min(max)).min(left)
+        let floored = requested.clamp(min, max).max(min_wait_ms.unwrap_or(0));
+        Duration::from_millis(floored).min(left)
+    }
+
+    /// The whole seconds left of the turn, which nanocode shows the model with
+    /// a command's result (`Time left: <n> seconds`): the stage wall every
+    /// wait here is cut to.
+    fn time_left_seconds(&self) -> u64 {
+        self.turn_deadline
+            .saturating_duration_since(Instant::now())
+            .as_secs()
     }
 
     /// Spawn `script` in a fresh toolhost session: an effect, so marked first,
@@ -444,16 +465,21 @@ impl Seam {
             .ok_or_else(|| format!("{} is not a UTF-8 path", path.display()))
     }
 
-    /// The scrubbed, token-limited text the model reads.
+    /// The scrubbed, limited text the model reads, cut in the request's
+    /// `unit` (nanocode's truncation marker counts tokens or chars). The
+    /// session's buffer is already bounded (`SessionBuffer`), so the call's
+    /// `output_token_budget`, which bounds what nanocode's own executor holds
+    /// while a command runs, has nothing more to bound here.
     fn finish_output(
         &self,
         raw: &[u8],
         max_output_tokens: Option<usize>,
+        unit: OutputUnit,
     ) -> (String, Option<usize>) {
         let text = self.secrets.scrub(&String::from_utf8_lossy(raw));
         let original_tokens = text.len().saturating_add(3) / 4;
         let (text, truncated) =
-            redact_and_limit(text, &[], effective_token_limit(max_output_tokens));
+            redact_and_limit_in(text, &[], effective_token_limit(max_output_tokens), unit);
         (text, truncated.then_some(original_tokens))
     }
 }
@@ -492,6 +518,7 @@ impl Seam {
         end: Option<SessionEnd>,
         session: Option<i32>,
         max_output_tokens: Option<usize>,
+        unit: OutputUnit,
     ) -> ExecCommandResult {
         let mut raw = Vec::new();
         if let Some(note) = note {
@@ -499,7 +526,7 @@ impl Seam {
             raw.push(b'\n');
         }
         raw.extend_from_slice(output);
-        let (output, original_token_count) = self.finish_output(&raw, max_output_tokens);
+        let (output, original_token_count) = self.finish_output(&raw, max_output_tokens, unit);
         let wall_time_seconds = started.elapsed().as_secs_f64();
         let exit = exit_of(end);
         if let Some(reason) = self.client.latch().reason()
@@ -518,6 +545,7 @@ impl Seam {
             session_id: session.map(i64::from),
             original_token_count,
             output,
+            time_left_seconds: Some(self.time_left_seconds()),
         }
     }
 
@@ -697,7 +725,9 @@ impl ShellExecutor for Seam {
             };
             let wait = self.clamp(
                 command.yield_time_ms.unwrap_or(DEFAULT_EXEC_YIELD_MS),
+                MIN_YIELD_MS,
                 MAX_EXEC_YIELD_MS,
+                command.min_wait_ms,
             );
             let (output, end) = collect(&buffer, wait).await;
             let model_session = i32::try_from(session.0).unwrap_or(i32::MAX);
@@ -723,6 +753,7 @@ impl ShellExecutor for Seam {
                 end,
                 still_running.then_some(model_session),
                 command.max_output_tokens,
+                command.output_unit,
             )
         }))
     }
@@ -744,7 +775,9 @@ impl ShellExecutor for Seam {
                 }
                 self.clamp(
                     request.yield_time_ms.unwrap_or(DEFAULT_POLL_YIELD_MS),
+                    MIN_POLL_YIELD_MS,
                     MAX_POLL_YIELD_MS,
+                    request.min_wait_ms,
                 )
             } else {
                 let mut frames = Vec::new();
@@ -781,7 +814,9 @@ impl ShellExecutor for Seam {
                 }
                 self.clamp(
                     request.yield_time_ms.unwrap_or(DEFAULT_WRITE_YIELD_MS),
+                    MIN_YIELD_MS,
                     MAX_EXEC_YIELD_MS,
+                    None,
                 )
             };
             let (output, end) = collect(&buffer, wait).await;
@@ -796,8 +831,17 @@ impl ShellExecutor for Seam {
                 end,
                 still_running.then_some(request.session_id),
                 request.max_output_tokens,
+                request.output_unit,
             )
         }))
+    }
+
+    /// Sessions stay live past their yield (`keep_live`), so nanocode registers
+    /// `write_stdin` beside `exec_command`; the turn's end kills them all.
+    /// nanocode's own default, stated: a seam that answered `false` would take
+    /// `write_stdin` out of the host tool set (`HOST_SET_CODEX`).
+    fn keeps_sessions(&self) -> bool {
+        true
     }
 
     fn running(&self) -> Vec<RunningProcess> {
@@ -963,7 +1007,9 @@ mod tests {
         decode_frame, encode_frame,
     };
     use kata_types::redaction::LiftedSecrets;
-    use nanocode_process_contracts::{ExecCommand, FileHost, ForegroundExecutor, ShellExecutor};
+    use nanocode_process_contracts::{
+        ExecCommand, FileHost, ForegroundExecutor, ShellExecutor, WriteStdin,
+    };
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::super::session::check_tool_set;
@@ -1086,6 +1132,9 @@ mod tests {
             tty: false,
             yield_time_ms: None,
             max_output_tokens: None,
+            output_unit: nanocode_process_contracts::OutputUnit::Tokens,
+            output_token_budget: None,
+            min_wait_ms: None,
             caller: None,
         };
         let result =
@@ -1168,6 +1217,9 @@ mod tests {
             tty: false,
             yield_time_ms: None,
             max_output_tokens: None,
+            output_unit: nanocode_process_contracts::OutputUnit::Tokens,
+            output_token_budget: None,
+            min_wait_ms: None,
             caller: None,
         };
         let workspace = PathBuf::from(WORKSPACE);
@@ -1292,6 +1344,9 @@ mod tests {
                 tty: false,
                 yield_time_ms: Some(5_000),
                 max_output_tokens: None,
+                output_unit: nanocode_process_contracts::OutputUnit::Tokens,
+                output_token_budget: None,
+                min_wait_ms: None,
                 caller: None,
             };
             let result = ShellExecutor::execute(&seam, command, workspace.as_path()).await;
@@ -1360,6 +1415,9 @@ mod tests {
             tty: false,
             yield_time_ms: Some(250),
             max_output_tokens: None,
+            output_unit: nanocode_process_contracts::OutputUnit::Tokens,
+            output_token_budget: None,
+            min_wait_ms: None,
             caller: Some("cell-1".to_owned()),
         };
         let result = ShellExecutor::execute(&seam, command, workspace.as_path()).await;
@@ -1375,5 +1433,156 @@ mod tests {
             "the turn's end forgets it"
         );
         drop(toolhost.await);
+    }
+
+    /// A seam over a fake toolhost that answers each `Exec` with `Started` and
+    /// never ends it, under a turn with `left` to run: the waits below are cut
+    /// by nothing but their floors and the turn.
+    fn holding_seam(left: Duration) -> (Seam, tokio::task::JoinHandle<()>) {
+        let (worker_stdin, mut toolhost_stdin) = tokio::io::duplex(1 << 16);
+        let (mut toolhost_stdout, worker_stdout) = tokio::io::duplex(1 << 16);
+        let gate = Arc::new(TurnGate::new());
+        let client = ToolhostClient::start(
+            Box::new(worker_stdin),
+            Box::new(worker_stdout),
+            Arc::new(ProtocolLatch::default()),
+            Arc::clone(&gate),
+        );
+        let toolhost = tokio::spawn(async move {
+            loop {
+                let mut header = [0_u8; FRAME_HEADER_BYTES];
+                if toolhost_stdin.read_exact(&mut header).await.is_err() {
+                    return;
+                }
+                let mut body = vec![0_u8; body_len(header).expect("a length")];
+                toolhost_stdin.read_exact(&mut body).await.expect("a body");
+                if let WorkerFrame::Exec { id, session, .. } = decode_frame(&body).expect("a frame")
+                {
+                    let started = ToolhostFrame::Started {
+                        id,
+                        session,
+                        pid: 42,
+                        note: None,
+                    };
+                    toolhost_stdout
+                        .write_all(&encode_frame(&started).expect("encodes"))
+                        .await
+                        .expect("written");
+                }
+            }
+        });
+        let seam = Seam::new(client, gate, LiftedSecrets::none(), Instant::now() + left);
+        (seam, toolhost)
+    }
+
+    fn exec(yield_time_ms: u64, min_wait_ms: Option<u64>) -> ExecCommand {
+        // A struct literal, not `ExecCommand`'s constructor: the adapter scan
+        // refuses the `::new` spelling of anything ending in `Command`.
+        ExecCommand {
+            script: "sleep 600".to_owned(),
+            workdir: None,
+            shell: None,
+            login: None,
+            tty: false,
+            yield_time_ms: Some(yield_time_ms),
+            max_output_tokens: None,
+            output_unit: nanocode_process_contracts::OutputUnit::Tokens,
+            output_token_budget: None,
+            min_wait_ms,
+            caller: None,
+        }
+    }
+
+    /// **A wait honours nanocode's floors and the call's `min_wait_ms`, and is
+    /// cut by the turn; each result states the seconds left of the turn.** On a
+    /// session that never ends, measured by the wall clock: an `exec_command`
+    /// asking to yield after 1 ms waits nanocode's 250 ms floor; one asking for
+    /// 300 ms with `min_wait_ms` 900 waits 900 ms; an empty `write_stdin` poll
+    /// asking for 1 ms waits toward nanocode's 5 s `MIN_POLL_YIELD_MS` and is cut
+    /// by the turn's end, 3 s out. Every result's `time_left_seconds` is the
+    /// turn's, at most the 3 s it started with.
+    ///
+    /// **Would red if:** `Seam::clamp` dropped its floor (the 1 ms exec and the
+    /// poll return at once) or the call's `min_wait_ms`, the turn's deadline
+    /// stopped bounding a floor (the poll waits 5 s), or `Seam::exec_result`
+    /// left `time_left_seconds` unset.
+    #[tokio::test]
+    async fn a_wait_honours_nanocodes_floors_and_ends_with_the_turn() {
+        let (seam, toolhost) = holding_seam(Duration::from_secs(3));
+        let workspace = PathBuf::from(WORKSPACE);
+
+        let started = Instant::now();
+        let floored = ShellExecutor::execute(&seam, exec(1, None), workspace.as_path()).await;
+        let waited = started.elapsed();
+        assert!(
+            waited >= Duration::from_millis(250) && waited < Duration::from_millis(900),
+            "a 1 ms yield waited {waited:?}"
+        );
+        let session = floored.session_id.expect("still running past its yield");
+        assert!(
+            floored.time_left_seconds.is_some_and(|left| left <= 3),
+            "{:?}",
+            floored.time_left_seconds
+        );
+
+        let started = Instant::now();
+        let raised = ShellExecutor::execute(&seam, exec(300, Some(900)), workspace.as_path()).await;
+        let waited = started.elapsed();
+        assert!(
+            waited >= Duration::from_millis(900),
+            "min_wait_ms 900 waited {waited:?}"
+        );
+        assert!(raised.session_id.is_some(), "still running past its yield");
+
+        let started = Instant::now();
+        let polled = ShellExecutor::write_stdin(
+            &seam,
+            WriteStdin {
+                session_id: i32::try_from(session).expect("a model session id"),
+                chars: String::new(),
+                yield_time_ms: Some(1),
+                max_output_tokens: None,
+                output_unit: nanocode_process_contracts::OutputUnit::Tokens,
+                min_wait_ms: None,
+                caller: None,
+            },
+        )
+        .await;
+        let waited = started.elapsed();
+        assert!(
+            waited >= Duration::from_millis(500) && waited < Duration::from_secs(4),
+            "an empty 1 ms poll waited {waited:?}, its floor cut by the turn's end"
+        );
+        assert_eq!(polled.time_left_seconds, Some(0), "the turn has ended");
+        seam.end();
+        drop(seam);
+        toolhost.abort();
+    }
+
+    /// **The output a model reads is cut in the unit the call names.** Past the
+    /// token limit, a call in `Chars` reads nanocode's marker counting the
+    /// characters cut, and one in `Tokens` the tokens.
+    ///
+    /// **Would red if:** `Seam::finish_output` ignored the call's unit (cutting
+    /// in tokens whatever was asked).
+    #[tokio::test]
+    async fn output_is_cut_in_the_unit_the_call_names() {
+        let (seam, toolhost) = holding_seam(Duration::from_secs(60));
+        let raw = "é".repeat(4_000);
+        let (chars, _) = seam.finish_output(
+            raw.as_bytes(),
+            Some(100),
+            nanocode_process_contracts::OutputUnit::Chars,
+        );
+        let (tokens, _) = seam.finish_output(
+            raw.as_bytes(),
+            Some(100),
+            nanocode_process_contracts::OutputUnit::Tokens,
+        );
+        assert!(chars.contains(" chars truncated…"), "{chars}");
+        assert!(tokens.contains(" tokens truncated…"), "{tokens}");
+        seam.end();
+        drop(seam);
+        toolhost.abort();
     }
 }

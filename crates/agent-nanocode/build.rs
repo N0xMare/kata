@@ -37,7 +37,7 @@ use std::path::{Path, PathBuf};
 /// workspace dependency) and fails when the compiled digest is not theirs.
 ///
 /// Not covered, stated: the registry dependencies of the engine and of the
-/// host (rquickjs and the rest, by version in the lockfile), the toolchain, the
+/// host (djs and the rest, by version or rev in the lockfile), the toolchain, the
 /// target and the profile. Which files are tracked: every file on disk under a
 /// root is hashed, so a dirty tree states a digest no clean build of the same
 /// commit states.

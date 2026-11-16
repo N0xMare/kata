@@ -2,9 +2,10 @@
 """The vendored nanocode Code Mode engine: derive it, check it, record its patch, bump it.
 
 kata tracks nanocode (github.com/nanocodexyz/nanocode) by git rev, with exactly one
-crate vendored in-tree: `nanocode-code-mode-engine`, the native QuickJS worker,
-because kata patches a resource guard into it (memory, stack, per-cell wall and
-per-cell output limits) and nanocode has no public seam for those. The workspace
+crate vendored in-tree: `nanocode-code-mode-engine`, the Code Mode host over djs,
+because kata patches its seams into it (a backend that runs every cell out of
+process, a stored-value loader, the tool catalog's encoding and the heap's
+report) and nanocode has no public seam for those. The workspace
 `Cargo.toml` routes every dependency on that crate to `vendor/` with a
 `[patch."https://github.com/nanocodexyz/nanocode"]` entry, so the copy is built from
 a fresh clone with no network path kata does not already take.

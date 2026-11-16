@@ -546,7 +546,7 @@ the same of the kernel in seconds. The interpreter's standard error goes to the 
 hosting the worker, not to its log: its last 64 KiB are kept per interpreter (earlier
 bytes dropped and counted) and appended to the error of a cell its end fails, labelled
 `its standard error since it started` since they may be an earlier cell's; that is
-where a QuickJS or glibc assertion line appears. What the turn's end
+where a panic or glibc assertion line appears. What the turn's end
 leaves is recorded: a completed turn's session evidence carries `turn_end`
 (`kill_all`: `unconfirmed` or `wire_broken`, when the kill was not confirmed) and
 `code_mode_workers_live` (the Code Mode workers live in the worker's process once

@@ -1,501 +1,103 @@
-diff --git a/README.md b/README.md
-index 8e9d4db53de1e736b63bc36bed2f9d00c77c643f..11d677d06fd82a4752deb433eecd0523aa32567c 100644
---- a/README.md
-+++ b/README.md
-@@ -14,6 +14,94 @@ Each cell receives a fresh JavaScript context. Code Mode owns cell admission,
- tool execution, durable receipts and observation; the worker runs one cell at a
- time and uses caller-supplied cell and tool-call identifiers.
- 
-+`set_native_limits(NativeLimits { .. })` installs resource limits for every
-+native worker spawned after it, once per process; without it a worker is
-+unlimited. Each cell runs in a QuickJS runtime of its own, which the worker
-+builds before the cell (after the cell before it ends) and drops, with
-+everything the cell left in it, once the cell ends; the worker thread is kept.
-+The interpreter-stack limit is set when that runtime is built; the memory limit
-+only once the cell's context is prepared, just before the cell starts, because
-+QuickJS's context creation is not safe against it (a creation that runs out of
-+heap partway leaves a freed context in the runtime's garbage list, and the
-+runtime's next collection aborts the process). `thread_stack_bytes` sizes the
-+worker thread. `cell_wall` is armed
-+when a cell starts and disarmed when it ends, so idle context preparation
-+between cells is not charged; running JavaScript past the deadline is
-+interrupted at its next interrupt check, and a cell waiting on a tool result or
-+a timer, or held, ends at it: a hold does not stop the wall. A cell inside one
-+long native step (a built-in sort of millions of elements) has no interrupt
-+check to reach: it runs that step to its end, bounded by `memory_bytes`, before
-+the interrupt lands. `cell_emitted_bytes` caps what one cell emits:
-+every text, content item, notification, yield and tool call is charged its
-+payload (a tool call's input excepted) plus `CELL_EVENT_BYTES`, so it bounds the
-+number of events as well as their bytes. A limit hit, a failed context creation or a
-+failed execution ends that cell with an `Error` event; the worker keeps running
-+and the next cell runs in a fresh runtime, under all of `memory_bytes` but what
-+that runtime and its prepared context hold, whatever the cell before it did: a
-+runtime outlives a garbage collection in two ways one cell could otherwise pass
-+on to the next. rquickjs keeps, for a
-+runtime's life, the prototype of the first Rust function made in it, and so that
-+cell's context, its globals and whatever a later cell stores through the
-+`Function` constructor every later cell's native functions inherit; and
-+QuickJS's job queue belongs to the runtime, and a queued job keeps its context
-+alive and would run in the next cell's preparation with no wall armed. A memory
-+limit below what a cell's runtime holds once its context is prepared (about
-+200 KiB) fails every cell on the memory limit. Not every out-of-memory path in
-+QuickJS 0.16.2 is safe: an allocation that fails inside `Function.prototype.bind`
-+or inside `eval` compiling a class ends the process by SIGSEGV, and one inside
-+`Array.fromAsync` leaks an object, so dropping the cell's runtime trips
-+`JS_FreeRuntime`'s assertion and aborts the process (MEASURED; not a complete
-+list). A cell's own code reaches these paths; the worker cannot keep it off
-+them. Just before the `Error`
-+of a cell that failed on its wall, output, memory or interpreter stack limit,
-+the worker sends the guard's report of that limit as a `Notify`: the wall and
-+output reports come from the cell's budget; the memory and stack reports of a
-+failure the bootstrap reports, from its first line ending with QuickJS's
-+`InternalError: out of memory` or `RangeError: Maximum call stack size
-+exceeded`; and the memory report of a failure the bootstrap cannot report (the
-+run rejected, as when QuickJS, unable to allocate its own out-of-memory error,
-+throws a bare `null`), from the heap left within 64 KiB of `memory_bytes`, in
-+which case the cell's `Error` is that report too. A hit the cell catches and
-+rethrows inside an error of its own, and a heap hit whose bare `null` the
-+bootstrap reports (`Uncaught null`, `Unhandled promise rejection: null`), or
-+that rejects the run before the bootstrap can report it, after the cell's
-+frames released the heap, are reported as no limit. No job outlives
-+the cell that queued it: its runtime, job queue included, is dropped when it
-+ends. `live_workers` caps the workers live in the process at once, idle ones included,
-+so the process holds at most `live_workers` runtimes under `memory_bytes`;
-+`spawn` past it fails. `live_workers()` reads that same count, with or without
-+limits installed: every native worker from its spawn until its thread ends, so a
-+worker still inside a native step its interrupt cannot reach is counted. Once the
-+interrupt is raised (a limit hit, `terminate` or
-+a drop), the job drain
-+stops between two jobs, so a job that queues its successor before it spins
-+cannot keep a cell, or `terminate`, running.
+diff --git b/src/backend.rs b/src/backend.rs
+new file mode 100644
+index 0000000000000000000000000000000000000000..dee61a525954c5f31cba4674588e0ef0ebbe8c6f
+--- /dev/null
++++ b/src/backend.rs
+@@ -0,0 +1,220 @@
++//! kata's seams in the engine: a backend that runs each [`EmbeddedHost`]'s
++//! cells somewhere other than the calling thread, a loader for the stored
++//! values a cell's `start_cell` was not given, and the report of a heap hit.
++//!
++//! Without [`set_worker_backend`], every [`EmbeddedHost`] runs its cells on the
++//! task that polls it, as upstream's does; nothing below changes that host.
++//!
++//! [`EmbeddedHost`]: crate::EmbeddedHost
 +
-+`set_worker_backend(backend)` installs, once per process, what starts the worker
-+of every `EmbeddedHost` spawned after it, in place of a worker thread of this
-+process: `spawn` hands the backend the worker's ends (`WorkerEnds`: the
-+`HostCommand`s the host sends, the sender of the events it reads, the startup
-+failure it names once that channel closes, the signal `terminate` awaits, and the
-+worker's place in `live_workers()`, held until the backend drops it), and an
-+`Err` fails the spawn. kata installs one that runs each worker's cells in a
-+child process (`crates/code-mode-host` in kata's tree); everything above is the
-+thread that process runs. Without a backend, every worker is that thread.
-+
-+`set_stored_loader(loader)` installs, once per process, what answers a cell's
-+`load` of a key the stored values its `start_cell` was given lack; it runs on the
-+worker's thread, inside the cell's JavaScript, which waits for it. Without it such
-+a `load` answers `undefined`, as before. kata's interpreter process installs one
-+that asks its parent for the value, so a cell's stored values cross to it one at
-+a time, as the cell loads them.
-+
-+`set_cell_ended(ended)` installs, once per process, what a native worker calls
-+with a cell's id once the cell's terminal event is sent and before it drops the
-+runtime the cell ran in, which QuickJS can abort the process doing
-+(`Array.fromAsync`'s out-of-memory leak trips `JS_FreeRuntime`'s assertion).
-+Without it the worker drops the runtime at once, as before. kata's interpreter
-+process installs one that waits until it has written that event to its parent,
-+so such an abort never takes a cell's terminal event with it.
-+
- All native dependencies and worker APIs are gated out on WASM. WASM execution
- continues through Code Mode's existing Rust host interface. This crate adds no
- JavaScript bindings or wasm-bindgen interface.
-diff --git a/src/cell.rs b/src/cell.rs
-index aefeceaa649373e7b456a75ac0c4a0eab2224dd5..a7456c366879f9122c3f09c4b797de5144f0e849 100644
---- a/src/cell.rs
-+++ b/src/cell.rs
-@@ -2,7 +2,10 @@ use std::{
-     cell::RefCell,
-     collections::{BTreeSet, HashMap},
-     rc::Rc,
--    sync::{Arc, OnceLock},
-+    sync::{
-+        Arc, OnceLock,
-+        atomic::{AtomicBool, Ordering},
-+    },
-     time::Duration,
- };
- 
-@@ -247,6 +250,11 @@ pub(crate) struct ExecutionState {
-     pending_text: RefCell<Option<String>>,
-     journal: Option<SharedJournal>,
-     replay: Option<Replay>,
-+    emitted: usize,
-+    output_limit: Option<(usize, Arc<AtomicBool>)>,
-+    stop: Option<Rc<dyn Fn() -> bool>>,
-+    limit_report: Option<Rc<dyn Fn(&str) -> Option<String>>>,
-+    load_missing: Option<Rc<dyn Fn(&str) -> Option<Arc<RawValue>>>>,
- }
- 
- pub(crate) struct Replay {
-@@ -263,7 +271,68 @@ pub(crate) enum Expectation {
- 
- const PENDING_TEXT_BYTES: usize = 64 * 1024;
- 
-+/// What one event a cell causes costs against the native worker's per-cell
-+/// output limit (`NativeLimits::cell_emitted_bytes`) beside its payload: a
-+/// notification, a yield, a tool call, a content item, and each text event (the
-+/// first `text` of a run opens it; a `text` that joins the run is charged its
-+/// separator instead). So a cell sends at most `cell_emitted_bytes /
-+/// CELL_EVENT_BYTES` events and `cell_emitted_bytes` of payload, whatever their
-+/// sizes; a tool call's input is not charged.
-+pub const CELL_EVENT_BYTES: usize = 256;
-+
- impl ExecutionState {
-+    pub(crate) fn limit_output(&mut self, bytes: usize, exceeded: Arc<AtomicBool>) {
-+        self.output_limit = Some((bytes, exceeded));
-+    }
-+
-+    /// What ends a drain of the job queue between two jobs: the native worker's
-+    /// interrupt (a terminate, or a limit hit). The interrupt ends the job that is
-+    /// running, but the drain would go on to the next one, and a job that queues
-+    /// itself again before it spins always leaves one.
-+    pub(crate) fn stop_draining_when(&mut self, stop: Rc<dyn Fn() -> bool>) {
-+        self.stop = Some(stop);
-+    }
-+
-+    /// What names the limit a cell ending with a failure the bootstrap reports
-+    /// ended on: given the failure, the native worker's report of its limit,
-+    /// which [`send_terminal`] sends as a `Notify` just before the cell's
-+    /// `Error`. A failure the bootstrap cannot report never reaches it: the
-+    /// native worker reports that one itself.
-+    pub(crate) fn report_limits_with(&mut self, report: Rc<dyn Fn(&str) -> Option<String>>) {
-+        self.limit_report = Some(report);
-+    }
-+
-+    /// What answers a `load` of a key the cell's stored values lack: the
-+    /// native worker's stored-value loader, when one is installed.
-+    pub(crate) fn load_missing_with(&mut self, load: Rc<dyn Fn(&str) -> Option<Arc<RawValue>>>) {
-+        self.load_missing = Some(load);
-+    }
-+
-+    /// What a `text` costs: its bytes, plus its separator when it joins the
-+    /// buffered run, or plus one event when it opens the run that becomes the
-+    /// next `Content` event.
-+    fn text_cost(&self, text: &str) -> usize {
-+        let joins = self.pending_text.borrow().is_some();
-+        text.len()
-+            .saturating_add(if joins { 1 } else { CELL_EVENT_BYTES })
-+    }
-+
-+    /// Counts `bytes` against the cell's output limit. Past it, the cell fails
-+    /// with the returned message and the shared flag interrupts its JavaScript.
-+    pub(crate) fn charge_output(&mut self, bytes: usize) -> Result<(), String> {
-+        let Some((limit, exceeded)) = &self.output_limit else {
-+            return Ok(());
-+        };
-+        self.emitted = self.emitted.saturating_add(bytes);
-+        if self.emitted <= *limit {
-+            return Ok(());
-+        }
-+        exceeded.store(true, Ordering::Release);
-+        let message = format!("Code Mode cell output exceeded its {limit}-byte limit");
-+        self.failure.get_or_insert_with(|| message.clone());
-+        Err(message)
-+    }
-+
-     const fn journaling(&self) -> bool {
-         self.journal.is_some() || self.replay.is_some()
-     }
-@@ -443,6 +512,11 @@ pub(crate) fn new_state(
-         pending_text: RefCell::new(None),
-         journal: None,
-         replay: None,
-+        emitted: 0,
-+        output_limit: None,
-+        stop: None,
-+        limit_report: None,
-+        load_missing: None,
-     }))
- }
- 
-@@ -456,6 +530,7 @@ pub(crate) fn begin_execution(
-     state.rejections.borrow_mut().clear();
-     state.execution_id = execution_id;
-     state.stored = stored;
-+    state.emitted = 0;
-     let (journal, replay) = journaling.map_or((None, None), |journaling| {
-         (
-             Some(journaling.journal),
-@@ -606,6 +681,10 @@ pub(crate) fn install_native_functions<'js>(
-                       input_json: String,
-                       host: Opt<bool>|
-                       -> rquickjs::Result<Promise<'js>> {
-+                    tool_state
-+                        .borrow_mut()
-+                        .charge_output(CELL_EVENT_BYTES)
-+                        .map_err(|message| throw_message(&ctx, &message))?;
-                     let input = serde_json::from_str(&input_json).map_err(|error| {
-                         Exception::throw_type(&ctx, &format!("invalid tool input: {error}"))
-                     })?;
-@@ -671,6 +750,10 @@ pub(crate) fn install_native_functions<'js>(
-             "__nanocodeContent",
-             Func::from(
-                 move |ctx: Ctx<'js>, content_json: String| -> rquickjs::Result<()> {
-+                    content_state
-+                        .borrow_mut()
-+                        .charge_output(CELL_EVENT_BYTES.saturating_add(content_json.len()))
-+                        .map_err(|message| throw_message(&ctx, &message))?;
-                     let content: ToolOutputContent = serde_json::from_str(&content_json).map_err(|error| {
-                         Exception::throw_type(&ctx, &format!("invalid output content: {error}"))
-                     })?;
-@@ -707,7 +790,15 @@ pub(crate) fn install_native_functions<'js>(
-     globals
-         .set(
-             "__nanocodeText",
--            Func::from(move |text: String| text_state.borrow().push_text(text)),
-+            Func::from(move |ctx: Ctx<'js>, text: String| -> rquickjs::Result<()> {
-+                let mut state = text_state.borrow_mut();
-+                let cost = state.text_cost(&text);
-+                state
-+                    .charge_output(cost)
-+                    .map_err(|message| throw_message(&ctx, &message))?;
-+                state.push_text(text);
-+                Ok(())
-+            }),
-         )
-         .catch(ctx)
-         .map_err(|error| format!("failed to install QuickJS text callback: {error}"))?;
-@@ -720,10 +811,12 @@ pub(crate) fn install_native_functions<'js>(
-                 move |ctx: Ctx<'js>,
-                       key: String|
-                       -> rquickjs::Result<Option<rquickjs::String<'js>>> {
--                    load_state
--                        .borrow()
--                        .stored
--                        .get(&key)
-+                    let (value, load_missing) = {
-+                        let state = load_state.borrow();
-+                        (state.stored.get(&key).cloned(), state.load_missing.clone())
-+                    };
-+                    value
-+                        .or_else(|| load_missing.and_then(|load| load(&key)))
-                         .map(|value| rquickjs::String::from_str(ctx, value.get()))
-                         .transpose()
-                 },
-@@ -753,12 +846,16 @@ pub(crate) fn install_native_functions<'js>(
-     globals
-         .set(
-             "__nanocodeNotify",
--            Func::from(move |text: String| {
--                let state = notify_state.borrow();
-+            Func::from(move |ctx: Ctx<'js>, text: String| -> rquickjs::Result<()> {
-+                let mut state = notify_state.borrow_mut();
-+                state
-+                    .charge_output(CELL_EVENT_BYTES.saturating_add(text.len()))
-+                    .map_err(|message| throw_message(&ctx, &message))?;
-                 let _ = state.send(RuntimeEvent::Notify {
-                     cell_id: state.execution_id,
-                     text,
-                 });
-+                Ok(())
-             }),
-         )
-         .catch(ctx)
-@@ -768,11 +865,15 @@ pub(crate) fn install_native_functions<'js>(
-     globals
-         .set(
-             "__nanocodeYield",
--            Func::from(move || {
--                let state = yield_state.borrow();
-+            Func::from(move |ctx: Ctx<'js>| -> rquickjs::Result<()> {
-+                let mut state = yield_state.borrow_mut();
-+                state
-+                    .charge_output(CELL_EVENT_BYTES)
-+                    .map_err(|message| throw_message(&ctx, &message))?;
-                 let _ = state.send(RuntimeEvent::Yielded {
-                     cell_id: state.execution_id,
-                 });
-+                Ok(())
-             }),
-         )
-         .catch(ctx)
-@@ -987,6 +1088,13 @@ pub(crate) fn send_terminal(
-             return Err("embedded QuickJS returned an error result without a message".to_owned());
-         }
-     };
-+    if let RuntimeEvent::Error { message, .. } = &event
-+        && let Some(text) = state.limit_report.as_ref().and_then(|report| report(message))
-+    {
-+        state
-+            .send(RuntimeEvent::Notify { cell_id, text })
-+            .map_err(|_| "embedded QuickJS execution observer closed".to_owned())?;
-+    }
-     state
-         .send(event)
-         .map_err(|_| "embedded QuickJS execution observer closed".to_owned())
-@@ -1139,8 +1247,14 @@ pub(crate) fn next_due_timeout(state: &Rc<RefCell<ExecutionState>>, at: Instant)
- }
- 
- pub(crate) fn drain_jobs(ctx: &Ctx<'_>, state: &Rc<RefCell<ExecutionState>>) {
-+    let stop = state.borrow().stop.clone();
-+    let stopped = || stop.as_ref().is_some_and(|stop| stop());
-     loop {
--        while ctx.execute_pending_job() {}
-+        while !stopped() && ctx.execute_pending_job() {}
-+        if stopped() {
-+            state.borrow().flush_text();
-+            return;
-+        }
-         let (rejections, uncaught) = {
-             let state = state.borrow();
-             let rejections = std::mem::take(&mut *state.rejections.borrow_mut());
-diff --git a/src/lib.rs b/src/lib.rs
-index 7a4540429e2ffe30005cc19a4e77ee13dfd82f41..d0671891cf564166e16a6dd5e66f70bbb6d906f1 100644
---- a/src/lib.rs
-+++ b/src/lib.rs
-@@ -7,9 +7,13 @@ mod native;
- #[cfg(target_family = "wasm")]
- mod wasm;
- 
--pub use cell::RuntimeEvent;
-+pub use cell::{CELL_EVENT_BYTES, RuntimeEvent};
- pub use journal::{CellJournaling, JOURNAL_LIMIT_BYTES, Journal, JournalEntry, SharedJournal};
- #[cfg(not(target_family = "wasm"))]
--pub use native::EmbeddedHost;
-+pub use native::{
-+    CellEnded, EmbeddedHost, HostCommand, LiveWorker, NativeLimits, StartExecution, StoredLoader,
-+    WorkerBackend, WorkerEnds, live_workers, set_cell_ended, set_native_limits, set_stored_loader,
-+    set_worker_backend,
++use std::{
++    collections::HashMap,
++    sync::{Arc, OnceLock, mpsc as std_mpsc},
 +};
- #[cfg(target_family = "wasm")]
- pub use wasm::{DEFAULT_INTERRUPT_CHECKS, EmbeddedHost, set_interrupt_checks};
-diff --git a/src/native.rs b/src/native.rs
-index b007ac5dc3e192e5f0082ee3df713b9aafec5684..4be137efa4ad218f111efea58b0042553d1b36c2 100644
---- a/src/native.rs
-+++ b/src/native.rs
-@@ -3,7 +3,7 @@ use std::{
-     rc::Rc,
-     sync::{
-         Arc, OnceLock,
--        atomic::{AtomicBool, Ordering},
-+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
-         mpsc as std_mpsc,
-     },
-     thread,
-@@ -25,6 +25,405 @@ use crate::{
-     journal::CellJournaling,
- };
- 
-+/// Resource limits for the native QuickJS worker, installed process-wide by
-+/// [`set_native_limits`]. Without that call every worker is unlimited.
-+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-+pub struct NativeLimits {
-+    /// The QuickJS allocator's limit (`Runtime::set_memory_limit`) on the
-+    /// runtime one cell runs in, set once that cell's context is prepared, just
-+    /// before the cell starts. An allocation past it fails the cell, except on
-+    /// an out-of-memory path QuickJS itself mishandles, which ends the PROCESS:
-+    /// MEASURED on QuickJS 0.16.2, `Function.prototype.bind`, `eval` compiling
-+    /// a class, and `Array.fromAsync` (whose leak aborts the runtime's drop).
-+    pub memory_bytes: usize,
-+    /// The interpreter's stack limit (`Runtime::set_max_stack_size`).
-+    pub max_stack_bytes: usize,
-+    /// The worker thread's stack; it must exceed `max_stack_bytes` with headroom
-+    /// for the Rust frames a cell's host calls add. Not checked: without that
-+    /// headroom, deep recursion overflows the thread's stack and aborts the
-+    /// process instead of failing the cell.
-+    pub thread_stack_bytes: usize,
-+    /// Wall time one cell may take from its start, tool calls, timers and holds
-+    /// included. Running JavaScript past it is interrupted at its next interrupt
-+    /// check and the job drain stops before its next job, so a job queue that
-+    /// requeues itself ends too; a cell waiting on a tool result or a timer, or
-+    /// held (`EmbeddedHost::hold`), ends at it. One long native step (a built-in
-+    /// sort of millions of elements) runs to its end before the interrupt lands.
-+    /// Time between cells is not charged.
-+    pub cell_wall: Duration,
-+    /// What one cell may emit, in bytes: every text, content item, notification,
-+    /// yield and tool call is charged its payload (a tool call's input excepted)
-+    /// plus [`crate::CELL_EVENT_BYTES`], so the cap bounds the number of events as
-+    /// well as their bytes. The call that crosses it throws and emits nothing, and
-+    /// the cell fails.
-+    pub cell_emitted_bytes: usize,
-+    /// Native workers that may be live in this process at once, idle ones
-+    /// included. Each has its own thread and its own runtime under
-+    /// `memory_bytes`, so the process's interpreter heap is at most
-+    /// `live_workers` × `memory_bytes`. `EmbeddedHost::spawn` past it fails, so
-+    /// the cell that needed the worker fails; a worker stops counting when its
-+    /// thread ends.
-+    pub live_workers: usize,
++
++use nanocode_sync::{mpsc, oneshot};
++use serde_json::value::RawValue;
++
++use crate::{
++    CellJournaling, RuntimeEvent,
++    cell::{CellTools, ExecutionState},
++};
++
++/// One `start_cell`, as a backend receives it. The engine's `Interrupt` is not
++/// passed on: a backend's host ends a cell by `terminate`, which every
++/// interrupt of a cell nanocode raises is followed by.
++pub struct StartExecution {
++    pub execution_id: u64,
++    pub source: String,
++    pub stored: HashMap<String, Arc<RawValue>>,
++    pub tools: Arc<CellTools>,
++    pub prelude: Option<Arc<str>>,
++    pub journaling: Option<CellJournaling>,
 +}
 +
-+/// The process's live native workers, each counted from its spawn until its
-+/// thread ends.
-+static LIVE_WORKERS: AtomicUsize = AtomicUsize::new(0);
++/// What an [`EmbeddedHost`](crate::EmbeddedHost) a backend started asks of it,
++/// in the order the host was asked.
++pub enum HostCommand {
++    Start(StartExecution),
++    ToolResult {
++        execution_id: u64,
++        id: u64,
++        encoded: String,
++        success: bool,
++    },
++    Hold {
++        execution_id: u64,
++    },
++    Release {
++        execution_id: u64,
++    },
++    /// `terminate`: end whatever runs, then send [`Stopped`].
++    Shutdown,
++}
 +
-+/// One worker's place in [`LIVE_WORKERS`], given back when it is dropped. A
-+/// backend [`set_worker_backend`] installs holds it in [`WorkerEnds::live`] and
-+/// drops it once nothing of that worker runs any more.
-+pub struct LiveWorker(());
++/// The sender of the events a backend's host reads, in order.
++pub struct Events(mpsc::UnboundedSender<RuntimeEvent>);
 +
-+impl LiveWorker {
-+    /// Counts one more live worker, or refuses when `limits` allow no more.
-+    fn claim(limits: Option<NativeLimits>) -> Result<Self, String> {
-+        let cap = limits.map_or(usize::MAX, |limits| limits.live_workers);
-+        LIVE_WORKERS
-+            .try_update(Ordering::AcqRel, Ordering::Acquire, |live| {
-+                if live < cap { Some(live + 1) } else { None }
-+            })
-+            .map(|_| Self(()))
-+            .map_err(|_| {
-+                format!(
-+                    "this process already runs {cap} Code Mode workers, its limit: end a \
-+                     running cell or wait for one to finish, then run this cell again"
-+                )
-+            })
++impl Events {
++    /// Sends `event` to the host; `false` once the host is gone.
++    pub fn send(&self, event: RuntimeEvent) -> bool {
++        self.0.send(event).is_ok()
 +    }
 +}
 +
-+impl Drop for LiveWorker {
-+    fn drop(&mut self) {
-+        LIVE_WORKERS.fetch_sub(1, Ordering::AcqRel);
++/// What `terminate` awaits: sent once nothing the backend started for the host
++/// runs any more. Dropped unsent, it ends the wait too.
++pub struct Stopped(oneshot::Sender<()>);
++
++impl Stopped {
++    pub fn send(self) {
++        let _ = self.0.send(());
 +    }
 +}
 +
-+/// The native workers live in this process now, idle ones included: the count
-+/// [`NativeLimits::live_workers`] caps, kept with or without limits installed. A
-+/// worker counts from its spawn until its thread ends, so one whose cell is
-+/// still inside a long native step after a `terminate` or a drop is counted; a
-+/// worker an installed backend started counts until that backend drops its
-+/// [`LiveWorker`].
-+pub fn live_workers() -> usize {
-+    LIVE_WORKERS.load(Ordering::Acquire)
-+}
-+
-+static NATIVE_LIMITS: OnceLock<NativeLimits> = OnceLock::new();
-+
-+/// Installs `limits` for every worker spawned after this call. Once only: a
-+/// second call with the same limits is `Ok`, with different ones it changes
-+/// nothing and returns the installed limits.
-+pub fn set_native_limits(limits: NativeLimits) -> Result<(), NativeLimits> {
-+    let installed = *NATIVE_LIMITS.get_or_init(|| limits);
-+    if installed == limits {
-+        Ok(())
-+    } else {
-+        Err(installed)
-+    }
-+}
-+
-+/// One worker's ends, handed to the backend [`set_worker_backend`] installs in
-+/// place of a worker thread: the commands its [`EmbeddedHost`] sends, the
-+/// sender of the events the host reads, the failure the host names once that
-+/// channel closes (`startup`), the signal `terminate` awaits (sent once nothing
-+/// of the worker runs any more), and the worker's place in [`live_workers`],
-+/// held until then.
++/// One host's ends, handed to the backend [`set_worker_backend`] installs: the
++/// commands the host sends (closed when the host is dropped), the sender of
++/// the events it reads, the failure the host returns once that sender is gone
++/// (`startup`, or a generic one when nothing was set), and [`Stopped`].
 +pub struct WorkerEnds {
 +    pub commands: std_mpsc::Receiver<HostCommand>,
-+    pub events: mpsc::UnboundedSender<RuntimeEvent>,
++    pub events: Events,
 +    pub startup: Arc<OnceLock<String>>,
-+    pub stopped: oneshot::Sender<()>,
-+    pub live: LiveWorker,
++    pub stopped: Stopped,
 +}
 +
-+/// What starts the worker of each [`EmbeddedHost`] spawned once it is installed
-+/// ([`set_worker_backend`]); an `Err` fails that spawn.
++/// What starts the backend of each host spawned once it is installed; an `Err`
++/// fails that spawn with its text.
 +pub type WorkerBackend = Box<dyn Fn(WorkerEnds) -> Result<(), String> + Send + Sync>;
 +
 +static WORKER_BACKEND: OnceLock<WorkerBackend> = OnceLock::new();
 +
-+/// Installs `backend` to start the worker of every [`EmbeddedHost`] spawned
-+/// after this call, in place of a worker thread of this process. Once only: a
-+/// later call changes nothing and returns its `backend`. Without it, each
-+/// worker is a thread of this process running the cells itself.
++/// Installs `backend` for every [`EmbeddedHost`](crate::EmbeddedHost) spawned
++/// after this call. Once only: a later call changes nothing and returns its
++/// `backend`.
 +pub fn set_worker_backend(backend: WorkerBackend) -> Result<(), WorkerBackend> {
 +    WORKER_BACKEND.set(backend)
 +}
@@ -506,637 +108,309 @@ index b007ac5dc3e192e5f0082ee3df713b9aafec5684..4be137efa4ad218f111efea58b004255
 +
 +static STORED_LOADER: OnceLock<StoredLoader> = OnceLock::new();
 +
-+/// Installs `loader` to answer, in every native worker of this process, a
-+/// cell's `load` of a key the stored values its `start_cell` was given lack.
-+/// It runs on the worker's thread, inside the cell's JavaScript, which waits
-+/// for it. Once only: a later call changes nothing and returns its `loader`.
-+/// Without it, such a `load` answers `undefined`.
++/// Installs `loader` to answer, in every host of this process that runs its
++/// cells itself, a cell's `load` of a key the stored values its `start_cell`
++/// was given lack. It runs inside the cell's step, which waits for it. Once
++/// only: a later call changes nothing and returns its `loader`. Without it,
++/// such a `load` answers `undefined`, as upstream's does.
 +pub fn set_stored_loader(loader: StoredLoader) -> Result<(), StoredLoader> {
 +    STORED_LOADER.set(loader)
 +}
 +
-+/// What a native worker calls with a cell's id once that cell's terminal event
-+/// is sent and before it drops the runtime the cell ran in
-+/// ([`set_cell_ended`]).
-+pub type CellEnded = Box<dyn Fn(u64) + Send + Sync>;
-+
-+static CELL_ENDED: OnceLock<CellEnded> = OnceLock::new();
-+
-+/// Installs `ended` to run, in every native worker of this process, on the
-+/// worker's thread once a cell's terminal event is sent and before the worker
-+/// drops the runtime the cell ran in, which QuickJS can abort the process
-+/// doing ([`Engine::renew`]): a host that forwards the event elsewhere can
-+/// wait there until it is forwarded. Once only: a later call changes nothing
-+/// and returns its `ended`. Without it the worker drops the runtime at once.
-+pub fn set_cell_ended(ended: CellEnded) -> Result<(), CellEnded> {
-+    CELL_ENDED.set(ended)
++pub(crate) fn load_stored(key: &str) -> Option<Arc<RawValue>> {
++    STORED_LOADER.get().and_then(|loader| loader(key))
 +}
 +
-+/// One worker's per-cell budget: a wall deadline armed only while a cell runs,
-+/// and the flag the output counter raises. The interrupt handler reads both.
-+struct CellBudget {
-+    limits: Option<NativeLimits>,
-+    epoch: Instant,
-+    deadline_nanos: AtomicU64,
-+    output_exceeded: Arc<AtomicBool>,
++/// The report of a cell's heap hit, sent as a notification of its own just
++/// before the cell's `Error`: nanocode delivers a notification beside the
++/// cell's result, where its truncation of that result does not reach it.
++pub(crate) fn report_out_of_memory(state: &mut ExecutionState) {
++    state.send(RuntimeEvent::Notify {
++        cell_id: state.execution_id,
++        text: format!(
++            "Code Mode cell exceeded its {}-byte memory limit",
++            crate::cell_memory()
++        ),
++    });
 +}
 +
-+#[derive(Clone, Copy)]
-+enum LimitHit {
-+    Wall(Duration),
-+    Output(usize),
-+    /// QuickJS's own exceptions under `memory_bytes` and `max_stack_bytes`.
-+    /// Neither raises the worker's interrupt, so [`CellBudget::hit`] never
-+    /// answers them: [`quickjs_limit`] reads them off a failure the bootstrap
-+    /// reports, and [`Engine::heap_exhausted`] names the memory limit for one
-+    /// it cannot.
-+    Memory(usize),
-+    Stack(usize),
++/// A host whose cells a backend runs.
++pub(crate) struct Remote {
++    commands: Option<std_mpsc::Sender<HostCommand>>,
++    events: mpsc::UnboundedReceiver<RuntimeEvent>,
++    startup: Arc<OnceLock<String>>,
++    stopped: Option<oneshot::Receiver<()>>,
 +}
 +
-+/// The headroom under `memory_bytes` at or below which a failed cell's heap
-+/// is exhausted. QuickJS throws a bare `null` when it cannot allocate even its
-+/// own out-of-memory error, and the bootstrap, which needs the heap to report
-+/// a failure, then cannot report the cell's: the engine sees the cell's run
-+/// rejected. MEASURED (`crates/agent-nanocode/tests/code_mode_limits.rs`): such
-+/// a cell leaves its heap within 4 KiB of the limit, under 16 MiB and 256 MiB
-+/// alike; a run rejected for another reason leaves it far from it.
-+const EXHAUSTED_HEAP_HEADROOM: usize = 64 << 10;
-+
-+impl CellBudget {
-+    fn new(limits: Option<NativeLimits>) -> Self {
-+        Self {
-+            limits,
-+            epoch: Instant::now(),
-+            deadline_nanos: AtomicU64::new(0),
-+            output_exceeded: Arc::new(AtomicBool::new(false)),
-+        }
-+    }
-+
-+    fn arm(&self) {
-+        let Some(limits) = self.limits else {
-+            return;
++impl Remote {
++    /// The installed backend's host, or `None` when no backend is installed.
++    pub(crate) fn spawn() -> Option<Result<Self, String>> {
++        let backend = WORKER_BACKEND.get()?;
++        let (commands, received) = std_mpsc::channel();
++        let (events, read) = mpsc::unbounded_channel();
++        let (stopped, awaited) = oneshot::channel();
++        let startup = Arc::new(OnceLock::new());
++        let ends = WorkerEnds {
++            commands: received,
++            events: Events(events),
++            startup: Arc::clone(&startup),
++            stopped: Stopped(stopped),
 +        };
-+        let deadline = self.epoch.elapsed().saturating_add(limits.cell_wall);
-+        let nanos = u64::try_from(deadline.as_nanos())
-+            .unwrap_or(u64::MAX)
-+            .max(1);
-+        self.deadline_nanos.store(nanos, Ordering::Release);
++        Some(backend(ends).map(|()| Self {
++            commands: Some(commands),
++            events: read,
++            startup,
++            stopped: Some(awaited),
++        }))
 +    }
 +
-+    fn disarm(&self) -> Option<LimitHit> {
-+        let hit = self.hit();
-+        self.deadline_nanos.store(0, Ordering::Release);
-+        self.output_exceeded.store(false, Ordering::Release);
-+        hit
++    fn send(&self, command: HostCommand) -> Result<(), String> {
++        self.commands
++            .as_ref()
++            .and_then(|commands| commands.send(command).ok())
++            .ok_or_else(|| self.ended())
 +    }
 +
-+    fn remaining(&self) -> Option<Duration> {
-+        match self.deadline_nanos.load(Ordering::Acquire) {
-+            0 => None,
-+            nanos => Some(Duration::from_nanos(nanos).saturating_sub(self.epoch.elapsed())),
++    fn ended(&self) -> String {
++        self.startup
++            .get()
++            .cloned()
++            .unwrap_or_else(|| "the Code Mode host's backend ended".to_owned())
++    }
++
++    pub(crate) fn start_cell(&self, start: StartExecution) -> Result<(), String> {
++        self.send(HostCommand::Start(start))
++    }
++
++    /// Cancel-safe: an event is taken off the channel only when it is returned.
++    pub(crate) async fn read_event(&mut self) -> Result<RuntimeEvent, String> {
++        match self.events.recv().await {
++            Some(event) => Ok(event),
++            None => Err(self.ended()),
 +        }
 +    }
 +
-+    /// Whether JavaScript must stop: the host's interrupt (a terminate or a
-+    /// drop) or a limit hit. The interrupt handler and the job drain both ask.
-+    fn stops(&self, interrupted: &AtomicBool) -> bool {
-+        interrupted.load(Ordering::Acquire) || self.hit().is_some()
-+    }
-+
-+    fn hit(&self) -> Option<LimitHit> {
-+        let limits = self.limits?;
-+        if self.output_exceeded.load(Ordering::Acquire) {
-+            return Some(LimitHit::Output(limits.cell_emitted_bytes));
-+        }
-+        (self.remaining() == Some(Duration::ZERO)).then_some(LimitHit::Wall(limits.cell_wall))
-+    }
-+
-+    /// The guard's report for a cell whose failure the bootstrap reports, as
-+    /// `failure`, while this budget is armed: the wall or output limit
-+    /// [`Self::hit`] names, else the QuickJS limit `failure` names
-+    /// ([`quickjs_limit`]); `None` for any other failure, and without limits.
-+    /// [`send_terminal`](crate::cell::send_terminal) sends it as a `Notify`
-+    /// just before the cell's `Error`, so the report is an event of its own
-+    /// beside the cell's output: a host that shortens the output it shows
-+    /// keeps a notification whole.
-+    fn report(&self, failure: &str) -> Option<String> {
-+        let limits = self.limits?;
-+        self.hit()
-+            .or_else(|| quickjs_limit(limits, failure))
-+            .map(|hit| hit.message())
-+    }
-+}
-+
-+/// The QuickJS limit a failure the bootstrap reports names: the memory limit
-+/// when its first line ends with QuickJS's `InternalError: out of memory`, the
-+/// interpreter stack limit when it ends with QuickJS's `RangeError: Maximum
-+/// call stack size exceeded`. The bootstrap writes a cell's error with its
-+/// stack and its `cause` below that first line, so a hit the cell catches and
-+/// rethrows inside an error of its own names no limit; nor does a heap hit
-+/// QuickJS throws as a bare `null` that the bootstrap reports (`Uncaught
-+/// null`, `Unhandled promise rejection: null`) once the cell's frames released
-+/// the heap.
-+fn quickjs_limit(limits: NativeLimits, failure: &str) -> Option<LimitHit> {
-+    let first = failure.lines().next().unwrap_or_default();
-+    if first.ends_with("InternalError: out of memory") {
-+        Some(LimitHit::Memory(limits.memory_bytes))
-+    } else if first.ends_with("RangeError: Maximum call stack size exceeded") {
-+        Some(LimitHit::Stack(limits.max_stack_bytes))
-+    } else {
-+        None
-+    }
-+}
-+
-+impl LimitHit {
-+    fn message(&self) -> String {
-+        match self {
-+            Self::Wall(wall) => format!(
-+                "Code Mode cell exceeded its {} ms wall-time limit",
-+                wall.as_millis()
-+            ),
-+            Self::Output(bytes) => {
-+                format!("Code Mode cell output exceeded its {bytes}-byte limit")
-+            }
-+            Self::Memory(bytes) => {
-+                format!("Code Mode cell exceeded its {bytes}-byte memory limit")
-+            }
-+            Self::Stack(bytes) => {
-+                format!("Code Mode cell exceeded its {bytes}-byte interpreter stack limit")
-+            }
-+        }
-+    }
-+}
-+
-+enum CellEnd {
-+    Stopped,
-+    Failed(String),
-+}
-+
-+impl From<String> for CellEnd {
-+    fn from(message: String) -> Self {
-+        Self::Failed(message)
-+    }
-+}
-+
-+/// The QuickJS runtime ONE cell runs in, with the bootstrap's loader, the
-+/// rejection tracker, the stack limit and the worker's interrupt installed. The
-+/// worker builds one before each cell and drops it, with everything that cell
-+/// left in it, once the cell ends ([`Self::renew`]), so no cell runs in a
-+/// runtime another cell ran in. A runtime outlives its cell's context in two
-+/// ways a garbage collection cannot undo:
-+///
-+/// - rquickjs keeps, for a runtime's whole life, the prototype of the first Rust
-+///   function made in it (`Opaque::get_or_insert_prototype`, which
-+///   `RustFunction::prototype` fills with that context's `Function.prototype`),
-+///   holding a counted reference to its context that QuickJS's cycle collector
-+///   cannot see. The first cell's context, its globals and whatever any later
-+///   cell stores through it (every later cell's native functions inherit that
-+///   prototype, and its `constructor` evaluates in that context) would stay
-+///   allocated until the runtime goes: a cell that fills the heap that way
-+///   would leave every later cell an exhausted heap.
-+/// - QuickJS's job queue belongs to the runtime, not a context, and a queued
-+///   job keeps its context alive: the next preparation's module load would run
-+///   it with no wall armed, under the failed cell's id. QuickJS has no call that
-+///   empties the queue.
-+///
-+/// The memory limit is set only once the cell's context is prepared
-+/// ([`Self::limit_memory`]): QuickJS's context creation is not safe against
-+/// the limit. `JS_NewContextRaw` frees a context whose class prototypes it could
-+/// not allocate while that context is still linked into the runtime's garbage
-+/// list, and the next collection walks the freed memory and aborts the process
-+/// (`gc_decref`'s assertion, or `mark_children`'s `abort`); a creation that
-+/// fails deeper leaves its half-built context allocated. That is the one
-+/// QuickJS out-of-memory defect the engine keeps cells from; the others it
-+/// knows lie on paths a cell's own code reaches ([`NativeLimits::memory_bytes`]).
-+struct Engine {
-+    // Declared before `runtime`, so dropped before it: it holds values of it.
-+    rejections: Rejections,
-+    runtime: Runtime,
-+}
-+
-+impl Engine {
-+    fn new(interrupted: &Arc<AtomicBool>, budget: &Arc<CellBudget>) -> Result<Self, String> {
-+        let runtime = Runtime::new()
-+            .map_err(|error| format!("failed to initialize embedded QuickJS runtime: {error}"))?;
-+        install_bootstrap(&runtime)?;
-+        let rejections = track_rejections(&runtime);
-+        if let Some(limits) = budget.limits {
-+            runtime.set_max_stack_size(limits.max_stack_bytes);
-+        }
-+        let interrupt_signal = Arc::clone(interrupted);
-+        let interrupt_budget = Arc::clone(budget);
-+        runtime.set_interrupt_handler(Some(Box::new(move || {
-+            interrupt_budget.stops(&interrupt_signal)
-+        })));
-+        Ok(Self {
-+            rejections,
-+            runtime,
++    pub(crate) fn send_tool_result(
++        &self,
++        execution_id: u64,
++        id: u64,
++        encoded: String,
++        success: bool,
++    ) -> Result<(), String> {
++        self.send(HostCommand::ToolResult {
++            execution_id,
++            id,
++            encoded,
++            success,
 +        })
 +    }
 +
-+    /// Sets `memory_bytes` on this runtime for the one cell about to run in it.
-+    /// Everything before (the bootstrap, a prelude's compilation, the cell's
-+    /// context and its preparation) ran without a memory limit, and no context
-+    /// is created in this runtime after it.
-+    fn limit_memory(&self, limits: Option<NativeLimits>) {
-+        if let Some(limits) = limits {
-+            self.runtime.set_memory_limit(limits.memory_bytes);
++    pub(crate) fn hold(&self, execution_id: u64) -> Result<(), String> {
++        self.send(HostCommand::Hold { execution_id })
++    }
++
++    pub(crate) fn release(&self, execution_id: u64) -> Result<(), String> {
++        self.send(HostCommand::Release { execution_id })
++    }
++
++    /// Ends whatever the backend runs for this host, and waits until it says
++    /// nothing does.
++    pub(crate) async fn terminate(&mut self) {
++        if let Some(commands) = self.commands.take() {
++            let _ = commands.send(HostCommand::Shutdown);
 +        }
-+    }
-+
-+    /// Whether this runtime's heap is within [`EXHAUSTED_HEAP_HEADROOM`] of
-+    /// `limit`: read before the failed cell's context is dropped, while its
-+    /// values still hold the heap.
-+    fn heap_exhausted(&self, limit: usize) -> bool {
-+        let used = usize::try_from(self.runtime.memory_usage().malloc_size).unwrap_or(0);
-+        used.saturating_add(EXHAUSTED_HEAP_HEADROOM) >= limit
-+    }
-+
-+    /// Drops this runtime, with everything the last cell (or a preparation that
-+    /// failed) left in it, its job queue included, and builds the next cell's.
-+    /// The worker thread is kept. Called only once the cell's prepared context
-+    /// is dropped. `JS_FreeRuntime` asserts that its last collection freed
-+    /// every object, so any reference this runtime still holds aborts the
-+    /// process here: a value of it held past the drop, and also one QuickJS
-+    /// itself leaked on an out-of-memory path the cell ran through
-+    /// (`Array.fromAsync`, MEASURED in
-+    /// `crates/agent-nanocode/tests/code_mode_out_of_memory_defects.rs`). The
-+    /// engine cannot tell such a runtime before dropping it.
-+    fn renew(
-+        self,
-+        interrupted: &Arc<AtomicBool>,
-+        budget: &Arc<CellBudget>,
-+    ) -> Result<Self, String> {
-+        drop(self);
-+        Self::new(interrupted, budget)
++        if let Some(stopped) = self.stopped.take() {
++            let _ = stopped.await;
++        }
 +    }
 +}
+diff --git a/src/cell.rs b/src/cell.rs
+index 6573341172657919d99c5054842e9e2ffae29a4e..4d6517d5a779d5a509c9cc8567549918dcb0794e 100644
+--- a/src/cell.rs
++++ b/src/cell.rs
+@@ -616,8 +616,11 @@ impl ExecutionState {
+             }
+             LOAD => {
+                 let key = text(call, 0)?;
+-                Ok(self.stored.get(&key).map_or(Reply::Nothing, |value| {
+-                    Reply::Text(Cow::Borrowed(value.get()))
++                if let Some(value) = self.stored.get(&key) {
++                    return Ok(Reply::Text(Cow::Borrowed(value.get())));
++                }
++                Ok(crate::backend::load_stored(&key).map_or(Reply::Nothing, |value| {
++                    Reply::Text(Cow::Owned(value.get().to_owned()))
+                 }))
+             }
+             STORE => {
+@@ -1073,6 +1076,21 @@ const DESCRIPTION_FIELD: &str = "description";
+ const SCHEMA_FIELDS: [&str; 2] = ["input_schema", "output_schema"];
+ 
+ impl CellTools {
++    /// The three encodings [`CellTools::encode`] made: the definitions, the
++    /// descriptions and the schemas, for a backend that carries them elsewhere.
++    pub fn encoded(&self) -> [&str; 3] {
++        [&self.definitions, &self.descriptions, &self.schemas]
++    }
 +
- struct Prepared {
-     run_cell: Persistent<Function<'static>>,
-     state: Rc<std::cell::RefCell<ExecutionState>>,
-@@ -38,11 +437,27 @@ impl Prepared {
-         event_tx: &mpsc::UnboundedSender<RuntimeEvent>,
-         rejections: &Rejections,
-         bytes: bool,
-+        budget: &CellBudget,
-+        stop: &Rc<dyn Fn() -> bool>,
-+        report: &Rc<dyn Fn(&str) -> Option<String>>,
-     ) -> Result<Self, String> {
-         let context = Context::full(runtime).map_err(|error| {
-             format!("failed to create a fresh embedded QuickJS context: {error}")
-         })?;
-         let state = new_state(0, event_tx.clone(), HashMap::new(), Rc::clone(rejections));
-+        if let Some(limits) = budget.limits {
-+            state.borrow_mut().limit_output(
-+                limits.cell_emitted_bytes,
-+                Arc::clone(&budget.output_exceeded),
-+            );
++    /// The tools [`CellTools::encoded`] read, rebuilt from its three parts.
++    pub const fn from_encoded(definitions: String, descriptions: String, schemas: String) -> Self {
++        Self {
++            definitions,
++            descriptions,
++            schemas,
 +        }
-+        state.borrow_mut().stop_draining_when(Rc::clone(stop));
-+        state.borrow_mut().report_limits_with(Rc::clone(report));
-+        if let Some(loader) = STORED_LOADER.get() {
-+            state
-+                .borrow_mut()
-+                .load_missing_with(Rc::new(move |key: &str| loader(key)));
-+        }
-         let run_cell = context.with(|ctx| {
-             prepare_execution(&ctx, &state, bytes).map(|run_cell| Persistent::save(&ctx, run_cell))
-         });
-@@ -77,16 +492,18 @@ pub struct EmbeddedHost {
-     stopped: Option<oneshot::Receiver<()>>,
++    }
++
+     pub fn encode(tools: &[Value]) -> Result<Self, String> {
+         struct Definition<'a>(&'a Value);
+ 
+diff --git a/src/host.rs b/src/host.rs
+index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ecdaffc982 100644
+--- a/src/host.rs
++++ b/src/host.rs
+@@ -12,6 +12,7 @@ use nanocode_platform::Instant;
+ use serde_json::value::RawValue;
+ 
+ use crate::{
++    backend::{Remote, StartExecution, report_out_of_memory},
+     cell::{
+         BOOTSTRAP_MODULE, CellTools, ExecutionState, NEXT, Prepared, RUN_CELL, Replaying, Reply,
+         RuntimeEvent, Unprepared, prepared,
+@@ -98,6 +99,7 @@ impl Machine {
+                 Ok(step) => step,
+                 Err(djs_embed::Error::OutOfMemory) => {
+                     let stored = state.take_written();
++                    report_out_of_memory(state);
+                     state.send(RuntimeEvent::Error {
+                         cell_id: state.execution_id,
+                         message: OUT_OF_MEMORY.to_owned(),
+@@ -225,6 +227,7 @@ impl Machine {
+                 Ok(false) => {}
+                 Err(djs_embed::Error::OutOfMemory) => {
+                     let stored = state.take_written();
++                    report_out_of_memory(state);
+                     state.send(RuntimeEvent::Error {
+                         cell_id: state.execution_id,
+                         message: OUT_OF_MEMORY.to_owned(),
+@@ -366,14 +369,19 @@ pub struct EmbeddedHost {
+     state: ExecutionState,
+     machine: Option<Machine>,
+     failure: Option<String>,
++    /// The installed backend's host (`set_worker_backend`): every call below
++    /// goes to it, and this host runs no cell itself.
++    remote: Option<Remote>,
  }
  
--struct StartExecution {
--    execution_id: u64,
--    source: String,
--    tools: Vec<Value>,
--    stored: HashMap<String, Arc<RawValue>>,
--    prelude: Option<Arc<str>>,
--    journaling: Option<CellJournaling>,
-+/// One cell to run: [`HostCommand::Start`].
-+pub struct StartExecution {
-+    pub execution_id: u64,
-+    pub source: String,
-+    pub tools: Vec<Value>,
-+    pub stored: HashMap<String, Arc<RawValue>>,
-+    pub prelude: Option<Arc<str>>,
-+    pub journaling: Option<CellJournaling>,
- }
+ impl EmbeddedHost {
+     pub fn spawn() -> Result<Self, String> {
++        let remote = Remote::spawn().transpose()?;
+         Ok(Self {
+             state: ExecutionState::new(),
+             machine: None,
+             failure: None,
++            remote,
+         })
+     }
  
--enum HostCommand {
-+/// What an [`EmbeddedHost`] sends its worker.
-+pub enum HostCommand {
-     Start(StartExecution),
-     ToolResult {
-         execution_id: u64,
-@@ -118,11 +535,38 @@ impl EmbeddedHost {
-         let worker_interrupted = Arc::clone(&interrupted);
-         let worker_startup = Arc::clone(&startup);
-         let (stopped_tx, stopped) = oneshot::channel();
--        thread::Builder::new()
--            .name("nanocode-code-mode-quickjs".to_owned())
-+        let limits = NATIVE_LIMITS.get().copied();
-+        let live = LiveWorker::claim(limits)?;
-+        if let Some(backend) = WORKER_BACKEND.get() {
-+            backend(WorkerEnds {
-+                commands: command_rx,
-+                events: event_tx,
-+                startup: worker_startup,
-+                stopped: stopped_tx,
-+                live,
-+            })?;
-+            return Ok(Self {
-+                command_tx,
-+                events,
-+                interrupted,
-+                startup,
-+                stopped: Some(stopped),
+@@ -392,6 +400,16 @@ impl EmbeddedHost {
+         journaling: Option<CellJournaling>,
+         interrupt: Interrupt,
+     ) -> Result<(), String> {
++        if let Some(remote) = &self.remote {
++            return remote.start_cell(StartExecution {
++                execution_id,
++                source: source.to_owned(),
++                stored,
++                tools,
++                prelude,
++                journaling,
 +            });
 +        }
-+        let mut builder = thread::Builder::new().name("nanocode-code-mode-quickjs".to_owned());
-+        if let Some(limits) = limits {
-+            builder = builder.stack_size(limits.thread_stack_bytes);
-+        }
-+        builder
-             .spawn(move || {
--                run_worker(&command_rx, &event_tx, &worker_startup, &worker_interrupted);
--                drop((command_rx, event_tx));
-+                run_worker(
-+                    &command_rx,
-+                    &event_tx,
-+                    &worker_startup,
-+                    &worker_interrupted,
-+                    limits,
-+                );
-+                drop((command_rx, event_tx, live));
-                 let _ = stopped_tx.send(());
-             })
-             .map_err(|error| format!("failed to start embedded QuickJS code-mode host: {error}"))?;
-@@ -222,33 +666,31 @@ fn run_worker(
-     event_tx: &mpsc::UnboundedSender<RuntimeEvent>,
-     startup: &OnceLock<String>,
-     interrupted: &Arc<AtomicBool>,
-+    limits: Option<NativeLimits>,
- ) {
--    let runtime = match Runtime::new() {
--        Ok(runtime) => runtime,
-+    let budget = Arc::new(CellBudget::new(limits));
-+    let mut engine = match Engine::new(interrupted, &budget) {
-+        Ok(engine) => engine,
-         Err(error) => {
--            let _ = startup.set(format!(
--                "failed to initialize embedded QuickJS runtime: {error}"
--            ));
-+            let _ = startup.set(error);
-             return;
-         }
-     };
--    if let Err(error) = install_bootstrap(&runtime) {
--        let _ = startup.set(error);
--        return;
--    }
--    let rejections = track_rejections(&runtime);
--    let interrupt_signal = Arc::clone(interrupted);
--    runtime.set_interrupt_handler(Some(Box::new(move || {
--        interrupt_signal.load(Ordering::Acquire)
--    })));
-+    let drain_signal = Arc::clone(interrupted);
-+    let drain_budget = Arc::clone(&budget);
-+    let stop: Rc<dyn Fn() -> bool> = Rc::new(move || drain_budget.stops(&drain_signal));
-+    let report_budget = Arc::clone(&budget);
-+    let report: Rc<dyn Fn(&str) -> Option<String>> =
-+        Rc::new(move |failure| report_budget.report(failure));
-     let mut prepared: Option<Prepared> = None;
-     loop {
-         match command_rx.recv() {
-             Ok(HostCommand::Start(start)) => {
-                 interrupted.store(false, Ordering::Release);
--                if let Err(error) = install_prelude(&runtime, start.prelude.as_deref()) {
-+                let cell_id = start.execution_id;
-+                if let Err(error) = install_prelude(&engine.runtime, start.prelude.as_deref()) {
-                     let _ = event_tx.send(RuntimeEvent::Error {
--                        cell_id: start.execution_id,
-+                        cell_id,
-                         message: error,
-                         stored: HashMap::new(),
-                     });
-@@ -259,27 +701,86 @@ fn run_worker(
-                     Some(next) if next.bytes == bytes => Ok(next),
-                     stale => {
-                         drop(stale);
--                        Prepared::new(&runtime, event_tx, &rejections, bytes)
-+                        Prepared::new(
-+                            &engine.runtime,
-+                            event_tx,
-+                            &engine.rejections,
-+                            bytes,
-+                            &budget,
-+                            &stop,
-+                            &report,
-+                        )
-                     }
-                 };
--                let next = match next {
--                    Ok(next) => next,
-+                // A context that could not be prepared fails the cell like a failed
-+                // run, and its runtime is renewed below like any cell's.
-+                let (result, hit) = match next {
-+                    Ok(next) => {
-+                        engine.limit_memory(limits);
-+                        budget.arm();
-+                        let result = run_execution(&next, start, command_rx, &budget);
-+                        // A cell that failed outside the bootstrap's own report
-+                        // failed on the wall or output limit its budget names, or,
-+                        // its heap exhausted, on the memory limit: QuickJS's bare
-+                        // `null` names none, and neither does the text the engine
-+                        // writes for it. Read before `next` drops the cell's values.
-+                        let hit = budget.disarm().or_else(|| match (&result, limits) {
-+                            (Err(CellEnd::Failed(_)), Some(limits))
-+                                if engine.heap_exhausted(limits.memory_bytes) =>
-+                            {
-+                                Some(LimitHit::Memory(limits.memory_bytes))
-+                            }
-+                            _ => None,
-+                        });
-+                        (result, hit)
-+                    }
-                     Err(error) => {
-                         tracing::error!(
-                             target: "nanocode_code_mode",
-                             %error,
-                             "failed to create a fresh embedded QuickJS context"
-                         );
--                        return;
-+                        (Err(CellEnd::Failed(error)), None)
-                     }
-                 };
--                let result = run_execution(&next, start, command_rx);
--                drop(next);
--                runtime.run_gc();
--                if result.is_err() {
--                    return;
-+                match result {
-+                    Ok(()) => {}
-+                    Err(CellEnd::Stopped) => return,
-+                    Err(CellEnd::Failed(_)) if interrupted.load(Ordering::Acquire) => return,
-+                    Err(CellEnd::Failed(error)) => {
-+                        if let Some(hit) = hit {
-+                            let _ = event_tx.send(RuntimeEvent::Notify {
-+                                cell_id,
-+                                text: hit.message(),
-+                            });
-+                        }
-+                        let _ = event_tx.send(RuntimeEvent::Error {
-+                            cell_id,
-+                            message: hit.map_or(error, |hit| hit.message()),
-+                            stored: HashMap::new(),
-+                        });
-+                    }
-                 }
--                prepared = Prepared::new(&runtime, event_tx, &rejections, bytes).ok();
-+                if let Some(ended) = CELL_ENDED.get() {
-+                    ended(cell_id);
-+                }
-+                engine = match engine.renew(interrupted, &budget) {
-+                    Ok(engine) => engine,
-+                    Err(error) => {
-+                        let _ = startup.set(error);
-+                        return;
-+                    }
-+                };
-+                prepared = Prepared::new(
-+                    &engine.runtime,
-+                    event_tx,
-+                    &engine.rejections,
-+                    bytes,
-+                    &budget,
-+                    &stop,
-+                    &report,
-+                )
-+                .ok();
-             }
-             Ok(
-                 HostCommand::ToolResult { .. }
-@@ -295,10 +796,11 @@ fn run_execution(
-     prepared: &Prepared,
-     start: StartExecution,
-     command_rx: &std_mpsc::Receiver<HostCommand>,
--) -> Result<(), String> {
-+    budget: &CellBudget,
-+) -> Result<(), CellEnd> {
-     prepared
-         .context
--        .with(|ctx| run_execution_in_context(&ctx, prepared, start, command_rx))
-+        .with(|ctx| run_execution_in_context(&ctx, prepared, start, command_rx, budget))
- }
- 
- fn run_execution_in_context(
-@@ -306,7 +808,8 @@ fn run_execution_in_context(
-     prepared: &Prepared,
-     start: StartExecution,
-     command_rx: &std_mpsc::Receiver<HostCommand>,
--) -> Result<(), String> {
-+    budget: &CellBudget,
-+) -> Result<(), CellEnd> {
-     let execution_id = start.execution_id;
-     let state = &prepared.state;
-     begin_execution(state, execution_id, start.stored, start.journaling);
-@@ -327,19 +830,26 @@ fn run_execution_in_context(
- 
-     let result = (|| {
-         if let Some(reason) = replay_inputs(ctx, state, &promise)? {
--            return state
-+            return Ok(state
-                 .borrow()
-                 .send(RuntimeEvent::Diverged {
-                     cell_id: execution_id,
-                     reason,
-                 })
--                .map_err(|_| "embedded QuickJS execution observer closed".to_owned());
-+                .map_err(|_| "embedded QuickJS execution observer closed".to_owned())?);
-         }
-         loop {
-             if let Some(terminal) = completed_terminal(ctx, &promise)? {
--                return send_terminal(state, terminal);
-+                return Ok(send_terminal(state, terminal)?);
-+            }
-+            if let Some(hit) = budget.hit() {
-+                return Err(CellEnd::Failed(hit.message()));
-             }
--            match receive_command(command_rx, next_timeout_wait(state)) {
-+            let wait = match (next_timeout_wait(state), budget.remaining()) {
-+                (Some(timer), Some(wall)) => Some(timer.min(wall)),
-+                (timer, wall) => timer.or(wall),
-+            };
-+            match receive_command(command_rx, wait) {
-                 CommandPoll::Command(HostCommand::ToolResult {
-                     execution_id: result_execution_id,
-                     id,
-@@ -355,17 +865,17 @@ fn run_execution_in_context(
-                         invoke_timeout(ctx, state, id)?;
-                         drain_jobs(ctx, state);
-                         if let Some(terminal) = completed_terminal(ctx, &promise)? {
--                            return send_terminal(state, terminal);
-+                            return Ok(send_terminal(state, terminal)?);
-                         }
-                     }
-                 }
-                 CommandPoll::Command(HostCommand::Hold { execution_id: held })
-                     if held == execution_id =>
-                 {
--                    hold_execution(ctx, state, execution_id, command_rx)?;
-+                    hold_execution(ctx, state, execution_id, command_rx, budget)?;
-                 }
-                 CommandPoll::Command(HostCommand::Shutdown) | CommandPoll::Disconnected => {
--                    return Err("embedded QuickJS host stopped".into());
-+                    return Err(CellEnd::Stopped);
-                 }
-                 CommandPoll::Command(
-                     HostCommand::Start(_)
-@@ -385,7 +895,8 @@ fn hold_execution(
-     state: &Rc<std::cell::RefCell<ExecutionState>>,
-     execution_id: u64,
-     command_rx: &std_mpsc::Receiver<HostCommand>,
--) -> Result<(), String> {
-+    budget: &CellBudget,
-+) -> Result<(), CellEnd> {
-     state
-         .borrow()
-         .send(RuntimeEvent::Held {
-@@ -393,21 +904,28 @@ fn hold_execution(
-         })
-         .map_err(|_| "embedded QuickJS execution observer closed".to_owned())?;
-     let mut stashed = Vec::new();
-+    // A hold does not stop the cell's wall: the cell keeps its thread, its runtime
-+    // and its timers' deadlines while held, so the wait ends at the deadline.
-     loop {
--        match command_rx.recv() {
--            Ok(HostCommand::Release {
-+        match receive_command(command_rx, budget.remaining()) {
-+            CommandPoll::Command(HostCommand::Release {
-                 execution_id: released,
-             }) if released == execution_id => break,
--            Ok(HostCommand::ToolResult {
-+            CommandPoll::Command(HostCommand::ToolResult {
-                 execution_id: result_execution_id,
-                 id,
-                 encoded,
-                 success,
-             }) if result_execution_id == execution_id => stashed.push((id, encoded, success)),
--            Ok(HostCommand::Shutdown) | Err(_) => {
--                return Err("embedded QuickJS host stopped".into());
-+            CommandPoll::Command(HostCommand::Shutdown) | CommandPoll::Disconnected => {
-+                return Err(CellEnd::Stopped);
-+            }
-+            CommandPoll::TimerReady => {
-+                if let Some(hit) = budget.hit() {
-+                    return Err(CellEnd::Failed(hit.message()));
-+                }
-             }
--            Ok(_) => {}
-+            CommandPoll::Command(_) => {}
-         }
+         self.machine = None;
+         let prepared = prepared(&tools, prelude.as_ref());
+         self.state.begin(execution_id, stored, tools, journaling);
+@@ -436,6 +454,9 @@ impl EmbeddedHost {
      }
-     for (id, encoded, success) in stashed {
+ 
+     pub async fn read_event(&mut self) -> Result<RuntimeEvent, String> {
++        if let Some(remote) = &mut self.remote {
++            return remote.read_event().await;
++        }
+         loop {
+             if let Some(event) = self.state.events.pop_front() {
+                 return Ok(event);
+@@ -594,6 +615,9 @@ impl EmbeddedHost {
+         encoded: String,
+         success: bool,
+     ) -> Result<(), String> {
++        if let Some(remote) = &self.remote {
++            return remote.send_tool_result(execution_id, id, encoded, success);
++        }
+         if self.state.execution_id == execution_id
+             && let Some(machine) = self.machine.as_mut()
+         {
+@@ -603,6 +627,9 @@ impl EmbeddedHost {
+     }
+ 
+     pub fn hold(&mut self, execution_id: u64) -> Result<(), String> {
++        if let Some(remote) = &self.remote {
++            return remote.hold(execution_id);
++        }
+         if self.state.execution_id == execution_id
+             && let Some(machine) = self.machine.as_mut()
+             && !machine.held
+@@ -615,7 +642,10 @@ impl EmbeddedHost {
+         Ok(())
+     }
+ 
+-    pub const fn release(&mut self, execution_id: u64) -> Result<(), String> {
++    pub fn release(&mut self, execution_id: u64) -> Result<(), String> {
++        if let Some(remote) = &self.remote {
++            return remote.release(execution_id);
++        }
+         if self.state.execution_id == execution_id
+             && let Some(machine) = self.machine.as_mut()
+             && machine.held
+@@ -627,9 +657,14 @@ impl EmbeddedHost {
+     }
+ 
+     pub async fn terminate(&mut self) {
++        if let Some(remote) = &mut self.remote {
++            return remote.terminate().await;
++        }
+         self.stop();
+     }
+ 
++    /// Under a backend, the values a cell wrote reach the host only with its
++    /// terminal event: a cell its host terminated keeps none.
+     pub fn take_stored(&mut self) -> HashMap<String, Arc<RawValue>> {
+         self.state.take_written()
+     }
+diff --git a/src/lib.rs b/src/lib.rs
+index 1bf89fb8ca50da4ee324106ea6cc4a8aca852fe0..ebba745d2d2ef8bdf95f7b83353719df5f32f579 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1,4 +1,5 @@
+ mod audio;
++mod backend;
+ pub mod bytes;
+ mod cell;
+ mod host;
+@@ -6,6 +7,10 @@ mod journal;
+ mod memory;
+ mod setup;
+ 
++pub use backend::{
++    Events, HostCommand, StartExecution, Stopped, StoredLoader, WorkerBackend, WorkerEnds,
++    set_stored_loader, set_worker_backend,
++};
+ pub use cell::{
+     CellTools, RuntimeEvent, SnapshotStore, cell_memory, set_cell_memory, set_snapshot_store,
+ };
+@@ -14,3 +19,6 @@ pub use djs_embed::Interrupt;
+ pub use host::DEFAULT_INTERRUPT_CHECKS;
+ pub use host::{EmbeddedHost, set_interrupt_checks};
+ pub use journal::{CellJournaling, JOURNAL_LIMIT_BYTES, JournalEntry, SharedJournal};
++/// The platform the engine reads its clock, timers and randomness from, for a
++/// process that runs cells and installs its own (`platform::install`).
++pub use nanocode_platform as platform;

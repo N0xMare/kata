@@ -1,21 +1,21 @@
 //! The interpreter process: a fresh image of the hosting process's own
 //! executable (re-executed with [`crate::INTERPRETER_ARGS`]), which confines
-//! itself and then runs the engine's worker thread on the cells its parent
-//! sends, one engine worker per cell.
+//! itself and then runs the engine's own host (`EmbeddedHost`, no backend
+//! installed here) on the cells its parent sends, one host per cell.
 //!
 //! # Confinement, in the order it is applied
 //!
 //! 1. Every descriptor above 2 is closed, so the interpreter holds its socket
 //!    (0), `/dev/null` (1) and its standard error (2), a socket its parent
-//!    drains, and nothing it inherited by accident. Its environment is empty:
-//!    the parent cleared it.
+//!    drains, and nothing it inherited by accident. Its environment holds only
+//!    an empty `TZ`, which its parent sets (`supervisor`).
 //! 2. Parent-death signal SIGKILL, then, once the first frame names its parent,
 //!    a check that the process that started it is still its parent (a parent
 //!    that died before the signal was armed would otherwise go unnoticed).
 //! 3. `oom_score_adj` 1000: under memory pressure the kernel's OOM killer picks
 //!    an interpreter before the process that hosts the worker.
-//! 4. `RLIMIT_AS` at [`address_space_limit`]: whatever escapes QuickJS's own
-//!    heap accounting fails an allocation here, which ends only this process.
+//! 4. `RLIMIT_AS` at [`address_space_limit`]: whatever escapes djs's own heap
+//!    accounting fails an allocation here, which ends only this process.
 //! 5. No core dump: `RLIMIT_CORE` 0 and not dumpable. The limit stops only a
 //!    dump to a file; the kernel checks dumpability before any dump, so only
 //!    not dumpable also stops a dump that `core_pattern` pipes to a helper such
@@ -32,50 +32,64 @@
 //! `Init`; `Init` carries no cell, and every frame that does is read under the
 //! filter.
 //!
-//! # One engine worker per cell
+//! # The limits this process enforces
 //!
-//! The engine drops a cell's QuickJS runtime only after the cell's terminal
-//! event is sent, and QuickJS can abort the process in that drop
-//! (`Array.fromAsync`'s out-of-memory leak trips `JS_FreeRuntime`'s assertion).
-//! The engine's worker makes that drop on its own thread while this process's
-//! main loop is still writing the event to the parent, so the worker waits
-//! first, in the engine's cell-ended hook (`set_cell_ended`), until the main
-//! loop has written that cell's terminal frame ([`Written`]): an abort in the
-//! drop never takes the cell's terminal event with it. After each terminal
-//! event this process ends that cell's engine worker, waiting for its thread to
-//! finish, and only then starts the next worker and answers `Ready`: a death in
-//! a cell's teardown happens before the parent sends the next cell, and is
-//! never charged to it, nor to the cell it ends.
+//! The engine runs a cell's JavaScript inside its host's `read_event`, one
+//! slice of djs fuel at a time, on a thread of `thread_stack_bytes`; this
+//! process's loop waits on that, on its parent's frames and on the cell's wall
+//! at once (`run`).
+//!
+//! * The heap: `set_cell_memory(memory_bytes)`, before any cell. djs ends a
+//!   cell whose heap would pass it, uncatchably, and the engine reports the
+//!   limit (kata's patch) before the cell's `Error`.
+//! * The wall: once `cell_wall` has passed since the cell's `Start`, the loop
+//!   ends the cell, between two slices, with its report and an `Error` of it.
+//!   A step that does not return (one long native operation) is ended by the
+//!   supervisor, which kills this process `WALL_GRACE` later.
+//! * The output: each event is charged as the supervisor charges it
+//!   ([`wire::Event::charge`]); the event that would take the cell past
+//!   `cell_emitted_bytes` is not sent, and the cell ends with the report of
+//!   the limit and an `Error` of it.
+//! * The stack: djs keeps a script's call stack in its heap and throws a
+//!   catchable `RangeError` past its own slot limit; a cell that fails on one
+//!   gets the stack report before its `Error`.
+//!
+//! After each terminal event this process ends that cell's host and starts
+//! the next one before it answers `Ready`, so no timer, job or value of one
+//! cell reaches the next.
 //!
 //! # Stored values, as the cell loads them
 //!
 //! A cell's `Start` carries none of its stored values: the engine's
 //! stored-value loader (`set_stored_loader`) asks the parent for each key the
-//! cell loads (`Load`) and waits, on the engine's thread, for the answer the
-//! frame reader hands it (`Loaded`). The engine runs one cell at a time on one
-//! thread, so at most one `Load` is ever unanswered. A cell's stored values do
-//! not change while it runs, so the loader keeps its answers ([`Answers`]) and
-//! a key the cell loads again costs no round trip; the main loop empties them
-//! at each `Start`.
+//! cell loads (`Load`) and waits, inside the cell's step, for the answer the
+//! frame reader hands it (`Loaded`). One cell runs at a time on one thread, so
+//! at most one `Load` is ever unanswered. A cell's stored values do not change
+//! while it runs, so the loader keeps its answers ([`Answers`]) and a key the
+//! cell loads again costs no round trip; the loop empties them at each
+//! `Start`.
 //!
 //! # An event that does not fit a frame
 //!
 //! An event longer than [`wire::FRAME_CAP`] (stored values or a tool-call
 //! input the cell made that large) is not sent: the cell's `Error` naming it
-//! is, in its place, and the cell's engine worker ends as after any terminal
-//! event.
+//! is, in its place, and the cell's host ends as after any terminal event.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::io::{self, Read, Write};
 use std::os::fd::RawFd;
-use std::sync::{Arc, Condvar, Mutex, PoisonError, mpsc as std_mpsc};
+use std::pin::Pin;
+use std::sync::{Arc, Mutex, PoisonError, mpsc as std_mpsc};
+use std::time::{Duration, Instant, SystemTime};
 
 use nanocode_code_mode_engine::{
-    EmbeddedHost, NativeLimits, RuntimeEvent, set_cell_ended, set_native_limits, set_stored_loader,
+    CellTools, EmbeddedHost, Interrupt, RuntimeEvent, platform, set_cell_memory, set_stored_loader,
 };
 use serde_json::value::RawValue;
 use tokio::sync::mpsc;
 
+use crate::CodeModeLimits;
 use crate::wire::{self, Event, FromInterpreter, ToInterpreter};
 
 /// Exit: the parent closed the socket.
@@ -86,31 +100,44 @@ pub const EXIT_REFUSED: i32 = 1;
 pub const EXIT_BROKEN: i32 = 2;
 /// Exit: an event the engine sent does not encode.
 pub const EXIT_UNENCODABLE: i32 = 3;
+/// Exit: the thread that runs the cells panicked (its message went to the
+/// standard error the supervisor drains).
+pub const EXIT_PANICKED: i32 = 101;
 
-/// What `RLIMIT_AS` allows beside `memory_bytes` and the engine worker's
-/// thread stack: the executable and its libraries mapped, the allocator's
-/// per-thread arenas, the other threads' stacks, and what the engine allocates
-/// outside QuickJS's accounting (frames, stored values, events in flight).
-/// MEASURED (debug test binary, a cell holding its whole 256 MiB heap in typed
-/// arrays, objects or strings): `VmPeak` 467 to 492 MiB, so about 240 MiB
-/// past `memory_bytes` and the thread stack; this is four times that.
+/// What `RLIMIT_AS` allows beside `memory_bytes` and the cell thread's stack:
+/// the executable and its libraries mapped, the allocator's arenas, the other
+/// threads' stacks, a moment's second copy of the djs arena as it grows (the
+/// allocator moves a growing block), and what the engine allocates outside
+/// djs's accounting (frames, stored values, events in flight). MEASURED (debug
+/// test binary, djs at `8ec3b215`, a cell filling its whole 256 MiB heap with
+/// typed arrays, objects or strings until the heap cap ends it): `VmPeak` 474
+/// to 486 MiB, `VmHWM` 270 to 279 MiB, so about 220 MiB past `memory_bytes`
+/// and the thread stack; this is over four times that.
 pub const ADDRESS_SPACE_OVERHEAD: u64 = 1 << 30;
 
 /// The address space an interpreter process under `limits` may map.
 #[must_use]
-pub fn address_space_limit(limits: &NativeLimits) -> u64 {
+pub fn address_space_limit(limits: &CodeModeLimits) -> u64 {
     let bytes = |count: usize| u64::try_from(count).unwrap_or(u64::MAX);
     bytes(limits.memory_bytes)
         .saturating_add(bytes(limits.thread_stack_bytes))
         .saturating_add(ADDRESS_SPACE_OVERHEAD)
 }
 
+/// The report of a cell that failed on djs's call-stack limit; djs's slot
+/// limit is its own (`ExecOptions::max_stack`), so the report names no size.
+pub(crate) const STACK_REPORT: &str = "Code Mode cell exceeded its interpreter stack limit";
+
+/// What djs throws past its call-stack limit, as the engine's bootstrap labels
+/// an uncaught error: the end of the first line of the cell's `Error`.
+const STACK_OVERFLOW: &str = "RangeError: Maximum call stack size exceeded";
+
 /// The socket to the parent, descriptor 0, read and written in place: no
 /// duplicate descriptor is made. Writes are whole frames under [`WRITING`].
 struct Socket;
 
-/// Held for each frame's write: the main loop and the engine's thread (its
-/// stored-value loader) both write frames.
+/// Held for each frame's write: the loop and the stored-value loader both
+/// write frames.
 static WRITING: Mutex<()> = Mutex::new(());
 
 /// The running cell's answers the loader keeps, keys and values up to
@@ -124,39 +151,6 @@ struct Answers {
 /// What [`Answers`] keeps, so the cache costs a cell at most this much beside
 /// its heap.
 const ANSWERS_BYTES: usize = 16 << 20;
-
-/// The last cell whose terminal frame the main loop wrote, and the engine's
-/// cell-ended hook waiting for it: the engine's worker drops a cell's runtime
-/// only once that cell's terminal frame is on the socket.
-struct Written {
-    cell: Mutex<Option<u64>>,
-    changed: Condvar,
-}
-
-static WRITTEN: Written = Written {
-    cell: Mutex::new(None),
-    changed: Condvar::new(),
-};
-
-impl Written {
-    /// The main loop wrote cell `cell_id`'s terminal frame.
-    fn wrote(&self, cell_id: u64) {
-        *self.cell.lock().unwrap_or_else(PoisonError::into_inner) = Some(cell_id);
-        self.changed.notify_all();
-    }
-
-    /// The engine's cell-ended hook: waits until cell `cell_id`'s terminal
-    /// frame is written. A main loop that cannot write it ends this process.
-    fn wait_for(&self, cell_id: u64) {
-        let mut cell = self.cell.lock().unwrap_or_else(PoisonError::into_inner);
-        while *cell != Some(cell_id) {
-            cell = self
-                .changed
-                .wait(cell)
-                .unwrap_or_else(PoisonError::into_inner);
-        }
-    }
-}
 
 impl Read for Socket {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
@@ -174,6 +168,41 @@ impl Write for Socket {
     }
 }
 
+/// The engine's platform in this process: the clocks, a timer on the cell
+/// thread's runtime, and the kernel's randomness. Installed so that no timer
+/// starts nanocode's own reactor (epoll, an eventfd and a thread of its own,
+/// which the syscall filter refuses).
+struct CellPlatform;
+
+impl platform::Host for CellPlatform {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+
+    fn system_time(&self) -> SystemTime {
+        SystemTime::now()
+    }
+
+    fn sleep(&self, duration: Duration) -> platform::HostFuture {
+        Box::pin(tokio::time::sleep(duration))
+    }
+
+    fn fill_random(&self, mut bytes: &mut [u8]) -> io::Result<()> {
+        while !bytes.is_empty() {
+            let filled =
+                rustix::rand::getrandom(&mut *bytes, rustix::rand::GetRandomFlags::empty())?;
+            bytes = &mut bytes[filled..];
+        }
+        Ok(())
+    }
+
+    fn spawn(&self, future: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
+        drop(tokio::spawn(future));
+    }
+}
+
+static CELL_PLATFORM: CellPlatform = CellPlatform;
+
 /// Runs this process as an interpreter until its parent closes the socket,
 /// and returns its exit code.
 pub fn serve() -> i32 {
@@ -181,24 +210,39 @@ pub fn serve() -> i32 {
         Ok(limits) => limits,
         Err(code) => return code,
     };
-    if let Err(installed) = set_native_limits(limits) {
-        return refuse(&format!(
-            "this process already ran Code Mode under {installed:?}"
-        ));
+    // Without it the engine's zone reader stats `/etc/localtime` at a cell's
+    // start, which the syscall filter answers with SIGSYS.
+    if std::env::var_os("TZ").is_none_or(|zone| !zone.is_empty()) {
+        return refuse_with(
+            "Code Mode's interpreter process holds no empty TZ (UTC) to run a cell under",
+        );
+    }
+    set_cell_memory(limits.memory_bytes);
+    if platform::install(&CELL_PLATFORM).is_err() {
+        return refuse("this process already had a platform host");
     }
     let (answer, answers) = std_mpsc::channel();
     let kept = Arc::new(Mutex::new(Answers::default()));
     if set_stored_loader(Box::new(loader(answers, Arc::clone(&kept)))).is_err() {
         return refuse("this process already had a stored-value loader");
     }
-    if set_cell_ended(Box::new(|cell_id| WRITTEN.wait_for(cell_id))).is_err() {
-        return refuse("this process already had a cell-ended hook");
+    let cells = std::thread::Builder::new()
+        .name("code-mode-cell".to_owned())
+        .stack_size(limits.thread_stack_bytes)
+        .spawn(move || {
+            let runtime = match tokio::runtime::Builder::new_current_thread()
+                .enable_time()
+                .build()
+            {
+                Ok(runtime) => runtime,
+                Err(error) => return refuse(&format!("its runtime could not be built ({error})")),
+            };
+            runtime.block_on(run(answer, &kept, limits))
+        });
+    match cells {
+        Ok(cells) => cells.join().unwrap_or(EXIT_PANICKED),
+        Err(error) => refuse(&format!("its cell thread could not start ({error})")),
     }
-    let runtime = match tokio::runtime::Builder::new_current_thread().build() {
-        Ok(runtime) => runtime,
-        Err(error) => return refuse(&format!("its runtime could not be built ({error})")),
-    };
-    runtime.block_on(run(answer, &kept))
 }
 
 /// The engine's stored-value loader: the answer kept for `key`, or the
@@ -239,7 +283,7 @@ fn loader(
 
 /// The module's confinement, steps 1 to 6: the limits the cells run under, or
 /// the exit code of a process that cannot run one.
-pub(crate) fn confined() -> Result<NativeLimits, i32> {
+pub(crate) fn confined() -> Result<CodeModeLimits, i32> {
     let limits = hardened()?;
     crate::syscall_filter::install().map_err(|why| refuse(&why))?;
     Ok(limits)
@@ -248,7 +292,7 @@ pub(crate) fn confined() -> Result<NativeLimits, i32> {
 /// Steps 1 to 5 of the module's confinement, around reading the parent's
 /// `Init`: what a probe that reads `/proc` about itself (which step 6 forbids)
 /// can observe of it.
-pub(crate) fn hardened() -> Result<NativeLimits, i32> {
+pub(crate) fn hardened() -> Result<CodeModeLimits, i32> {
     close_inherited_descriptors().map_err(|why| refuse(&why))?;
     rustix::process::set_parent_process_death_signal(Some(rustix::process::Signal::KILL))
         .map_err(|error| refuse(&format!("PR_SET_PDEATHSIG failed ({error})")))?;
@@ -259,7 +303,7 @@ pub(crate) fn hardened() -> Result<NativeLimits, i32> {
                 // The parent died before the death signal was armed.
                 return Err(EXIT_PARENT_CLOSED);
             }
-            NativeLimits::from(limits)
+            CodeModeLimits::from(limits)
         }
         Ok(None) => return Err(EXIT_PARENT_CLOSED),
         Ok(Some(_)) | Err(_) => return Err(EXIT_BROKEN),
@@ -270,7 +314,7 @@ pub(crate) fn hardened() -> Result<NativeLimits, i32> {
 
 /// Steps 3 to 5 of the module's confinement. Not dumpable comes last: it makes
 /// this process's `/proc/self` files root's, `oom_score_adj` among them.
-fn confine(limits: &NativeLimits) -> Result<(), String> {
+fn confine(limits: &CodeModeLimits) -> Result<(), String> {
     use rustix::process::{Resource, Rlimit, setrlimit};
     std::fs::write("/proc/self/oom_score_adj", "1000")
         .map_err(|error| format!("oom_score_adj 1000 failed ({error})"))?;
@@ -332,98 +376,201 @@ fn read_parent(
 enum Next {
     Parent(Option<Result<ToInterpreter, ()>>),
     Engine(Result<RuntimeEvent, String>),
+    Wall,
 }
 
-async fn run(answer: std_mpsc::Sender<Option<Arc<RawValue>>>, kept: &Mutex<Answers>) -> i32 {
+/// The cell the host runs: its id, when its wall passes, and what it emitted
+/// so far as [`wire::Event::charge`] counts it.
+struct Running {
+    id: u64,
+    until: tokio::time::Instant,
+    charged: usize,
+}
+
+/// What the loop does after an event.
+enum After {
+    /// The cell goes on.
+    Next,
+    /// The cell ended: end its host and start the next one.
+    Ended,
+}
+
+async fn run(
+    answer: std_mpsc::Sender<Option<Arc<RawValue>>>,
+    kept: &Mutex<Answers>,
+    limits: CodeModeLimits,
+) -> i32 {
     let mut frames = read_parent(answer);
-    let mut host = match start_worker() {
+    let mut host = match start_host() {
         Ok(host) => host,
         Err(code) => return code,
     };
+    let mut cell: Option<Running> = None;
     loop {
-        // The two waits borrow `host` and `frames`; each is dropped before the
+        let until = cell.as_ref().map(|cell| cell.until);
+        // The waits borrow `host` and `frames`; each is dropped before the
         // arm below runs.
         let next = tokio::select! {
             frame = frames.recv() => Next::Parent(frame),
             event = host.read_event() => Next::Engine(event),
+            () = wall(until) => Next::Wall,
         };
-        match next {
+        let after = match next {
             Next::Parent(None) => return EXIT_PARENT_CLOSED,
             Next::Parent(Some(Err(()) | Ok(ToInterpreter::Init { .. }))) => return EXIT_BROKEN,
-            Next::Parent(Some(Ok(command))) => command_worker(&host, command, kept),
-            Next::Engine(Err(message)) => return refuse_with(&message),
-            Next::Engine(Ok(event)) => {
-                let cell_id = event.cell_id();
-                let mut terminal = matches!(
-                    event,
-                    RuntimeEvent::Done { .. }
-                        | RuntimeEvent::Error { .. }
-                        | RuntimeEvent::Diverged { .. }
+            Next::Parent(Some(Ok(ToInterpreter::Start {
+                execution_id,
+                source,
+                tools,
+                prelude,
+            }))) => {
+                // The cell before ended (its host with it): no load is waiting.
+                *kept.lock().unwrap_or_else(PoisonError::into_inner) = Answers::default();
+                cell = Some(Running {
+                    id: execution_id,
+                    until: tokio::time::Instant::now() + limits.cell_wall,
+                    charged: 0,
+                });
+                let [definitions, descriptions, schemas] = tools;
+                let started = host.start_cell(
+                    execution_id,
+                    &source,
+                    HashMap::new(),
+                    Arc::new(CellTools::from_encoded(definitions, descriptions, schemas)),
+                    prelude.map(Into::into),
+                    None,
+                    Interrupt::new(),
                 );
-                let Ok(event) = Event::encode(event) else {
-                    return EXIT_UNENCODABLE;
-                };
-                let what = TooLong::of(&event);
-                let bytes = if let Some(bytes) = wire::encode(&FromInterpreter::Event(event)) {
-                    bytes
-                } else {
-                    terminal = true;
-                    let failure = FromInterpreter::Event(Event::Error {
-                        cell_id,
-                        message: what.failure(),
-                        stored: HashMap::new(),
-                    });
-                    let Some(bytes) = wire::encode(&failure) else {
-                        return EXIT_UNENCODABLE;
-                    };
-                    bytes
-                };
-                if write(&bytes).is_err() {
-                    return EXIT_BROKEN;
-                }
-                if terminal {
-                    WRITTEN.wrote(cell_id);
-                    host.terminate().await;
-                    drop(host);
-                    host = match start_worker() {
-                        Ok(host) => host,
-                        Err(code) => return code,
-                    };
+                match started {
+                    Ok(()) => After::Next,
+                    Err(message) => end_cell(execution_id, None, &message),
                 }
             }
+            Next::Parent(Some(Ok(command))) => {
+                command_host(&mut host, command);
+                After::Next
+            }
+            Next::Wall => match cell.as_ref() {
+                Some(running) => {
+                    let report = format!(
+                        "Code Mode cell exceeded its {} ms wall-time limit",
+                        limits.cell_wall.as_millis()
+                    );
+                    end_cell(running.id, Some(&report), &report)
+                }
+                None => After::Next,
+            },
+            Next::Engine(Err(message)) => match cell.as_ref() {
+                Some(running) => end_cell(running.id, None, &message),
+                None => return refuse_with(&message),
+            },
+            Next::Engine(Ok(event)) => match forward(event, cell.as_mut(), &limits) {
+                Ok(after) => after,
+                Err(code) => return code,
+            },
+        };
+        if matches!(after, After::Ended) {
+            cell = None;
+            host.terminate().await;
+            drop(host);
+            host = match start_host() {
+                Ok(host) => host,
+                Err(code) => return code,
+            };
         }
     }
 }
 
-/// Starts an engine worker and answers `Ready`, or answers `Refused` and
-/// returns the exit code.
-fn start_worker() -> Result<EmbeddedHost, i32> {
+/// Resolves once the running cell's wall has passed; never without a cell.
+async fn wall(until: Option<tokio::time::Instant>) {
+    match until {
+        Some(until) => tokio::time::sleep_until(until).await,
+        None => std::future::pending().await,
+    }
+}
+
+/// Sends one of the running cell's events to the parent, charged against its
+/// output limit, with the stack report before a stack failure.
+fn forward(
+    event: RuntimeEvent,
+    running: Option<&mut Running>,
+    limits: &CodeModeLimits,
+) -> Result<After, i32> {
+    let cell_id = event.cell_id();
+    let mut terminal = matches!(
+        event,
+        RuntimeEvent::Done { .. } | RuntimeEvent::Error { .. } | RuntimeEvent::Diverged { .. }
+    );
+    let stack_hit = matches!(
+        &event,
+        RuntimeEvent::Error { message, .. }
+            if message.lines().next().is_some_and(|line| line.ends_with(STACK_OVERFLOW))
+    );
+    let Ok(event) = Event::encode(event) else {
+        return Err(EXIT_UNENCODABLE);
+    };
+    if let Some(running) = running {
+        running.charged = running.charged.saturating_add(event.charge());
+        if running.charged > limits.cell_emitted_bytes {
+            let report = format!(
+                "Code Mode cell output exceeded its {}-byte limit",
+                limits.cell_emitted_bytes
+            );
+            return Ok(end_cell(cell_id, Some(&report), &report));
+        }
+    }
+    if stack_hit {
+        notify(cell_id, STACK_REPORT).map_err(|_| EXIT_BROKEN)?;
+    }
+    let what = TooLong::of(&event);
+    let bytes = if let Some(bytes) = wire::encode(&FromInterpreter::Event(event)) {
+        bytes
+    } else {
+        terminal = true;
+        let failure = FromInterpreter::Event(Event::Error {
+            cell_id,
+            message: what.failure(),
+            stored: HashMap::new(),
+        });
+        wire::encode(&failure).ok_or(EXIT_UNENCODABLE)?
+    };
+    write(&bytes).map_err(|_| EXIT_BROKEN)?;
+    Ok(if terminal { After::Ended } else { After::Next })
+}
+
+/// Ends cell `cell_id` this process's way: `report` as a notification of its
+/// own, when there is one, then an `Error` of `message`, keeping none of the
+/// cell's writes.
+fn end_cell(cell_id: u64, report: Option<&str>, message: &str) -> After {
+    if let Some(report) = report {
+        let _ = notify(cell_id, report);
+    }
+    let _ = send(&FromInterpreter::Event(Event::Error {
+        cell_id,
+        message: message.to_owned(),
+        stored: HashMap::new(),
+    }));
+    After::Ended
+}
+
+fn notify(cell_id: u64, text: &str) -> io::Result<()> {
+    send(&FromInterpreter::Event(Event::Notify {
+        cell_id,
+        text: text.to_owned(),
+    }))
+}
+
+/// Starts a host and answers `Ready`, or answers `Refused` and returns the
+/// exit code.
+fn start_host() -> Result<EmbeddedHost, i32> {
     let host = EmbeddedHost::spawn().map_err(|message| refuse_with(&message))?;
     send(&FromInterpreter::Ready).map_err(|_| EXIT_BROKEN)?;
     Ok(host)
 }
 
-fn command_worker(host: &EmbeddedHost, command: ToInterpreter, kept: &Mutex<Answers>) {
-    // A command the worker cannot take means the worker ended; its event
-    // channel then closes, which ends this process.
+fn command_host(host: &mut EmbeddedHost, command: ToInterpreter) {
+    // The engine answers a command for no running cell by ignoring it.
     let _ = match command {
-        ToInterpreter::Start {
-            execution_id,
-            source,
-            tools,
-            prelude,
-        } => {
-            // The cell before ended (its worker with it): no load is waiting.
-            *kept.lock().unwrap_or_else(PoisonError::into_inner) = Answers::default();
-            host.start_cell(
-                execution_id,
-                &source,
-                HashMap::new(),
-                tools,
-                prelude.map(Into::into),
-                None,
-            )
-        }
         ToInterpreter::ToolResult {
             execution_id,
             id,
@@ -432,8 +579,11 @@ fn command_worker(host: &EmbeddedHost, command: ToInterpreter, kept: &Mutex<Answ
         } => host.send_tool_result(execution_id, id, encoded, success),
         ToInterpreter::Hold { execution_id } => host.hold(execution_id),
         ToInterpreter::Release { execution_id } => host.release(execution_id),
-        // `read_parent` hands a `Loaded` to the loader, never to the loop.
-        ToInterpreter::Init { .. } | ToInterpreter::Loaded { .. } => Ok(()),
+        // `run` takes `Init` and `Start`; `read_parent` hands a `Loaded` to
+        // the loader, never to the loop.
+        ToInterpreter::Init { .. } | ToInterpreter::Start { .. } | ToInterpreter::Loaded { .. } => {
+            Ok(())
+        }
     };
 }
 

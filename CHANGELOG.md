@@ -16,6 +16,24 @@ between releases to accumulate changes as they land.
 
 ## [Unreleased]
 
+### Changed
+
+- The embedded harness follows nanocode to its new home,
+  `github.com/nanocodexyz/nanocode`, and to its `master` of 2026-11-16
+  (`8ec3b215`). Code Mode cells now run in nanocode's own JavaScript engine, djs,
+  in place of QuickJS, still each in a confined interpreter process of their own
+  (now one per cell, as nanocode starts a fresh Code Mode host for every cell).
+  The limits are kata's as before (a 256 MiB heap, a 300 s wall, 8 MiB of output
+  and 8 hosts per worker process), now enforced by kata's interpreter process
+  rather than a patched engine; djs keeps a script's call stack in its heap, so
+  kata no longer sets a separate interpreter-stack limit, and the stack report a
+  model and the session evidence see reads `Code Mode cell exceeded its
+  interpreter stack limit`. A cell reads UTC as its time zone.
+- `exec_command` and `write_stdin` wait as nanocode's own host does: at least
+  250 ms (an empty poll at least 5 s, or longer when the call asks), truncate
+  output in the unit the call names, and tell the model the seconds left of the
+  turn with each result.
+
 ## [0.0.1] - 2026-11-17
 
 The first release. kata is a prototype, built from

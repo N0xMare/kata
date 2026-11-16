@@ -17,11 +17,11 @@ function createValueHelpers() {
       key = `${key}`;
       const encoded = JSON.stringify(value);
       if (encoded === undefined) throw `Unable to store ${JSON.stringify(key)}. Only plain serializable objects can be stored.`;
-      return [key, JSON.parse(encoded)];
+      return [key, JSON.parse(encoded), encoded];
     },
 
     normalizeImage(value, detail) {
-      const expected = "image expects a non-empty image URL string, an object with exactly one of image_url or file_id and optional detail, or a raw MCP image block";
+      const expected = "image expects a non-empty image URL string, an object with exactly one of image_url or file_id and optional detail, a raw MCP image block, or an array of these";
       if (detail != null && typeof detail !== "string") throw "image detail must be a string when provided";
       let url;
       let fileId;

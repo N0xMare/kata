@@ -13,9 +13,11 @@ mod common;
 use std::io::Read;
 use std::time::{Duration, Instant};
 
-use common::{MIB, children, collect, eventually, run};
-use kata_code_mode_host::{ENDED_BY, FRAME_CAP, Program, STDERR_CAP, WALL_GRACE, install};
-use nanocode_code_mode_engine::{EmbeddedHost, NativeLimits, RuntimeEvent};
+use common::{MIB, cell_tools, children, collect, eventually, run};
+use kata_code_mode_host::{
+    CodeModeLimits, ENDED_BY, FRAME_CAP, Program, STDERR_CAP, WALL_GRACE, install,
+};
+use nanocode_code_mode_engine::{EmbeddedHost, Interrupt, RuntimeEvent};
 use serde_json::{Value, json};
 
 const HOSTILE_ARGS: [&str; 5] = [
@@ -28,9 +30,8 @@ const HOSTILE_ARGS: [&str; 5] = [
 
 const WALL: Duration = Duration::from_secs(1);
 
-const LIMITS: NativeLimits = NativeLimits {
+const LIMITS: CodeModeLimits = CodeModeLimits {
     memory_bytes: 16 * MIB,
-    max_stack_bytes: MIB,
     thread_stack_bytes: 8 * MIB,
     cell_wall: WALL,
     cell_emitted_bytes: MIB,
@@ -408,9 +409,10 @@ async fn a_silent_interpreter_is_killed_past_its_cells_wall_and_grace() {
         1,
         "silent",
         std::collections::HashMap::new(),
-        Vec::new(),
+        cell_tools(&[]),
         None,
         None,
+        Interrupt::new(),
     )
     .expect("the cell starts");
     let cell = tokio::time::timeout(WALL + WALL_GRACE * 4, collect(&mut host, 1))
@@ -507,9 +509,10 @@ async fn deafen(host: &mut EmbeddedHost, id: u64) -> Instant {
         id,
         "deaf",
         std::collections::HashMap::new(),
-        Vec::new(),
+        cell_tools(&[]),
         None,
         None,
+        Interrupt::new(),
     )
     .expect("the cell starts");
     let event = host
@@ -690,9 +693,10 @@ async fn loads_without_reading_the_answers_kill_the_interpreter() {
         1,
         "loads",
         std::collections::HashMap::from([("big".to_owned(), std::sync::Arc::from(big))]),
-        Vec::new(),
+        cell_tools(&[]),
         None,
         None,
+        Interrupt::new(),
     )
     .expect("the cell starts");
     let started = Instant::now();

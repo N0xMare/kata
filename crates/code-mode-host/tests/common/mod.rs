@@ -6,9 +6,10 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
-use nanocode_code_mode_engine::{EmbeddedHost, RuntimeEvent};
+use nanocode_code_mode_engine::{CellTools, EmbeddedHost, Interrupt, RuntimeEvent};
 
 pub const MIB: usize = 1 << 20;
 
@@ -23,11 +24,24 @@ pub struct Cell {
     pub kinds: Vec<&'static str>,
 }
 
+/// `tools` as the engine encodes a cell's tool catalog.
+pub fn cell_tools(tools: &[serde_json::Value]) -> Arc<CellTools> {
+    Arc::new(CellTools::encode(tools).expect("the tools encode"))
+}
+
 /// Runs `source` as cell `id` and reads its events up to its terminal one.
 /// Panics if the host ends instead.
 pub async fn run(host: &mut EmbeddedHost, id: u64, source: &str) -> Cell {
-    host.start_cell(id, source, HashMap::new(), Vec::new(), None, None)
-        .unwrap_or_else(|error| panic!("cell {id}: the host refused the cell: {error}"));
+    host.start_cell(
+        id,
+        source,
+        HashMap::new(),
+        cell_tools(&[]),
+        None,
+        None,
+        Interrupt::new(),
+    )
+    .unwrap_or_else(|error| panic!("cell {id}: the host refused the cell: {error}"));
     collect(host, id).await
 }
 
@@ -60,7 +74,9 @@ pub async fn collect(host: &mut EmbeddedHost, id: u64) -> Cell {
                 cell.error = Some(message);
                 return cell;
             }
-            RuntimeEvent::Replayed { .. } | RuntimeEvent::Diverged { .. } => {
+            RuntimeEvent::Replayed { .. }
+            | RuntimeEvent::Diverged { .. }
+            | RuntimeEvent::Waiting { .. } => {
                 panic!("cell {id} replayed a journal it was never given")
             }
         }
@@ -104,6 +120,17 @@ pub fn state_of(pid: u32) -> Option<char> {
         .next()?
         .chars()
         .next()
+}
+
+/// The CPU time the kernel has charged process `pid` (`self` for this one),
+/// in clock ticks (`utime` + `stime`, off `/proc/<pid>/stat`); `None` once it
+/// is gone.
+pub fn cpu_ticks(pid: &str) -> Option<u64> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let fields: Vec<&str> = stat.rsplit_once(')')?.1.split_whitespace().collect();
+    let utime: u64 = fields.get(11)?.parse().ok()?;
+    let stime: u64 = fields.get(12)?.parse().ok()?;
+    Some(utime + stime)
 }
 
 /// The names of this process's threads, off `/proc/self/task/*/comm`.

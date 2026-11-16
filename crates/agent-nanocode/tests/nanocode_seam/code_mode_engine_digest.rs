@@ -68,7 +68,7 @@ fn the_engine_digest_is_the_blake3_of_the_engine_as_kata_runs_it() {
     for sample in [
         "vendor/nanocode-code-mode-engine.patch",
         "vendor/nanocode-code-mode-engine/Cargo.toml",
-        "vendor/nanocode-code-mode-engine/src/native.rs",
+        "vendor/nanocode-code-mode-engine/src/backend.rs",
         "crates/code-mode-host/Cargo.toml",
         "crates/code-mode-host/src/syscall_filter.rs",
     ] {

@@ -19,21 +19,23 @@
 
 use std::time::Duration;
 
-use nanocode_code_mode_engine::NativeLimits;
+use kata_code_mode_host::CodeModeLimits;
 
 pub mod adapter;
 pub mod credential;
 
 pub use adapter::{HarnessAuth, NanocodeAdapter};
 
-/// Install [`CODE_MODE_LIMITS`] for every Code Mode (QuickJS) worker this process
-/// spawns afterwards, and run each worker's cells in an interpreter process: this
+/// Install [`CODE_MODE_LIMITS`] for every Code Mode host this process spawns
+/// afterwards, and run each host's cells in an interpreter process: this
 /// process's own executable, re-executed (`kata_code_mode_host::install` with
-/// `Program::this_executable`), never a thread of this process. The engine's
-/// limits and its worker backend are process-global and read when a worker is
-/// spawned, so the worker calls this ONCE, at start, before any agent is built
-/// (`kata_worker::adapter_registry::production`); a Code Mode worker spawned
-/// before it runs is unlimited and runs in this process. Calling it again is a
+/// `Program::this_executable`), never a task of this process. The engine's
+/// backend is process-global and read when a host is spawned, so the worker
+/// calls this ONCE, at start, before any agent is built
+/// (`kata_worker::adapter_registry::production`); a Code Mode host spawned
+/// before it runs runs its cells in this process, under upstream's heap cap
+/// (half the memory available when its first cell starts) and no other limit
+/// kata sets. Calling it again is a
 /// no-op. A binary that calls it dispatches to the interpreter first thing in
 /// `main` (`kata_code_mode_host::run_if_interpreter`), a test binary through
 /// `kata_code_mode_host::interpreter_entry!`.
@@ -67,8 +69,8 @@ pub fn install_code_mode_limits() {
 ///   `claude` folds them as well (below).
 /// - `code_mode_limits`: [`CODE_MODE_LIMITS`], every field of it: the limits
 ///   every Code Mode cell in the worker runs under and the process's cap on live
-///   Code Mode workers. The struct is destructured whole, so a field the
-///   vendored engine adds fails this build until it is folded here.
+///   Code Mode workers. The struct is destructured whole, so a field
+///   `kata_code_mode_host` adds fails this build until it is folded here.
 /// - `code_mode_engine_digest`: [`CODE_MODE_ENGINE_DIGEST`], the blake3 of
 ///   every file of the vendored Code Mode engine cargo builds
 ///   (`vendor/nanocode-code-mode-engine`), of kata's patch to it
@@ -111,9 +113,8 @@ pub fn install_code_mode_limits() {
 /// compile.
 pub fn harness_identity() -> Result<serde_json::Value, String> {
     let (codex, claude) = adapter::host_tool_definitions()?;
-    let NativeLimits {
+    let CodeModeLimits {
         memory_bytes,
-        max_stack_bytes,
         thread_stack_bytes,
         cell_wall,
         cell_emitted_bytes,
@@ -127,7 +128,6 @@ pub fn harness_identity() -> Result<serde_json::Value, String> {
         "code_mode_syscall_filter_digest": kata_code_mode_host::syscall_filter_digest()?,
         "code_mode_limits": {
             "memory_bytes": memory_bytes,
-            "max_stack_bytes": max_stack_bytes,
             "thread_stack_bytes": thread_stack_bytes,
             "cell_wall_ms": wall_ms,
             "cell_emitted_bytes": cell_emitted_bytes,
@@ -157,7 +157,7 @@ pub fn harness_identity() -> Result<serde_json::Value, String> {
 /// The nanocode commit kata builds against: the `rev` of the three nanocode
 /// dependencies in the workspace manifest, and the commit `Cargo.lock` must resolve
 /// every nanocode package to.
-pub const NANOCODE_REV: &str = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2";
+pub const NANOCODE_REV: &str = "8ec3b215ed9280219956b4cea9edcd871fd541fb";
 
 /// The blake3 of the Code Mode engine as kata runs it, as this build compiled
 /// it: every file under `vendor/nanocode-code-mode-engine`,
@@ -189,52 +189,53 @@ pub const HOST_SET_CODEX: [&str; 5] = [
 /// reaches the capsule any other way.
 pub const HOST_SET_CLAUDE: [&str; 6] = ["Read", "Write", "Edit", "Bash", "TaskOutput", "TaskStop"];
 
-/// The limits for every Code Mode (QuickJS) worker in this process, which
-/// [`install_code_mode_limits`] installs through
-/// `nanocode_code_mode_engine::set_native_limits`, the guard kata patches into its
-/// vendored copy of the engine (`vendor/nanocode-code-mode-engine.patch`).
+/// The limits for every Code Mode cell in this process, which
+/// [`install_code_mode_limits`] hands to kata's interpreter host
+/// (`kata_code_mode_host::install`): the interpreter process sets the heap on
+/// the engine (`set_cell_memory`) and enforces the rest itself, with its
+/// supervisor here.
 ///
 /// - `memory_bytes`, 256 MiB: far above any honest cell (tool orchestration, JSON
-///   munging). It is one worker's: every Code Mode worker has its own runtime under
-///   it, and nanocode spawns a worker for any cell that starts while another of the
-///   session's cells still runs, so an attempt is not bounded to one runtime.
-///   `live_workers` bounds the process.
-/// - `max_stack_bytes`, 1 MiB: QuickJS's own default, stated, with the thread stack
-///   below leaving headroom for the Rust frames a cell's host calls add.
-/// - `thread_stack_bytes`, 8 MiB: explicit, rather than the platform default.
-///   QuickJS checks only its own frames, so the thread needs headroom over
-///   `max_stack_bytes` or a deep recursion overflows it and aborts the process it
-///   runs in, the cell's interpreter process.
-///   MEASURED (`tests/code_mode_stack_through_adapter.rs`): a cell recursing to
-///   the interpreter's limit through `sort`'s comparator needs
-///   `max_stack_bytes` + 20 KiB, the widest shape measured; through
-///   `setTimeout`'s delay coercion (a host call), and the other shapes measured,
-///   `max_stack_bytes` + 16 KiB. That binary pins
-///   this at least twice what the wider of the sort and `setTimeout` recursions
-///   needs, and shows a thread stack of `max_stack_bytes` aborting the process the
-///   thread runs in.
-/// - `cell_wall`, 300 s: a cell spinning in JavaScript past it is interrupted at
-///   its next interrupt check, its job queue is drained no further, and a cell
-///   waiting on a tool or a timer past it, or held past it, ends. One long native
-///   step (a built-in sort of millions of elements) runs to its end before the
-///   interrupt lands; the interpreter process's supervisor kills it 5 s past the
-///   wall (`kata_code_mode_host::WALL_GRACE`), and the turn's shutdown sooner.
+///   munging). It is one cell's: nanocode spawns a host per cell, each in an
+///   interpreter process of its own with its own djs heap under it, so an
+///   attempt is not bounded to one heap; `live_workers` bounds the process.
+///   Explicit, where upstream derives a cap from the memory the host has free
+///   (half of `MemAvailable` or the cgroup's headroom), so a cell's heap does
+///   not depend on the machine. djs keeps a script's call stack in this heap
+///   (a `RangeError` past djs's own slot limit), so it bounds the stack too:
+///   kata has no separate interpreter-stack limit since nanocode moved from
+///   QuickJS to djs.
+/// - `thread_stack_bytes`, 8 MiB: the stack of the interpreter's thread that
+///   runs the cells, explicit rather than the inherited `RLIMIT_STACK`. djs runs
+///   a script's frames on its heap, not on this stack; what a cell can push onto
+///   it is the native recursion of djs's own parsers and builtins, each bounded
+///   by djs. MEASURED (`tests/code_mode_stack_through_adapter.rs`): every shape
+///   measured completes on a 372 KiB thread stack (368 KiB overflows), the need
+///   set by djs's regular-expression parser at its 211 nested groups; `sort`,
+///   `setTimeout`, plain recursion and `JSON.parse` complete on 64 KiB. 8 MiB is
+///   22 times the need; that binary is red below twice it, and shows a thread
+///   stack too small ending only the interpreter (SIGABRT).
+/// - `cell_wall`, 300 s: the interpreter ends a cell running, waiting on a tool
+///   or a timer past it, between two slices of its JavaScript. One long native
+///   step (a split or join of hundreds of megabytes) runs to its end first; the
+///   interpreter process's supervisor kills it 5 s past the wall
+///   (`kata_code_mode_host::WALL_GRACE`), and the turn's shutdown sooner.
 /// - `cell_emitted_bytes`, 8 MiB: bounds what a cell sends through nanocode's
-///   unbounded channel. Every text, content item, notification, yield and tool
-///   call is charged its payload plus `CELL_EVENT_BYTES` (256), so a cell sends at
+///   unbounded channel. Every content item, notification, yield and tool call
+///   is charged its payload plus `CELL_EVENT_BYTES` (256), so a cell sends at
 ///   most 32,768 events and 8 MiB of payload. A cell's tool-call inputs and its
-///   `stored` values go through the same channel uncharged; only `memory_bytes` bounds them, while the interpreter
-///   builds them. What each event costs inside nanocode is nanocode's: the charge
-///   bounds the number of events, not that cost.
-///
-/// - `live_workers`, 8: Code Mode workers live in this process at once, idle ones
-///   included (nanocode keeps one per session between cells), each counted until
-///   its interpreter process is reaped. So the process's interpreters hold at most
-///   8 x 256 MiB = 2 GiB of heap, each also under an address-space limit
-///   (`kata_code_mode_host::address_space_limit`), whatever the number of attempts
-///   or cells. A cell that would need a ninth worker fails to the model. The cap
-///   is the process's, so concurrent attempts share it: one attempt's running
-///   cells can leave another's next cell without a worker until one ends.
+///   `stored` values go through the same channel uncharged; only
+///   `memory_bytes` bounds them, while the interpreter builds them. What each
+///   event costs inside nanocode is nanocode's: the charge bounds the number of
+///   events, not that cost.
+/// - `live_workers`, 8: Code Mode hosts live in this process at once, each
+///   counted until its interpreter process is reaped. So the process's
+///   interpreters hold at most 8 x 256 MiB = 2 GiB of heap, each also under an
+///   address-space limit (`kata_code_mode_host::address_space_limit`), whatever
+///   the number of attempts or cells. A cell that would need a ninth host fails
+///   to the model. The cap is the process's, so concurrent attempts share it:
+///   one attempt's running cells can leave another's next cell without a host
+///   until one ends.
 ///
 /// A limit hit fails the cell, not the turn. These bound the interpreters, not
 /// the process hosting the worker: Rust-side copies of a cell's `stored` values
@@ -243,30 +244,27 @@ pub const HOST_SET_CLAUDE: [&str; 6] = ["Read", "Write", "Edit", "Bash", "TaskOu
 /// it; what a session has stored is bounded by nothing here, as its values reach
 /// an interpreter one at a time, as a cell loads them.
 ///
-/// The guard reports a wall or output hit, and a heap or stack hit it can
-/// tell, as a Code Mode notification of its own just before the cell's error,
-/// and the adapter records every report as `CodeModeLimit`, and the
-/// live-worker refusal off the `exec` result, whatever the model is shown
-/// (`adapter::events`). It tells a heap or stack hit by QuickJS's own error
-/// on the first line of the failure the bootstrap reports, or a heap hit by
-/// the heap left within 64 KiB of `memory_bytes` when the bootstrap could not
-/// report the failure (QuickJS's bare `null`); a hit the cell catches and
-/// rethrows inside an error of its own, and a bare-`null` heap hit the
-/// bootstrap reports as `Uncaught null` once the heap was released, are told
-/// as that error and recorded nowhere (`tests/code_mode_limits.rs`). nanocode
-/// shows the model a cell's result cut to a 12,000-token budget that counts
-/// the result's header and error with the cell's text, which cuts or drops a
-/// failed cell's trailing `Script error:` once the header and the text fill it
-/// (a text flood's output hit always does). The model still gets the report on
-/// the Responses kind, as an output of its own, unless nanocode compacts the
-/// turn's history first, which rewrites the report; on the Messages kind the
-/// report is the same result's last text block and is dropped once the text
-/// before it fills the budget, so there the model is told a bare `Script
-/// failed` (`tests/code_mode_output_through_adapter.rs`,
+/// Every heap, wall, output and stack hit is reported as a Code Mode
+/// notification of its own just before the cell's error (the heap's by the
+/// engine, as kata patches it; the rest by the interpreter process), and the
+/// adapter records every report as `CodeModeLimit`, and the live-worker refusal
+/// off the `exec` result, whatever the model is shown (`adapter::events`). djs
+/// ends a heap hit uncatchably, so every hit a cell's own code makes is
+/// reported (a heap too small for the engine's bootstrap, under about 360 KiB,
+/// fails every cell with the bootstrap's own error and no report); a stack hit
+/// is a catchable `RangeError`, reported when it ends the cell. nanocode shows the
+/// model a cell's result cut to a token budget. On the Responses kind (10,000
+/// tokens, the header outside it) a cell's text and its `Script error:` are
+/// joined into one item and middle-truncated, so the error survives at the
+/// tail, and the report reaches the model as an output of its own unless
+/// nanocode compacts the turn's history first, which rewrites the report. On
+/// the Messages kind (12,000 tokens, the header counted) text blocks are kept
+/// in order and the rest dropped, so a past-budget cell's error and report are
+/// dropped and the model is told a bare `Script failed`
+/// (`tests/code_mode_output_through_adapter.rs`,
 /// `tests/code_mode_wall_through_adapter.rs`).
-pub const CODE_MODE_LIMITS: NativeLimits = NativeLimits {
+pub const CODE_MODE_LIMITS: CodeModeLimits = CodeModeLimits {
     memory_bytes: 256 << 20,
-    max_stack_bytes: 1 << 20,
     thread_stack_bytes: 8 << 20,
     cell_wall: Duration::from_secs(300),
     cell_emitted_bytes: 8 << 20,
@@ -308,7 +306,6 @@ mod tests {
             identity["code_mode_limits"],
             serde_json::json!({
                 "memory_bytes": CODE_MODE_LIMITS.memory_bytes,
-                "max_stack_bytes": CODE_MODE_LIMITS.max_stack_bytes,
                 "thread_stack_bytes": CODE_MODE_LIMITS.thread_stack_bytes,
                 "cell_wall_ms": 300_000_u64,
                 "cell_emitted_bytes": CODE_MODE_LIMITS.cell_emitted_bytes,

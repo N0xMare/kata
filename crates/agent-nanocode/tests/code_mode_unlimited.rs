@@ -1,25 +1,40 @@
-//! The vendored Code Mode engine with `set_native_limits` never called: kata's
-//! resource guard is opt-in, and a process that does not install limits keeps
-//! nanocode's unlimited behaviour. The job drain's stop on the host's interrupt
-//! is not a limit, and holds here too: it is what lets `terminate` end a cell
-//! that no wall would. Its own binary because the setter is process-global and
-//! once-only (`code_mode_limits.rs` installs limits).
+//! The vendored Code Mode engine with kata's backend never installed
+//! (`kata_code_mode_host::install` not called): every `EmbeddedHost` runs its
+//! cells itself, on the task that polls it, in this process, as upstream's
+//! does, under upstream's heap cap (half the memory available when the first
+//! cell's snapshot is prepared) and no limit of kata's. Its own binary because
+//! the backend is process-global and once-only (`code_mode_limits.rs`
+//! installs it).
 //!
-//! The memory cell's resident growth is the number the guard exists to bound.
+//! The memory cell's resident growth, read off `/proc/self/status`, is the
+//! number kata's limits exist to bound, and it is this process's: no
+//! interpreter process runs.
 
 mod code_mode_engine;
 #[path = "fixtures/quickjs_threads.rs"]
+#[allow(dead_code)]
 mod quickjs_threads;
 
 use std::time::Duration;
 
-use code_mode_engine::{ALLOCATE_64_MIB, MIB, REQUEUEING_SPINNER, resident, run, start};
+use code_mode_engine::{ALLOCATE_64_MIB, MIB, resident, run};
 use nanocode_code_mode_engine::EmbeddedHost;
-use quickjs_threads::{cpu_ticks, quickjs_threads};
+use quickjs_threads::interpreters;
 
+/// **Without kata's backend a cell allocates, emits and waits past every limit
+/// kata's tests install, in this process.** A cell allocates 64 MiB of filled
+/// arrays (four times `code_mode_limits.rs`'s heap) and this process's resident
+/// high-water mark grows by at least 48 MiB; a cell notifies 2 MiB (twice its
+/// output limit); a cell waits 3 s on a timer (past its 2 s wall) and wakes.
+/// No interpreter process is ever listed.
+///
+/// **Would red if:** kata's patch put a limit or a process of its own on a host
+/// that runs its cells itself (the engine's `EmbeddedHost::spawn` making a
+/// `Remote` with no backend installed, or a cap of kata's applied without
+/// `set_cell_memory`).
 #[tokio::test]
 async fn without_limits_a_cell_allocates_emits_and_waits_past_every_test_limit() {
-    let mut host = EmbeddedHost::spawn().expect("spawn the QuickJS worker");
+    let mut host = EmbeddedHost::spawn().expect("a host");
     let (rss_before, _) = resident();
 
     let cell = run(&mut host, 1, ALLOCATE_64_MIB).await;
@@ -65,39 +80,10 @@ async fn without_limits_a_cell_allocates_emits_and_waits_past_every_test_limit()
         "woke after {:?}",
         wait.elapsed
     );
-}
-
-/// **`terminate` ends a microtask that requeues itself, with no limits
-/// installed.** No wall exists here, so only the host's interrupt can end the
-/// cell: it ends each job as it spins, and the job drain must stop between
-/// jobs instead of running the successor each one queued. The kernel is the
-/// witness both ways: the QuickJS thread is charged CPU time while the cell
-/// spins, and it is gone once `terminate` returns.
-#[tokio::test]
-async fn terminate_ends_a_self_requeueing_microtask() {
-    let mut host = EmbeddedHost::spawn().expect("spawn the QuickJS worker");
-    start(&host, 1, REQUEUEING_SPINNER);
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    let thread = quickjs_threads();
-    let tid = *thread.first().expect("one QuickJS thread");
-    let before = cpu_ticks(tid).expect("the QuickJS thread is live");
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    let after = cpu_ticks(tid).expect("the QuickJS thread is live");
     assert!(
-        after > before,
-        "the cell is not spinning: {before} -> {after} ticks"
+        interpreters().is_empty(),
+        "an interpreter process ran: {:?}",
+        interpreters()
     );
-
-    tokio::time::timeout(Duration::from_secs(10), host.terminate())
-        .await
-        .expect("terminate never returned: the job drain ran on past the interrupt");
-
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while quickjs_threads().contains(&tid) && std::time::Instant::now() < deadline {
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-    assert!(
-        !quickjs_threads().contains(&tid),
-        "the terminated worker's thread is still live"
-    );
+    host.terminate().await;
 }

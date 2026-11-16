@@ -39,9 +39,15 @@
 //! shipped `kata` binary run as an interpreter by hand), or one named for a
 //! reason given beside it. Removing any one ends the confined interpreter of
 //! `every_listed_call_runs_and_every_thread_is_filtered`, which issues each;
-//! removing most also ends an honest cell of those suites by SIGSYS (MEASURED:
-//! 25 of the 34, `sched_yield` and `restart_syscall`, unseen under strace,
-//! among them).
+//! removing most also ended an honest cell of those suites by SIGSYS
+//! (MEASURED with nanocode's QuickJS engine at `2ac77424`: 25 of the 34,
+//! `sched_yield` and `restart_syscall`, unseen under strace, among them).
+//! nanocode's djs engine (since `8ec3b215`) needed no change to the list:
+//! strace of `interpreter_process`'s interpreters past their confinement saw
+//! only listed calls (`clone` and `clone3`, `futex`, `getrandom`, `gettid`,
+//! `mmap`, `mprotect`, `mremap`, `munmap`, `openat` answered EACCES, `prctl`,
+//! `read`, `rseq`, `rt_sigprocmask`, `sched_getaffinity`, `set_robust_list`,
+//! `sigaltstack`, `write`), and every Code Mode suite runs under it.
 
 use kata_types::sandbox_seccomp::SockFilter;
 #[cfg(target_arch = "x86_64")]
@@ -67,14 +73,14 @@ pub(crate) fn allowed(pid: u32) -> Vec<AllowedSyscall> {
     };
     vec![
         // The frames on its socket; libtest's "running for over 60 seconds"
-        // line on /dev/null (a test binary run as an interpreter); panics,
-        // QuickJS's and glibc's assertion lines on standard error. close is on
+        // line on /dev/null (a test binary run as an interpreter); panics and
+        // glibc's assertion lines on standard error. close is on
         // the owner's list; nothing closes a held descriptor after confinement.
         entry("read", libc::SYS_read, held()),
         entry("write", libc::SYS_write, held()),
         entry("close", libc::SYS_close, held()),
         // glibc's fatal-error report (malloc_printerr, on the heap corruption a
-        // QuickJS memory defect can cause) is one writev to descriptor 2 before
+        // memory defect can cause) is one writev to descriptor 2 before
         // its abort: denied, that SIGABRT would read as SIGSYS and lose its line.
         entry(
             "writev",
@@ -84,9 +90,10 @@ pub(crate) fn allowed(pid: u32) -> Vec<AllowedSyscall> {
                 values: vec![2],
             },
         ),
-        // The memory calls: QuickJS's heap through glibc's malloc (brk for the
-        // main arena, mmap/munmap/mremap for large blocks, mprotect as a thread
-        // arena grows, madvise as one shrinks), and each thread's stack.
+        // The memory calls: djs's arena and the engine's allocations through
+        // glibc's malloc (brk for the main arena, mmap/munmap/mremap for large
+        // blocks, the arena's growth among them, mprotect as a thread arena
+        // grows, madvise as one shrinks), and each thread's stack.
         entry("mmap", libc::SYS_mmap, Admit::Always),
         entry("mprotect", libc::SYS_mprotect, Admit::Always),
         entry("munmap", libc::SYS_munmap, Admit::Always),
@@ -95,8 +102,7 @@ pub(crate) fn allowed(pid: u32) -> Vec<AllowedSyscall> {
         entry("madvise", libc::SYS_madvise, Admit::Always),
         // Every lock, channel and thread join.
         entry("futex", libc::SYS_futex, Admit::Always),
-        // One engine worker thread per cell, the frame reader and the
-        // runtime's: glibc's pthread_create asks clone3 first and, answered
+        // The thread that runs the cells, the frame reader and the runtime's: glibc's pthread_create asks clone3 first and, answered
         // ENOSYS, clone; only a clone that makes a THREAD of this process, in
         // its namespaces, runs (CLONE_THREAD, which the kernel accepts only
         // with CLONE_SIGHAND and CLONE_VM, and no CLONE_NEW* flag: a thread
@@ -185,8 +191,10 @@ pub(crate) fn allowed(pid: u32) -> Vec<AllowedSyscall> {
         // carries on without them: malloc's /proc/sys/vm/overcommit_memory the
         // first time a thread arena shrinks (check_may_shrink_heap), and
         // __assert_fail's /proc/self/maps (the fortified %n check of its
-        // format) before QuickJS's assertion line. Answered EACCES they open
-        // nothing; any other open ends the process.
+        // format) before an assertion line; the engine's own reads of
+        // /proc/meminfo and the cgroup files (its default heap cap, which kata
+        // overrides) and std's of the cgroup's CPU quota. Answered EACCES they
+        // open nothing; any other open ends the process.
         entry(
             "openat",
             libc::SYS_openat,
@@ -431,7 +439,7 @@ mod tests {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
-    use nanocode_code_mode_engine::NativeLimits;
+    use crate::CodeModeLimits;
 
     use crate::wire::{self, FromInterpreter, ToInterpreter};
 
@@ -443,9 +451,8 @@ mod tests {
         "kata-code-mode-adversary",
     ];
 
-    const LIMITS: NativeLimits = NativeLimits {
+    const LIMITS: CodeModeLimits = CodeModeLimits {
         memory_bytes: 16 << 20,
-        max_stack_bytes: 1 << 20,
         thread_stack_bytes: 8 << 20,
         cell_wall: Duration::from_secs(10),
         cell_emitted_bytes: 1 << 20,
@@ -1045,7 +1052,7 @@ mod tests {
             &ToInterpreter::Start {
                 execution_id: 1,
                 source: act.to_owned(),
-                tools: Vec::new(),
+                tools: [String::from("[]"), String::from("[]"), String::from("[]")],
                 prelude: None,
             },
         );

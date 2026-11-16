@@ -54,10 +54,10 @@
 //!   a second run of an agent stage authoring `cache_policy = "model_reuse"` mints
 //!   the equal capsule and adopts the first run's turn: the mock receives no request
 //!   for it and no container runs.
-//! * **I — a provider disconnect** (`a_provider_disconnect_mid_response_settles_proven_ambiguous_live`):
-//!   the mock drops its connection mid-response after the turn's command ran in the
-//!   container; the attempt settles PROVEN AMBIGUOUS, is never re-run, and publishes
-//!   nothing.
+//! * **I — a provider failing its response** (`a_provider_failing_its_response_mid_turn_settles_proven_ambiguous_live`):
+//!   the mock begins the turn's second response and fails it with a
+//!   `response.failed` event after the turn's command ran in the container; the
+//!   attempt settles PROVEN AMBIGUOUS, is never re-run, and publishes nothing.
 //! * **J — a split key** (`a_lifted_key_split_across_text_deltas_never_reaches_an_sse_subscriber_live`):
 //!   the model streams the stage's own fake key split across two text deltas under
 //!   `progress_visibility = "full"`; a bare reader of `GET /api/v1/events` takes
@@ -1384,76 +1384,102 @@ fn a_second_equal_agent_stage_adopts_the_first_turn_and_runs_no_container_live()
 }
 
 // ---------------------------------------------------------------------------
-// CELL I — a provider disconnect mid-response
+// CELL I — a provider failing its response mid-turn
 // ---------------------------------------------------------------------------
 
-/// The disconnect cell's pack: one agent stage over a writable, offline
+/// The failed-response cell's pack: one agent stage over a writable, offline
 /// `/work`, so a run whose one turn fails has nothing behind it to wait on. Its
 /// agent is a two-member fallback panel, so a failed turn has a NEXT seat the
 /// runner's failure retry would run it on were its failure retryable: the
 /// second member pins [`SECOND_OPENAI_MODEL`], and any request naming that model
 /// in the mock's log is a re-run.
-const DISCONNECT_PACK_LIVE: &str = "implement = stage(\n\
+const FAILED_RESPONSE_PACK_LIVE: &str = "implement = stage(\n\
      \x20   id = \"implement\",\n\
      \x20   agent = [\"change-agent\", \"fallback-agent\"],\n\
      \x20   prompt = \"Make src/app.txt contain exactly the line implemented-change.\",\n\
      \x20   sandbox = \"edit\",\n\
      )\n\
-     workflow(\"provider-disconnect\", root = [implement], worktree_isolated = True,\n\
+     workflow(\"provider-failed-response\", root = [implement], worktree_isolated = True,\n\
      \x20   sandbox_profiles = {\"edit\": sandbox_profile(workspace = \"rw\", net = \"offline\")})\n";
 
-/// The line the turn's command writes into `/work` before the model call that
-/// the provider cuts.
-const WRITTEN_BEFORE_THE_CUT: &str = "written-before-the-cut";
+/// The line the turn's command writes into `/work` before the model call whose
+/// response the provider fails.
+const WRITTEN_BEFORE_THE_FAILURE: &str = "written-before-the-failure";
 
-/// **Cell I — a model provider that drops its connection mid-response, mid-turn,
-/// leaves the attempt PROVEN AMBIGUOUS: never accepted, never re-run, nothing
+/// The provider's error object the failed response carries: a code nanocode
+/// reads as terminal (`is_terminal_response_failure`), so it neither retries
+/// nor reconnects the call, and that names neither code kata's
+/// `provider_failure` classifies by name.
+const FAILED_RESPONSE_CODE: &str = "insufficient_quota";
+
+/// **Cell I — a model provider that fails its response mid-turn leaves the
+/// attempt PROVEN AMBIGUOUS: never accepted, never re-run, nothing
 /// published.** The turn's first response asks for one `exec_command`, which
 /// runs inside the real container and writes `src/app.txt`; the mock then
-/// begins the turn's second response — its head declaring the whole body — and
-/// drops the connection before the terminal event. kata's provider-failure
-/// classification (`docs/development/nanocode.md`, "A turn the provider
-/// failed") makes a turn end a provider failure — refused, or transient and
-/// re-run — only on the harness's own typed error; nanocode reports this cut
-/// on the Responses HTTPS transport the rig's door runs as a body it could not
-/// decode, with no retry advice (`nanocode_qualification`'s
-/// `a_model_connection_dropped_mid_response_is_ambiguous`), so the turn is
-/// `Ambiguous` and the worker settles it PROVEN AMBIGUOUS: a turn whose answer
-/// is unknown may have done anything, so the runner never re-runs it
-/// (`uncertainty-not-reissued`) — not even on the stage's fallback panel's next
-/// member, the seat its failure retry would otherwise mint — and the run fails.
-/// Asserted from OUTSIDE kata: the raw `operational.db` (one attempt on the
-/// stage, `failed`, its terminal payload's `verdict` `proven_ambiguous` and no
-/// `provider_failure`, no accepted attempt, the execution's head never
-/// advanced), the mock's own request log (the command, then the cut response,
-/// both naming the first member's model, and no third request — no re-send and
-/// no request naming the second member's model), and `git` on the fixture
-/// (trunk where it was, the turn's write on no commit).
+/// begins the turn's second response — `response.created` and a text delta —
+/// and ends it with a `response.failed` event whose error names
+/// [`FAILED_RESPONSE_CODE`], over the Responses HTTPS SSE transport the rig's
+/// door runs. kata's provider-failure classification (`docs/development/nanocode.md`,
+/// "A turn the provider failed"; `kata_agent_nanocode::adapter::session::provider_failure`)
+/// makes a turn end a provider failure — refused, or transient and re-run —
+/// only on the harness's own typed error: a 4xx answer, retry advice, or a code
+/// it names. A `response.failed` event is nanocode's `ResponsesError::Api`
+/// stating no HTTP status, and nanocode reads this code as terminal
+/// (`is_terminal_response_failure`), so it neither retries nor reconnects the
+/// call (`ResponsesRetryPolicy::retry`, `reconnectable`) and gives no retry
+/// advice; the turn is `Ambiguous` (the WebSocket twin: `nanocode_qualification`'s
+/// `a_websocket_error_event_with_a_4xx_status_is_the_providers_refusal`, its
+/// `response.failed` row) and the worker settles it PROVEN AMBIGUOUS: a turn
+/// whose answer is unknown may have done anything, so the runner never re-runs
+/// it (`uncertainty-not-reissued`) — not even on the stage's fallback panel's
+/// next member, the seat its failure retry would otherwise mint — and the run
+/// fails. Asserted from OUTSIDE kata: the raw `operational.db` (one attempt on
+/// the stage, `failed`, its terminal payload's `verdict` `proven_ambiguous`
+/// carrying the provider's failed event, and no `provider_failure`, no
+/// accepted attempt, the execution's head never advanced), the mock's own
+/// request log (the command, then the failed response, both naming the first
+/// member's model, and no third request — no re-send and no request naming the
+/// second member's model), and `git` on the fixture (trunk where it was, the
+/// turn's write on no commit).
 ///
-/// **Would red if:** the cut were settled PROVEN NOT PERFORMED or classed a
-/// provider failure (watched: `agent_turn`'s `Ambiguous` arm settling through
-/// `with_verdict(.., ProvenNotPerformed)`), the runner's failure retry admitted
-/// PROVEN AMBIGUOUS (watched: `failure_is_retryable` matching
-/// `proven_ambiguous`, which ran the panel's second member), or the turn's
-/// `/work` write were published.
+/// A response whose connection is cut mid-body is no such trigger: nanocode
+/// reports the cut as a retryable transport failure and reconnects the call,
+/// so a cut its reconnects do not outlast is the provider's TRANSIENT failure,
+/// not an unknown answer (`nanocode_qualification`'s
+/// `a_model_connection_dropped_mid_response_is_a_transient_failure`).
+///
+/// **Would red if:** the failed response were settled PROVEN NOT PERFORMED or
+/// classed a provider failure (watched: `agent_turn`'s `Ambiguous` arm settling
+/// through `with_verdict(.., ProvenNotPerformed)`), the runner's failure retry
+/// admitted PROVEN AMBIGUOUS (watched: `failure_is_retryable` matching
+/// `proven_ambiguous`, which ran the panel's second member), nanocode began
+/// retrying a terminal `response.failed` (a third request on the first
+/// member's model), or the turn's `/work` write were published.
 #[test]
 #[ignore = "live end-to-end smoke; KATA_SANDBOX_REQUIRE_LIVE=1 just oci-live-smoke"]
-fn a_provider_disconnect_mid_response_settles_proven_ambiguous_live() {
+fn a_provider_failing_its_response_mid_turn_settles_proven_ambiguous_live() {
     let model = MockModel::answering(|request| {
         if model_of(request) == SECOND_OPENAI_MODEL {
             // The panel's second member: a turn that would complete, so a re-run
             // shows as its request in the log and a run that did not fail.
             Turn::running("true", "done").reply(request)
         } else if mock_model::ran_a_tool(request) {
-            let mock_provider::Reply::Events(answer) =
-                mock_provider::message_reply("cut", "done", mock_provider::usage(10, 0, 1))
-            else {
-                unreachable!("a message reply is a stream of events")
-            };
-            mock_provider::Reply::DropMidResponse(answer)
+            mock_provider::Reply::Events(vec![
+                serde_json::json!({"type": "response.created", "response": {"id": "failed"}}),
+                serde_json::json!({
+                    "type": "response.output_text.delta", "output_index": 0, "delta": "do",
+                }),
+                serde_json::json!({
+                    "type": "response.failed",
+                    "response": {"id": "failed", "error": {
+                        "type": FAILED_RESPONSE_CODE, "code": FAILED_RESPONSE_CODE,
+                        "message": "mock: the response failed mid-turn",
+                    }},
+                }),
+            ])
         } else {
             Turn::running(
-                &format!("printf '{WRITTEN_BEFORE_THE_CUT}\\n' > src/app.txt"),
+                &format!("printf '{WRITTEN_BEFORE_THE_FAILURE}\\n' > src/app.txt"),
                 "done",
             )
             .reply(request)
@@ -1476,8 +1502,8 @@ fn a_provider_disconnect_mid_response_settles_proven_ambiguous_live() {
         &[],
     );
     let trunk_before = git_out(&node.fixture.repo, &["rev-parse", &node.fixture.trunk]);
-    let pack = node.root_path.join("provider-disconnect.star");
-    std::fs::write(&pack, DISCONNECT_PACK_LIVE).unwrap();
+    let pack = node.root_path.join("provider-failed-response.star");
+    std::fs::write(&pack, FAILED_RESPONSE_PACK_LIVE).unwrap();
     let execution = node.main.submit(&pack);
     let doc = node.main.wait_terminal(&execution);
     assert_eq!(
@@ -1486,9 +1512,9 @@ fn a_provider_disconnect_mid_response_settles_proven_ambiguous_live() {
         "{TEST}: an ambiguous turn fails its stage and is not re-run: {doc}"
     );
 
-    // THE MOCK'S OWN LOG: the turn's command, then the response it cut, both on
-    // the first member's model — and no third request: neither a re-send nor the
-    // panel's second member re-running the stage.
+    // THE MOCK'S OWN LOG: the turn's command, then the response it failed, both
+    // on the first member's model — and no third request: neither a re-send nor
+    // the panel's second member re-running the stage.
     let requests = model.requests();
     let models: Vec<&str> = requests.iter().map(model_of).collect();
     assert_eq!(
@@ -1498,11 +1524,12 @@ fn a_provider_disconnect_mid_response_settles_proven_ambiguous_live() {
             agent_change_rig::nanocode::OPENAI_MODEL
         ],
         "{TEST}: the mock received the first member's two requests and nothing after \
-         the cut — no request naming the second member's model {SECOND_OPENAI_MODEL}"
+         the failed response — no request naming the second member's model \
+         {SECOND_OPENAI_MODEL}"
     );
     assert!(
         !mock_model::ran_a_tool(&requests[0]) && mock_model::ran_a_tool(&requests[1]),
-        "{TEST}: the cut response answered the request carrying the command's output"
+        "{TEST}: the failed response answered the request carrying the command's output"
     );
 
     // RAW SQLITE, through a second read-only handle.
@@ -1547,13 +1574,17 @@ fn a_provider_disconnect_mid_response_settles_proven_ambiguous_live() {
     );
     assert!(
         terminal["provider_failure"].is_null(),
-        "{TEST}: the cut is no provider failure, refused or transient: {terminal}"
+        "{TEST}: the failed response is no provider failure, refused or transient: \
+         {terminal}"
     );
+    let reason = terminal["reason"].as_str().unwrap_or_default();
     assert!(
-        terminal
-            .to_string()
-            .contains("error decoding response body"),
-        "{TEST}: the settlement carries the harness's account of the cut: {terminal}"
+        reason.starts_with("the turn's answer is unknown")
+            && reason.contains("Responses API returned an error event")
+            && reason.contains("response.failed")
+            && reason.contains(FAILED_RESPONSE_CODE),
+        "{TEST}: the settlement carries the harness's account of the failed response: \
+         {terminal}"
     );
     let accepted: Option<Vec<u8>> = conn
         .query_row(
@@ -1585,8 +1616,8 @@ fn a_provider_disconnect_mid_response_settles_proven_ambiguous_live() {
     assert!(
         git_out(&node.fixture.repo, &["log", "--all", "-p", "--format=%H"])
             .lines()
-            .all(|line| !line.contains(WRITTEN_BEFORE_THE_CUT)),
-        "{TEST}: the turn's write before the cut reached no commit"
+            .all(|line| !line.contains(WRITTEN_BEFORE_THE_FAILURE)),
+        "{TEST}: the turn's write before the failed response reached no commit"
     );
 }
 

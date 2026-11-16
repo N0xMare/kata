@@ -1,13 +1,13 @@
-//! The live-worker cap, seen through the nanocode adapter. nanocode spawns a
-//! Code Mode worker for any cell that starts while another of the session's
-//! cells still runs, so an attempt's cells are not bounded to one runtime: only
-//! `NativeLimits::live_workers` bounds how many runtimes, each under
-//! `memory_bytes`, the process holds. kata's cap of 8 would take nine spinning
-//! cells to reach, so this binary installs kata's limits with a cap of two,
-//! through kata's installer (`kata_code_mode_host::install`, which runs each
-//! worker's cells in an interpreter process of its own, this binary
-//! re-executed: its entry below), before any agent is built; it is its own
-//! binary because that installer is once-only.
+//! The live-worker cap, seen through the nanocode adapter. On native nanocode
+//! spawns a Code Mode host for every cell, and kata's installer
+//! (`kata_code_mode_host::install`) gives each host an interpreter process of
+//! its own, this binary re-executed (its entry below), counted live until it
+//! is reaped: so an attempt's running cells are not bounded to one
+//! interpreter, and only `CodeModeLimits::live_workers` bounds how many
+//! interpreters, each under `memory_bytes`, the process holds. kata's cap of 8
+//! would take nine spinning cells to reach, so this binary installs kata's
+//! limits with a cap of two, through that installer, before any agent is
+//! built; it is its own binary because that installer is once-only.
 //!
 //! The witnesses do not share the adapter's code: the mock's log of the
 //! request bodies it received (what the model was told) and the kernel's
@@ -40,12 +40,12 @@ use serde_json::json;
 use anthropic_turn::{anthropic, anthropic_prompt};
 use kata_agent::adapter::TurnOutcome;
 use kata_agent_nanocode::CODE_MODE_LIMITS;
+use kata_code_mode_host::CodeModeLimits;
 use kata_code_mode_host::{Program, install};
 use mock_provider::{
     Gate, MockProvider, Reply, call_output, claude_code_reply, claude_text_reply, code_reply,
     message_reply, tool_result_texts, usage,
 };
-use nanocode_code_mode_engine::NativeLimits;
 use openai_turn::{bounded, open_scoped, openai, openai_prompt, scope, turn};
 use quickjs_threads::{interpreters, once_listed};
 
@@ -102,7 +102,7 @@ fn wait_on_the_first_cell(id: &str) -> Reply {
 #[tokio::test]
 async fn a_cell_past_the_live_worker_limit_fails_to_the_model_and_the_turn_goes_on() {
     install(
-        NativeLimits {
+        CodeModeLimits {
             live_workers: 2,
             ..CODE_MODE_LIMITS
         },
@@ -206,7 +206,7 @@ async fn a_cell_past_the_live_worker_limit_fails_to_the_model_and_the_turn_goes_
 #[tokio::test]
 async fn on_the_messages_kind_a_cell_past_the_live_worker_limit_is_told_and_recorded() {
     install(
-        NativeLimits {
+        CodeModeLimits {
             live_workers: 2,
             ..CODE_MODE_LIMITS
         },

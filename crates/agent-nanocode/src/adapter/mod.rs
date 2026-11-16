@@ -35,9 +35,11 @@
 //!
 //! # Code Mode limits
 //!
-//! nanocode's Code Mode evaluates model-authored JavaScript in this process, in
-//! the vendored QuickJS engine. Its memory, interpreter-stack, per-cell wall-time
-//! and per-cell output limits ([`crate::CODE_MODE_LIMITS`]) are process-global,
+//! nanocode's Code Mode evaluates model-authored JavaScript in djs, through the
+//! vendored engine crate, in an interpreter process of its own per cell
+//! (`kata_code_mode_host`). Its memory, thread-stack, per-cell wall-time and
+//! per-cell output limits and the live-host cap ([`crate::CODE_MODE_LIMITS`])
+//! are process-global,
 //! so the worker installs them once at start through
 //! [`crate::install_code_mode_limits`], not per turn; this adapter installs
 //! nothing. A limit hit ends that cell with an error the model reads, and the turn
@@ -52,6 +54,7 @@ use kata_agent::adapter::{
 use kata_types::agent::AdapterKind;
 
 mod events;
+mod platform;
 mod seam;
 mod session;
 mod toolhost_client;
