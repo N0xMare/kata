@@ -67,7 +67,6 @@ fn harness(adapter: NanocodeAdapter) -> NanocodeAdapter {
     adapter.with_endpoint(kata_agent_nanocode::adapter::TestEndpoint {
         url,
         websocket_url: None,
-        max_attempts: std::num::NonZeroU32::MIN,
     })
 }
 

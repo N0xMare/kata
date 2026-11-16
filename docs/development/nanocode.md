@@ -612,13 +612,27 @@ request body left (`kata_agent_nanocode::adapter::session::provider_failed`, nan
   a refused connect among them) and the Responses client's
   `ResponsesError::retry_advice` (the same statuses unless the body names a terminal
   code, a premature close, a transport or timeout failure, an overload, rate-limit or
-  server error event). nanocode has already retried it: the Messages client eleven
-  times in all whatever kata asks (MEASURED: about 180 s for a dropped connection
-  or a 500), the Responses client up to its configured attempts and, for a stream
-  that failed (a dropped connection, a cut mid-body, a non-terminal error event),
-  five more re-sends of each (`STREAM_MAX_RETRIES`, 200 ms doubling); and both wait
-  out a 429, 502, 503, 504 or 529 for up to 600 s (`nanocode_http`'s `PATIENCE`),
-  or the `retry-after` it names.
+  server error event). nanocode has already retried it. kata is the retry authority
+  (the runner re-runs a transient stage, and walks a fallback panel), so it holds the
+  harness's own retrying as near as nanocode's public knobs allow to what it was at
+  `2ac77424` (five attempts on either client, about 8 s of backoff on the Messages
+  client and 15 s on the Responses client): the Responses client makes the one
+  attempt kata configures (`kata_agent_nanocode::adapter::session::RESPONSES_MAX_ATTEMPTS`;
+  nanocode's default is five), then re-sends a call whose stream failed (a dropped
+  connection, a cut mid-body, a non-terminal error event) five more times
+  (`STREAM_MAX_RETRIES`, 200 ms doubling), on the WebSocket after falling back to
+  HTTPS: six sends in 6.2 s over HTTPS, seven over the WebSocket (MEASURED,
+  `nanocode_qualification`'s
+  `the_responses_client_sends_a_failing_call_six_times_within_seconds`; nanocode's
+  default would send thirty). No knob reaches the rest, which kata does not patch:
+  the re-send count; the Messages client's eleven attempts whatever kata asks
+  (MEASURED: about 180 s for a dropped connection or a 500); and both clients'
+  patience, which waits out a 429, 502, 503, 504 or 529 (on the Responses client also
+  an overload or rate-limit error event) for up to 600 s from the call's first
+  attempt (`nanocode_http`'s `PATIENCE`), or the `retry-after` it names when that is
+  longer than the backoff and still within it. MEASURED worst case at `8ec3b215`, every attempt of a call
+  answered 503 by a mock: the Messages client sent 22 requests over 578 s, the
+  Responses client (HTTPS) 49 over 605 s, before the turn ended `Transient`.
 - **by name**, before nanocode's retry advice is read, for two codes the answer
   names in `error.type` or `error.code`: `usage_limit_reached` (a ChatGPT plan's
   usage quota) is **refused** on either Responses transport — an HTTPS 429, which
@@ -753,8 +767,10 @@ The recipe does not finish the bump. After it:
   reads (above): `NanocodeError::Response`, `BackendFailure::{retryable, as_any}`,
   `ClaudeError::{Http, is_transient}`, `ResponseError::responses_error` and
   `ResponsesError::{HttpRejected, HandshakeRejected, Api, retry_advice}` (the
-  WebSocket `error` event's `status` field among them), and the Messages client's five
-  attempts. A variant that moved fails the build; a classification
+  WebSocket `error` event's `status` field among them), the Messages client's eleven
+  attempts, and the Responses client's re-sends past the `max_attempts` kata configures
+  (`STREAM_MAX_RETRIES`) and both clients' patience (`PATIENCE`), which no knob
+  reaches. A variant that moved fails the build; a classification
   that moved reds the cells named above, which are then re-measured, never weakened.
 - Re-check, at the new rev, the private `ChatGptSubscription` state fields kata
   reads out of nanocode's store, `credential.{refresh_token, account_id,

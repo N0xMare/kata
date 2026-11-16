@@ -862,7 +862,6 @@ async fn an_env_key_reaches_a_nanocode_provider_and_never_its_capsule() {
                 kata_agent_nanocode::adapter::TestEndpoint {
                     url: mock.url.clone(),
                     websocket_url: None,
-                    max_attempts: std::num::NonZeroU32::MIN,
                 },
             ),
         ) as std::sync::Arc<dyn kata_agent::adapter::AgentAdapter>,
@@ -1001,7 +1000,6 @@ async fn a_nanocode_env_key_no_header_can_carry_is_refused_before_the_container(
                 adapter.with_endpoint(kata_agent_nanocode::adapter::TestEndpoint {
                     url: format!("{}{}", mock.url, url.unwrap_or("")),
                     websocket_url: None,
-                    max_attempts: std::num::NonZeroU32::MIN,
                 }),
             ) as std::sync::Arc<dyn kata_agent::adapter::AgentAdapter>,
         ]);
@@ -1169,7 +1167,6 @@ async fn nanocode_turn_through_the_worker(
             adapter.with_endpoint(kata_agent_nanocode::adapter::TestEndpoint {
                 url,
                 websocket_url: None,
-                max_attempts: std::num::NonZeroU32::MIN,
             }),
         ) as std::sync::Arc<dyn kata_agent::adapter::AgentAdapter>,
     ]);
@@ -1829,7 +1826,6 @@ async fn a_nanocode_stop_confirmed_during_its_turn_end_is_not_lost_to_the_race()
                 kata_agent_nanocode::adapter::TestEndpoint {
                     url: mock.url.clone(),
                     websocket_url: None,
-                    max_attempts: std::num::NonZeroU32::MIN,
                 },
             ),
         ) as std::sync::Arc<dyn kata_agent::adapter::AgentAdapter>,
@@ -1950,7 +1946,6 @@ async fn a_nanocode_api_key_turn_records_its_tokens_and_an_unavailable_cost() {
                 kata_agent_nanocode::adapter::TestEndpoint {
                     url: mock.url.clone(),
                     websocket_url: None,
-                    max_attempts: std::num::NonZeroU32::MIN,
                 },
             ),
         ) as std::sync::Arc<dyn kata_agent::adapter::AgentAdapter>,
@@ -2075,7 +2070,6 @@ async fn a_nanocode_anthropic_api_key_turn_is_priced_from_the_anthropic_rows() {
                 kata_agent_nanocode::adapter::TestEndpoint {
                     url: format!("{}/messages", mock.url),
                     websocket_url: None,
-                    max_attempts: std::num::NonZeroU32::MIN,
                 },
             ),
         ) as std::sync::Arc<dyn kata_agent::adapter::AgentAdapter>,
@@ -2225,7 +2219,6 @@ async fn a_nanocode_background_bash_leaves_no_task_file_on_the_worker() {
                 kata_agent_nanocode::adapter::TestEndpoint {
                     url: format!("{}/messages", mock.url),
                     websocket_url: None,
-                    max_attempts: std::num::NonZeroU32::MIN,
                 },
             ),
         ) as std::sync::Arc<dyn kata_agent::adapter::AgentAdapter>,
@@ -2374,7 +2367,6 @@ async fn a_nanocode_turn_on(
                 kata_agent_nanocode::adapter::TestEndpoint {
                     url: mock.url.clone(),
                     websocket_url: None,
-                    max_attempts: std::num::NonZeroU32::MIN,
                 },
             ),
         ) as std::sync::Arc<dyn kata_agent::adapter::AgentAdapter>,
@@ -2977,10 +2969,6 @@ const NANOCODE_KINDS: [NanocodeKind; 2] = [NanocodeKind::OpenAi, NanocodeKind::A
 const CREDIT_REFUSAL: &str = "Your credit balance is too low to access the Anthropic API. \
      Please go to Plans & Billing to upgrade or purchase credits.";
 
-/// The attempts the Responses kind's test endpoint makes for one model call in
-/// these cells: more than one, so a transient failure outlives a retry.
-const RESPONSES_ATTEMPTS: std::num::NonZeroU32 = std::num::NonZeroU32::new(2).unwrap();
-
 impl NanocodeKind {
     const fn adapter_kind(self) -> kata_types::agent::AdapterKind {
         match self {
@@ -3004,13 +2992,11 @@ impl NanocodeKind {
                     url: mock.url.clone(),
                     websocket_url: matches!(self, Self::OpenAiWebSocket)
                         .then(|| mock.ws_url.clone()),
-                    max_attempts: RESPONSES_ATTEMPTS,
                 }),
             Self::Anthropic => kata_agent_nanocode::NanocodeAdapter::anthropic().with_endpoint(
                 kata_agent_nanocode::adapter::TestEndpoint {
                     url: format!("{}/messages", mock.url),
                     websocket_url: None,
-                    max_attempts: std::num::NonZeroU32::MIN,
                 },
             ),
         }
@@ -3018,15 +3004,13 @@ impl NanocodeKind {
 
     /// The requests the kind's client sends for one call every attempt of
     /// which is answered [`Self::server_error`], MEASURED at 8ec3b215: the
-    /// Responses client makes [`RESPONSES_ATTEMPTS`], then re-sends the call
-    /// [`RESPONSES_RECONNECTS`] times, each again for [`RESPONSES_ATTEMPTS`];
+    /// Responses client makes the one attempt kata configures, then re-sends
+    /// the call [`RESPONSES_RECONNECTS`] times;
     /// the Messages client makes one, the error's `retry-after` past the
     /// minute it waits.
     fn transient_attempts(self) -> usize {
         match self {
-            Self::OpenAi | Self::OpenAiWebSocket => {
-                RESPONSES_ATTEMPTS.get() as usize * (1 + RESPONSES_RECONNECTS)
-            }
+            Self::OpenAi | Self::OpenAiWebSocket => 1 + RESPONSES_RECONNECTS,
             Self::Anthropic => 1,
         }
     }

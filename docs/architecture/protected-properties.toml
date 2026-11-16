@@ -809,7 +809,7 @@ binary = "agent_turn_capsule"
 test = "a_transient_nanocode_failure_is_not_performed_and_a_fresh_attempt_completes"
 kind = "host-free"
 layer = "L1"
-pins = "on both nanocode kinds, a turn whose first call's every attempt is answered 500 (a 529 is waited out for up to 600 s since 8ec3b215; the Responses client sends 12, the Messages client 1, `retry-after` 61 s) is, durably, `proven_not_performed` with `provider_failure` `transient` naming HTTP 500 and an `Unavailable` charge; a fresh attempt against the same mock completes on its next answer (red at a81296c51: `proven_ambiguous`, which the main never re-runs)"
+pins = "on both nanocode kinds, a turn whose first call's every attempt is answered 500 (a 529 is waited out for up to 600 s since 8ec3b215; the Responses client sends 6, kata's one attempt and nanocode's five re-sends, the Messages client 1, `retry-after` 61 s) is, durably, `proven_not_performed` with `provider_failure` `transient` naming HTTP 500 and an `Unavailable` charge; a fresh attempt against the same mock completes on its next answer (red at a81296c51: `proven_ambiguous`, which the main never re-runs)"
 
 [[property.cell]]
 package = "kata-worker"
@@ -929,7 +929,15 @@ binary = "nanocode_qualification"
 test = "a_transient_failure_past_the_harness_retries_is_classed_transient"
 kind = "host-free"
 layer = "L1"
-pins = "on both kinds, every attempt of the turn's first call answered 500 (a 529 is now waited out for up to 600 s): the mock's own log holds every attempt the kind's client makes (the Responses test endpoint's two, each re-sent five times, 12; the Messages client's hard-coded eleven) and the turn ends `ProviderFailed` classed `Transient`, naming the provider's answer, charged UNKNOWN, never zero (red at a81296c51: `Ambiguous{ModelTokens}`)"
+pins = "on both kinds, every attempt of the turn's first call answered 500 (a 529 is now waited out for up to 600 s): the mock's own log holds every attempt the kind's client makes (the Responses client's one attempt, as kata configures it, re-sent five times, 6; the Messages client's hard-coded eleven) and the turn ends `ProviderFailed` classed `Transient`, naming the provider's answer, charged UNKNOWN, never zero (red at a81296c51: `Ambiguous{ModelTokens}`)"
+
+[[property.cell]]
+package = "kata-agent-nanocode"
+binary = "nanocode_qualification"
+test = "the_responses_client_sends_a_failing_call_six_times_within_seconds"
+kind = "host-free"
+layer = "L1"
+pins = "kata configures nanocode's Responses client to one attempt (`RESPONSES_MAX_ATTEMPTS`), so a call every send of which fails is sent six times over HTTPS (answered 500) and seven over the WebSocket (dropped at once; nanocode falls back to HTTPS), each count read off the mock's own log, and the turn ends `Transient` within 6.2 s to 16.5 s (MEASURED at 8ec3b215: 6.22 s on each transport; red with `configure` left at nanocode's default five attempts: the call sent past the script, the turn completed at 17.5 s)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"

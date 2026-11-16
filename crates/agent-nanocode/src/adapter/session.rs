@@ -1290,25 +1290,48 @@ fn turn_date() -> String {
     chrono::Utc::now().format("%Y-%m-%d").to_string()
 }
 
-/// The Responses client pointed where `endpoint` says: nanocode's own
-/// provider endpoints in production.
+/// The attempts nanocode's Responses client makes of one model call before
+/// its stream re-sends ([`configure`]): one, the fewest it takes. kata is the
+/// retry authority (the runner re-runs a transient stage and walks a fallback
+/// panel), so the harness's own retrying is held as near as nanocode's public
+/// knobs allow to what it was at 2ac77424, five attempts with 1, 2, 4 and 8 s of
+/// backoff between them. Since 8ec3b215 the client re-sends a Generation call
+/// whose stream failed reconnectably five more times beyond `max_attempts`
+/// (its `STREAM_MAX_RETRIES`, 200 ms doubling), each re-send with
+/// `max_attempts` attempts of its own, and no knob reaches that count: at one
+/// attempt a call that keeps failing is sent six times in about 6.2 s of
+/// backoff (seven on the WebSocket, which first falls back to HTTPS), where
+/// nanocode's default five would send it thirty. MEASURED at 8ec3b215
+/// (`nanocode_qualification`'s
+/// `the_responses_client_sends_a_failing_call_six_times_within_seconds`). No
+/// knob reaches nanocode's patience either: a 429, 502, 503, 504 or 529 (or an
+/// overload or rate-limit error event) is retried whatever `max_attempts` says
+/// until its backoff would pass 600 s from the call's first attempt
+/// (`nanocode_http`'s `PATIENCE`; MEASURED at 8ec3b215, a call answered 503
+/// every time: 49 sends over 605 s), and a compaction call, which nanocode
+/// does not re-send, makes its one attempt.
+const RESPONSES_MAX_ATTEMPTS: std::num::NonZeroU32 = std::num::NonZeroU32::MIN;
+
+/// The Responses client pointed where `endpoint` says (nanocode's own provider
+/// endpoints in production), making [`RESPONSES_MAX_ATTEMPTS`] attempts of a
+/// call.
 #[cfg(feature = "test-support")]
 fn configure(
     client: nanocode_backend_codex::client::OpenAiBuilder,
     endpoint: &Endpoint,
 ) -> nanocode_backend_codex::client::OpenAiBuilder {
     use nanocode_backend_codex::transport::ResponsesTransport;
+    let client = client.max_attempts(RESPONSES_MAX_ATTEMPTS);
     let Some(test) = endpoint.test.as_ref() else {
         return client;
     };
     let client = client.api_base_url(test.url.clone());
-    let client = match test.websocket_url.as_ref() {
+    match test.websocket_url.as_ref() {
         Some(url) => client
             .websocket_url(url.clone())
             .transport(ResponsesTransport::WebSocket),
         None => client.transport(ResponsesTransport::Https),
-    };
-    client.max_attempts(test.max_attempts)
+    }
 }
 
 #[cfg(not(feature = "test-support"))]
@@ -1316,7 +1339,7 @@ const fn configure(
     client: nanocode_backend_codex::client::OpenAiBuilder,
     _endpoint: &Endpoint,
 ) -> nanocode_backend_codex::client::OpenAiBuilder {
-    client
+    client.max_attempts(RESPONSES_MAX_ATTEMPTS)
 }
 
 fn messages_url(endpoint: &Endpoint) -> String {

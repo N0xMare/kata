@@ -133,9 +133,6 @@ pub struct TestEndpoint {
     pub url: String,
     /// The Responses WebSocket URL; `None` runs the HTTPS transport.
     pub websocket_url: Option<String>,
-    /// nanocode's attempts per Responses call (its default retries five
-    /// times with backoff).
-    pub max_attempts: std::num::NonZeroU32,
 }
 
 /// The adapter for one harness kind. Stateless: a session holds the turn.

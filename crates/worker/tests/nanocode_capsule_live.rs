@@ -42,7 +42,6 @@ mod mock_provider;
 #[allow(dead_code)]
 mod toolhost_capsule;
 
-use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -101,7 +100,6 @@ fn adapter(kind: AdapterKind, mock: &MockProvider) -> NanocodeAdapter {
     adapter.with_endpoint(TestEndpoint {
         url,
         websocket_url: None,
-        max_attempts: NonZeroU32::MIN,
     })
 }
 

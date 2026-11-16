@@ -566,8 +566,10 @@ properties = []
 
 # FINDING F3. ADR §1 and §5: a model request is never re-issued; "nothing that may
 # have been processed is re-issued". kata runs nanocode's own retry layers (Responses:
-# `ResponsesRetryPolicy`'s default 5 tries; Messages: 5, or 3 without tools, fixed in
-# the backend, beyond any `max_attempts`), which re-send a request whose stream failed
+# the one attempt kata configures, then up to five re-sends of a call whose stream
+# failed, beyond any `max_attempts`; Messages: 11, or 3 without tools, fixed in the
+# backend; both wait out a 429, 502, 503, 504 or 529 for up to 600 s; nanocode
+# `8ec3b215`), which re-send a request whose stream failed
 # before a response reached the harness. Under time_bound alone (no Unknown freeze) a
 # request that failed so (Unknown{delivered = false}, or Unknown{gateway_lost} after a
 # gateway crash: either may have been processed) is sent again by the harness, through

@@ -1,8 +1,6 @@
 //! The Anthropic kind beside `openai_turn.rs`: its adapter pointed at a mock's
 //! Messages endpoint, and its prompt on an API key.
 
-use std::num::NonZeroU32;
-
 use kata_agent_nanocode::adapter::TestEndpoint;
 use kata_agent_nanocode::{HarnessAuth, NanocodeAdapter};
 use kata_types::agent::{HarnessCredential, Prompt};
@@ -26,6 +24,5 @@ pub fn anthropic(url: &str) -> NanocodeAdapter {
     NanocodeAdapter::anthropic().with_endpoint(TestEndpoint {
         url: format!("{url}/messages"),
         websocket_url: None,
-        max_attempts: NonZeroU32::MIN,
     })
 }

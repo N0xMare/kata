@@ -40,7 +40,6 @@ mod toolhost_double;
 // cell in an interpreter process: this binary, re-executed.
 kata_code_mode_host::interpreter_entry!();
 
-use std::num::NonZeroU32;
 use std::time::Duration;
 
 use kata_agent::adapter::session::CancelToken;
@@ -968,7 +967,6 @@ fn anthropic(mock: &MockProvider) -> NanocodeAdapter {
     NanocodeAdapter::anthropic().with_endpoint(TestEndpoint {
         url: format!("{}/messages", mock.url),
         websocket_url: None,
-        max_attempts: NonZeroU32::MIN,
     })
 }
 
@@ -1570,7 +1568,6 @@ async fn a_refused_messages_connect_is_marked_conservatively() {
     let adapter = NanocodeAdapter::anthropic().with_endpoint(TestEndpoint {
         url: format!("{url}/messages"),
         websocket_url: None,
-        max_attempts: NonZeroU32::MIN,
     });
     let (mut session, _witness) = open(&adapter, DoubleConfig::default());
     let outcome = exhausting_turn(session.as_mut(), &anthropic_prompt("go")).await;
@@ -3907,15 +3904,14 @@ impl Kind {
     }
 
     /// The model requests the kind's client sends for one call whose every
-    /// attempt fails transiently, MEASURED at 8ec3b215: the Responses kind's
-    /// test endpoint makes [`TRANSIENT_ATTEMPTS`], then re-sends the call
-    /// [`RECONNECTS`] times, each again for [`TRANSIENT_ATTEMPTS`]; the
-    /// Messages client makes eleven whatever kata asks (nanocode hard-codes
-    /// them; five at 2ac77424), with backoff between them
-    /// ([`RETRY_EXHAUSTION_BOUND`]).
+    /// attempt fails transiently, MEASURED at 8ec3b215: the Responses client
+    /// makes the one attempt kata configures (`RESPONSES_MAX_ATTEMPTS`), then
+    /// re-sends the call [`RECONNECTS`] times; the Messages client makes
+    /// eleven whatever kata asks (nanocode hard-codes them; five at 2ac77424),
+    /// with backoff between them ([`RETRY_EXHAUSTION_BOUND`]).
     const fn transient_attempts(self) -> usize {
         match self {
-            Self::OpenAi => TRANSIENT_ATTEMPTS.get() as usize * (1 + RECONNECTS),
+            Self::OpenAi => 1 + RECONNECTS,
             Self::Anthropic => 11,
         }
     }
@@ -3927,16 +3923,11 @@ impl Kind {
             Self::OpenAi => NanocodeAdapter::openai().with_endpoint(TestEndpoint {
                 url: mock.url.clone(),
                 websocket_url: None,
-                max_attempts: TRANSIENT_ATTEMPTS,
             }),
             Self::Anthropic => anthropic(mock),
         }
     }
 }
-
-/// The attempts the Responses kind's test endpoint makes for one model call in
-/// the transient cells: more than one, so the turn fails past a retry.
-const TRANSIENT_ATTEMPTS: NonZeroU32 = NonZeroU32::new(2).unwrap();
 
 /// **A provider's refusal of the turn's first request is a known failure, not
 /// an ambiguity, on either kind.** The mock answers the one request with a 400
@@ -4028,6 +4019,68 @@ async fn a_transient_failure_past_the_harness_retries_is_classed_transient() {
         );
     }
 }
+
+/// **kata holds nanocode's Responses client to six sends of a failing call
+/// (seven on the WebSocket), within seconds.** kata, not the harness, is the
+/// retry authority, so the adapter configures the client's fewest attempts (its
+/// `RESPONSES_MAX_ATTEMPTS`, one); nanocode then re-sends a call whose stream
+/// failed reconnectably [`RECONNECTS`] more times, a count no knob reaches, and
+/// on the WebSocket transport (production's) it first falls back to HTTPS once
+/// the attempt fails. Every send of the turn's first call fails — answered 500
+/// over HTTPS, the socket or connection dropped at once over the WebSocket —
+/// and the mock's own log holds exactly `1 + RECONNECTS` requests over HTTPS,
+/// `2 + RECONNECTS` over the WebSocket, the turn ending between
+/// [`RESPONSES_RETRY_BACKOFF`] (nanocode's 200 ms doubling between re-sends)
+/// and [`RESPONSES_RETRY_CEILING`] after it began. MEASURED at 8ec3b215: 6
+/// requests in 6.22 s over HTTPS, 7 in 6.22 s over the WebSocket.
+///
+/// **Would red if:** the adapter left the client's attempts at nanocode's
+/// default, five (watched: `configure` without its `max_attempts`).
+#[tokio::test]
+async fn the_responses_client_sends_a_failing_call_six_times_within_seconds() {
+    for websocket in [false, true] {
+        let (failed, sends) = if websocket {
+            (Reply::Drop, 2 + RECONNECTS)
+        } else {
+            (Kind::OpenAi.server_error(), 1 + RECONNECTS)
+        };
+        let mut script = vec![failed; sends];
+        script.push(Kind::OpenAi.answer("r1", "must never be asked for"));
+        let mock = MockProvider::start(script).await;
+        let adapter = openai(&mock.url, websocket.then_some(mock.ws_url.as_str()));
+        let (mut session, _witness) = open(&adapter, DoubleConfig::default());
+        let started = std::time::Instant::now();
+        let outcome = turn(session.as_mut(), &openai_prompt("go")).await;
+        let took = started.elapsed();
+        let TurnOutcome::ProviderFailed { class, .. } = &outcome else {
+            panic!("websocket {websocket}: expected ProviderFailed, got {outcome:?}");
+        };
+        assert_eq!(
+            *class,
+            ProviderFailureClass::Transient,
+            "websocket {websocket}"
+        );
+        assert_eq!(
+            mock.requests().len(),
+            sends,
+            "websocket {websocket}: kata's one attempt and nanocode's re-sends of it, no more"
+        );
+        assert!(
+            (RESPONSES_RETRY_BACKOFF..RESPONSES_RETRY_CEILING).contains(&took),
+            "websocket {websocket}: the turn ended {took:?} after it began"
+        );
+    }
+}
+
+/// nanocode's backoff between its [`RECONNECTS`] re-sends of a Responses call:
+/// 200, 400, 800, 1,600 and 3,200 ms.
+const RESPONSES_RETRY_BACKOFF: Duration = Duration::from_millis(6_200);
+
+/// What a Responses call kata's adapter configures may take to fail past
+/// nanocode's re-sends, the mock answering each at once: the 2ac77424 client's
+/// backoff before its fifth attempt (1, 2, 4 and 8 s, each at most 10% over),
+/// the most the harness retried a call before kata configured it.
+const RESPONSES_RETRY_CEILING: Duration = Duration::from_millis(16_500);
 
 /// **A provider failure after a tool call says a tool ran, and keeps what
 /// kata metered.** The first call's Code Mode cell runs `true` in the capsule
@@ -4803,7 +4856,6 @@ async fn the_claude_model_facing_tool_list_is_the_pinned_set() {
     let adapter = NanocodeAdapter::anthropic().with_endpoint(TestEndpoint {
         url: format!("{}/messages", mock.url),
         websocket_url: None,
-        max_attempts: NonZeroU32::MIN,
     });
     let (mut session, _witness) = open(&adapter, DoubleConfig::default());
     let mut prompt = openai_prompt("go");

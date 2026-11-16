@@ -2,7 +2,6 @@
 //! prompt, the adapter pointed at a mock provider, and the bounded turn.
 //! Shared by every test binary that drives the adapter against the mocks.
 
-use std::num::NonZeroU32;
 use std::time::Duration;
 
 use kata_agent::adapter::session::CancelToken;
@@ -72,7 +71,6 @@ pub fn openai(url: &str, websocket_url: Option<&str>) -> NanocodeAdapter {
     NanocodeAdapter::openai().with_endpoint(TestEndpoint {
         url: url.to_owned(),
         websocket_url: websocket_url.map(str::to_owned),
-        max_attempts: NonZeroU32::MIN,
     })
 }
 

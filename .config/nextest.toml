@@ -117,10 +117,10 @@ final-status-level = "slow"
 [[profile.default.overrides]]
 # nanocode's own retries, exhausted on purpose (kata-agent-nanocode's
 # `RETRY_EXHAUSTION_CELLS`): since nanocode 8ec3b215 the Messages client makes
-# 11 attempts whatever kata asks and the Responses client re-sends a failed
-# stream 5 times beyond `max_attempts`, so a turn that classifies an exhausted
-# failure waits out nanocode's backoff. MEASURED: 178.8 s for a dropped Messages
-# connection, 183.8 s for a 500. Each cell's turn is bounded at 300 s
+# 11 attempts whatever kata asks (no knob reaches the count; the Responses
+# client's, which kata configures, ends within seconds), so a Messages turn that
+# classifies an exhausted failure waits out nanocode's backoff. MEASURED: 178.8 s
+# for a dropped Messages connection, 183.8 s for a 500. Each cell's turn is bounded at 300 s
 # (`RETRY_EXHAUSTION_BOUND`); `the_turn_bound_is_at_most_half_of_nextests_kill`
 # requires this kill to be at least twice that.
 filter = 'package(kata-agent-nanocode) & binary(nanocode_qualification) & (test(=a_transient_failure_past_the_harness_retries_is_classed_transient) | test(=an_anthropic_dropped_model_connection_after_a_tool_frame_is_a_transient_failure) | test(=a_refused_messages_connect_is_marked_conservatively))'

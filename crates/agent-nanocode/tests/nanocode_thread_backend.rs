@@ -42,7 +42,6 @@ mod quickjs_threads;
 #[allow(dead_code)]
 mod toolhost_double;
 
-use std::num::NonZeroU32;
 use std::time::Duration;
 
 use kata_agent::adapter::session::CancelToken;
@@ -62,7 +61,6 @@ fn anthropic(mock: &MockProvider) -> NanocodeAdapter {
     NanocodeAdapter::anthropic().with_endpoint(TestEndpoint {
         url: format!("{}/messages", mock.url),
         websocket_url: None,
-        max_attempts: NonZeroU32::MIN,
     })
 }
 
