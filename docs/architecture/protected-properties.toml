@@ -10396,6 +10396,30 @@ layer = "L1"
 pins = "under values `]` and `d]`, `LiftedSecrets::scrub` of `a]b d] c]e]` and the concatenated releases of `RollingScrub::push` at every one-, two- and three-piece char-boundary split equal `a[redacted]b [redacted] c[redacted]e[redacted]`, and the scrub's `Debug` reports 0 bytes held after the last push"
 
 [[construct.cell]]
+package = "kata-types"
+binary = "lib"
+test = "redaction::tests::rolling_scrub_holds_less_than_a_value_through_a_run_of_repeated_values"
+kind = "host-free"
+layer = "L1"
+pins = "under values `abab` and `XYZ☃`, `x ` + 64 KiB of `ab` + ` y` pushed through `RollingScrub::push` three bytes at a time leaves the scrub's `Debug` reporting fewer held bytes than the longest value after every push, and the releases concatenate to `x [redacted] y`"
+
+[[construct.cell]]
+package = "kata-types"
+binary = "lib"
+test = "redaction::tests::rolling_scrub_releases_a_run_on_the_push_that_settles_its_start"
+kind = "host-free"
+layer = "L1"
+pins = "`RollingScrub::push` of `a TOKENXY` under `TOKEN` and `XYZW` releases `a [redacted]` and holds 2 bytes; of `x ab` under `ab` and `abc` releases `x [redacted]` at once, then ` y` for `c y` and `d` for `d`, matching `LiftedSecrets::scrub` of `x abc y` and `x abd`; of `ababa` then `b` then ` y` under `abab` releases `[redacted]`, nothing, then ` y`"
+
+[[construct.cell]]
+package = "kata-types"
+binary = "lib"
+test = "redaction::tests::rolling_scrub_reads_back_as_the_whole_stream_scrub_for_random_streams"
+kind = "host-free"
+layer = "L1"
+pins = "for 20,000 seeded random sets of one to three short values over `a`, `b`, `é` (self-overlapping, mutually overlapping, prefixes of one another) and random streams ending in `#`, pushed in random char-boundary pieces (one char each in a quarter of the cases), the concatenated releases equal both `LiftedSecrets::scrub` of the stream and a reference scrub written in the test, and the scrub's `Debug` reports fewer held bytes than the longest value after every push and none after the last"
+
+[[construct.cell]]
 package = "kata-worker"
 binary = "lib"
 test = "capsule_progress::tests::a_summary_frame_carries_kind_and_a_head_of_delta"

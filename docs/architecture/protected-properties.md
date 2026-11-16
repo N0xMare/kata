@@ -1196,9 +1196,11 @@ emitter at all. Agent capsules stream their adapters' observed session events, e
 provider-influenced string scrubbed by the same pass the evidence record uses — the
 assistant's text deltas as one rolling stream (`RollingScrub`: a lifted value split
 across deltas is replaced whole, the held tail decided on the raw text — the earliest
-unfinished value head, at most the longest value less one byte, moved left over a run of
-overlapping occurrences it cuts into — and overlapping values redacted as one run, so
-the deltas read back as the whole stream's scrub), every other observed string alone; command
+unfinished value head, at most the longest value less one byte, a run of overlapping
+occurrences it cuts into placeheld at once and only its bytes past the tail kept raw, so
+the held text stays bounded however long a run of repeated values grows — and
+overlapping values redacted as one run, so the deltas read back as the whole stream's
+scrub), every other observed string alone; command
 capsules tail the provider's stdout and stderr spools under the attempt root. The wire
 arm is `WorkerMessage::CapsuleProgress`, bounded on every axis — a stream observation
 (a text delta, a spool line) once per kind per window, superseding only its own kind and

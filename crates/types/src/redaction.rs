@@ -269,45 +269,67 @@ impl LiftedSecrets {
 /// [`push`](Self::push) appends a piece to the RAW text it still holds and
 /// splits the whole at the start of the tail a later piece could still turn
 /// into an occurrence: the earliest suffix that is a non-empty PROPER prefix
-/// of a lifted value (at most the longest value's length minus one bytes),
-/// moved left to the start of a run of occurrences it cuts into. Everything
-/// before the split is scrubbed — as [`scrub_secret_values`] scrubs, on the
-/// raw text, never on a placeholder — and released; the tail stays raw. No
-/// occurrence the stream has not finished starts before the split, and no
-/// run of occurrences crosses it, so the released texts read back as the
-/// whole stream's scrub: a released text carries no byte of an occurrence,
-/// whatever values the set holds and however they overlap. What the stream's
-/// end still holds is never released — it is at most an unfinished value's
-/// head and the occurrences it overlaps, and a straddling value leaves
-/// NOTHING on the surface, the same rule as [`LiftedSecrets::cut`].
+/// of a lifted value. No occurrence the stream has not finished starts
+/// before the split, so a run of occurrences starting at or before it starts
+/// where it will always start: its placeholder is released then, once, and
+/// the bytes of the run past the split are held raw only so a later
+/// occurrence overlapping them joins the run rather than opening another.
+/// Everything else before the split is released as it is — the occurrences
+/// found, as [`scrub_secret_values`] finds them, on the raw text, never on a
+/// placeholder — and the tail stays raw. The held text is therefore at most
+/// the longest value's length minus one bytes however long a run of
+/// repeated values grows, and the released texts read back as the whole
+/// stream's scrub: a released text carries no byte of an occurrence,
+/// whatever values the set holds and however they overlap. What the
+/// stream's end still holds is never released — it is at most an unfinished
+/// value's head and the bytes of a run already placeheld, and a straddling
+/// value leaves NOTHING on the surface, the same rule as
+/// [`LiftedSecrets::cut`].
 ///
 /// `Debug` reports how many bytes it holds, never the bytes: the held tail
 /// may be a value's head.
 #[derive(Default)]
 pub struct RollingScrub {
     held: String,
+    /// The length of `held`'s leading bytes a run whose placeholder is
+    /// already released covers; an occurrence starting inside them joins
+    /// that run.
+    placeheld: usize,
 }
 
 impl RollingScrub {
     /// Append `piece` and release the scrubbed text no later piece can turn
     /// into a lifted value — possibly empty, when all of it could still be
-    /// one's head.
+    /// one's head or the run already released continues.
     #[must_use]
     pub fn push(&mut self, secrets: &LiftedSecrets, piece: &str) -> String {
         if secrets.is_empty() {
             return piece.to_owned();
         }
         self.held.push_str(piece);
-        let mut split = self.held.len() - secrets.unfinished_head_len(&self.held);
-        if let Some(run) = covered_runs(&self.held, &secrets.0)
-            .into_iter()
-            .find(|run| run.start < split && split < run.end)
-        {
-            split = run.start;
+        let split = self.held.len() - secrets.unfinished_head_len(&self.held);
+        let mut runs = covered_runs(&self.held, &secrets.0).into_iter().peekable();
+        let mut released = String::new();
+        let mut from = 0;
+        if self.placeheld > 0 {
+            let mut end = self.placeheld;
+            while let Some(run) = runs.next_if(|run| run.start < end) {
+                end = end.max(run.end);
+            }
+            from = end;
         }
-        let held = self.held.split_off(split);
-        let released = secrets.scrub(&self.held);
-        self.held = held;
+        // A run starting at or before the split starts there for good: no
+        // occurrence a later piece finishes can start before the split.
+        while let Some(run) = runs.next_if(|run| run.start <= split) {
+            released.push_str(&self.held[from..run.start]);
+            released.push_str(REDACTED_PLACEHOLDER);
+            from = run.end;
+        }
+        if from < split {
+            released.push_str(&self.held[from..split]);
+        }
+        self.placeheld = from.saturating_sub(split);
+        self.held.drain(..split);
         released
     }
 }
@@ -790,5 +812,220 @@ mod tests {
         let mut none = RollingScrub::default();
         assert_eq!(none.push(&LiftedSecrets::none(), "XY"), "XY");
         assert_eq!(format!("{none:?}"), "RollingScrub(0 byte(s) held)");
+    }
+
+    /// The byte count a [`RollingScrub`]'s `Debug` reports it holds.
+    fn held_len(scrub: &RollingScrub) -> usize {
+        let rendered = format!("{scrub:?}");
+        rendered
+            .strip_prefix("RollingScrub(")
+            .and_then(|rest| rest.strip_suffix(" byte(s) held)"))
+            .and_then(|count| count.parse().ok())
+            .unwrap_or_else(|| panic!("an unexpected Debug: {rendered}"))
+    }
+
+    /// **A stream repeating a value back to back holds less than a value,
+    /// however long the run grows.** `abab` overlaps itself, so `ababab…` is
+    /// ONE run of occurrences that every push extends; 64 KiB of it, pushed
+    /// three bytes at a time, reads back as one placeholder, and after every
+    /// push the scrub holds at most the longest value's length minus one —
+    /// so neither the held text nor a push's rescan of it grows with the
+    /// stream.
+    ///
+    /// **Would red if:** an open run were held raw until it closed (the held
+    /// text, and each push's rescan of it, grows with the run — quadratic in
+    /// the stream), or the run's placeholder were released once per push.
+    #[test]
+    fn rolling_scrub_holds_less_than_a_value_through_a_run_of_repeated_values() {
+        let values = ["abab", "XYZ☃"];
+        let longest = values.iter().map(|value| value.len()).max().unwrap();
+        let secrets = LiftedSecrets::new(values.iter().map(|value| (*value).to_owned()).collect());
+        let stream = format!("x {} y", "ab".repeat(32 * 1024));
+        let mut scrub = RollingScrub::default();
+        let mut released = String::new();
+        let mut from = 0;
+        while from < stream.len() {
+            let end = (from + 3).min(stream.len());
+            released.push_str(&scrub.push(&secrets, &stream[from..end]));
+            assert!(
+                held_len(&scrub) < longest,
+                "after {end} bytes the scrub holds {} bytes, a value is {longest}",
+                held_len(&scrub)
+            );
+            from = end;
+        }
+        assert_eq!(released, "x [redacted] y");
+    }
+
+    /// **A run's placeholder is released on the push that settles where the
+    /// run starts, and a value ending at the held tail is released whole on
+    /// that push.** `TOKEN` ends where the head `XY` of `XYZW` begins: the
+    /// push releases `a [redacted]` and holds `XY` alone. `ab` is whole and
+    /// also the head of `abc`: no later piece can start an occurrence before
+    /// it, so its placeholder is released at once and the run it may grow
+    /// into (`abc`) adds no second one.
+    ///
+    /// **Would red if:** a run ending exactly at the held tail were held with
+    /// it, or a whole occurrence starting exactly at the held tail were held
+    /// raw rather than released as its placeholder.
+    #[test]
+    fn rolling_scrub_releases_a_run_on_the_push_that_settles_its_start() {
+        let secrets = LiftedSecrets::new(vec!["TOKEN".to_owned(), "XYZW".to_owned()]);
+        let mut scrub = RollingScrub::default();
+        assert_eq!(scrub.push(&secrets, "a TOKENXY"), "a [redacted]");
+        assert_eq!(held_len(&scrub), 2, "only the head XY is held");
+        assert_eq!(scrub.push(&secrets, "Q"), "XYQ");
+
+        let secrets = LiftedSecrets::new(vec!["ab".to_owned(), "abc".to_owned()]);
+        let mut scrub = RollingScrub::default();
+        assert_eq!(scrub.push(&secrets, "x ab"), "x [redacted]");
+        assert_eq!(scrub.push(&secrets, "c y"), " y");
+        assert_eq!(secrets.scrub("x abc y"), "x [redacted] y");
+        let mut scrub = RollingScrub::default();
+        assert_eq!(scrub.push(&secrets, "x ab"), "x [redacted]");
+        assert_eq!(scrub.push(&secrets, "d"), "d");
+        assert_eq!(secrets.scrub("x abd"), "x [redacted]d");
+
+        let secrets = LiftedSecrets::new(vec!["abab".to_owned()]);
+        let mut scrub = RollingScrub::default();
+        assert_eq!(scrub.push(&secrets, "ababa"), "[redacted]");
+        assert_eq!(
+            scrub.push(&secrets, "b"),
+            "",
+            "the run grows; no second placeholder"
+        );
+        assert_eq!(scrub.push(&secrets, " y"), " y");
+    }
+
+    /// Deterministic splitmix64 step — the same seed draws the same case on
+    /// every platform.
+    fn splitmix64(state: &mut u64) -> u64 {
+        *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = *state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    /// A reference scrub that shares no code with the module: every
+    /// occurrence of every non-empty value found by testing each char
+    /// boundary, sorted, and a run of occurrences each starting before the
+    /// run so far ends replaced by one placeholder.
+    fn reference_scrub(text: &str, values: &[String]) -> String {
+        let mut occurrences: Vec<(usize, usize)> = (0..=text.len())
+            .filter(|at| text.is_char_boundary(*at))
+            .flat_map(|at| {
+                values
+                    .iter()
+                    .filter(move |value| {
+                        !value.is_empty() && text[at..].starts_with(value.as_str())
+                    })
+                    .map(move |value| (at, at + value.len()))
+            })
+            .collect();
+        occurrences.sort_unstable();
+        let mut out = String::new();
+        let mut from = 0;
+        let mut index = 0;
+        while index < occurrences.len() {
+            let (start, mut end) = occurrences[index];
+            index += 1;
+            while index < occurrences.len() && occurrences[index].0 < end {
+                end = end.max(occurrences[index].1);
+                index += 1;
+            }
+            out.push_str(&text[from..start]);
+            out.push_str("[redacted]");
+            from = end;
+        }
+        out.push_str(&text[from..]);
+        out
+    }
+
+    /// The seeded cases [`rolling_scrub_reads_back_as_the_whole_stream_scrub_for_random_streams`] draws.
+    const ROLLING_CASES: u64 = 20_000;
+
+    /// **For random value sets and streams, pushed in random pieces, the
+    /// releases read back as the whole stream's scrub and the scrub holds
+    /// less than a value after every push.** Values are drawn short from a
+    /// two-letter-plus-multibyte alphabet — so they overlap themselves and
+    /// each other and prefix one another — streams splice values into
+    /// random text, and pieces are cut at random char boundaries (one char
+    /// at a time in a quarter of the cases). Each stream ends on `#`, a char
+    /// no value holds, so the last push releases everything and the
+    /// read-back is the whole stream; it must equal both
+    /// [`LiftedSecrets::scrub`] and a reference written in the test.
+    ///
+    /// **Would red if:** a run were split across releases (two placeholders
+    /// for one run, or a placeholder for a run a later piece moved), a
+    /// value's head were released before the stream abandoned it, or the
+    /// held text outgrew a value.
+    #[test]
+    fn rolling_scrub_reads_back_as_the_whole_stream_scrub_for_random_streams() {
+        const ALPHABET: [&str; 5] = ["a", "b", "é", "☃", "c"];
+        for seed in 0..ROLLING_CASES {
+            let mut state = seed;
+            let mut draw =
+                |below: usize| usize::try_from(splitmix64(&mut state) % below as u64).unwrap();
+            let mut values: Vec<String> = Vec::new();
+            for _ in 0..=draw(3) {
+                let value: String = if !values.is_empty() && draw(3) == 0 {
+                    let base: Vec<char> = values[draw(values.len())].chars().collect();
+                    base[..=draw(base.len())].iter().collect()
+                } else {
+                    (0..=draw(4)).map(|_| ALPHABET[draw(3)]).collect()
+                };
+                values.push(value);
+            }
+            let mut stream = String::new();
+            for _ in 0..draw(12) {
+                if draw(2) == 0 {
+                    stream.push_str(&values[draw(values.len())]);
+                } else {
+                    stream.push_str(ALPHABET[draw(ALPHABET.len())]);
+                }
+            }
+            stream.push('#');
+            let longest = values.iter().map(String::len).max().unwrap();
+            let secrets = LiftedSecrets::new(values.clone());
+            let one_char_pieces = draw(4) == 0;
+            let mut scrub = RollingScrub::default();
+            let mut released = String::new();
+            let mut rest = stream.as_str();
+            while !rest.is_empty() {
+                let chars = rest.chars().count();
+                let take = if one_char_pieces {
+                    1
+                } else {
+                    1 + draw(chars.min(6))
+                };
+                let end = rest
+                    .char_indices()
+                    .nth(take)
+                    .map_or(rest.len(), |(at, _)| at);
+                released.push_str(&scrub.push(&secrets, &rest[..end]));
+                assert!(
+                    held_len(&scrub) < longest,
+                    "seed {seed} {values:?} {stream:?}: holds {} bytes",
+                    held_len(&scrub)
+                );
+                rest = &rest[end..];
+            }
+            let expected = reference_scrub(&stream, &values);
+            assert_eq!(
+                secrets.scrub(&stream),
+                expected,
+                "seed {seed} {values:?} {stream:?}"
+            );
+            assert_eq!(
+                released, expected,
+                "seed {seed} {values:?} {stream:?}: the read-back"
+            );
+            assert_eq!(
+                held_len(&scrub),
+                0,
+                "seed {seed}: the closing `#` releases all"
+            );
+        }
     }
 }
