@@ -14206,7 +14206,7 @@ binary = "nanocode_seam"
 test = "nanocode_rev_matches_the_lockfile"
 kind = "host-free"
 layer = "L1"
-pins = "Parses the workspace Cargo.lock and asserts every nanocode* package (or nanocode-repo git source) resolves to exactly `git+https://github.com/gakonst/nanocode?rev=<NANOCODE_REV>#<NANOCODE_REV>` (the vendored engine as one path package) and that every directly depended nanocode crate is present."
+pins = "Parses the workspace Cargo.lock and asserts every nanocode* package (or nanocode-repo git source) resolves to exactly `git+https://github.com/nanocodexyz/nanocode?rev=<NANOCODE_REV>#<NANOCODE_REV>` (the vendored engine as one path package) and that every directly depended nanocode crate is present."
 
 [[construct.cell]]
 package = "kata-agent-nanocode"

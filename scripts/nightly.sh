@@ -133,10 +133,10 @@ MUTANTS_SECS="${NIGHTLY_MUTANTS_SECS:-2700}"
 # reads (the self-test points it at a fixture), the scratch directory it builds in
 # (refused when it and the checkout overlap), and its wall cap, which the bisect's wall
 # cap gives back (see the step). The URL is not the only network source: the re-vendor
-# and cargo still resolve nanocode at https://github.com/gakonst/nanocode
+# and cargo still resolve nanocode at https://github.com/nanocodexyz/nanocode
 # (nanocode-vendor.py's REPOSITORY, which the pins name), so a mirror here does not
 # keep the step off GitHub.
-NANOCODE_URL="${NIGHTLY_NANOCODE_URL:-https://github.com/gakonst/nanocode}"
+NANOCODE_URL="${NIGHTLY_NANOCODE_URL:-https://github.com/nanocodexyz/nanocode}"
 NANOCODE_DRIFT_DIR="${NIGHTLY_NANOCODE_DRIFT_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/kata/nanocode-drift}"
 NANOCODE_DRIFT_SECS="${NIGHTLY_NANOCODE_DRIFT_SECS:-2700}"
 
@@ -1906,9 +1906,9 @@ nanocode_drift_self_test() {
     {
         printf '[workspace]\nmembers = ["crates/agent-nanocode"]\nresolver = "2"\n\n[workspace.dependencies]\n'
         for crate in nanocode-backend-codex nanocode-backend-claude nanocode-process-contracts; do
-            printf '%s = { git = "https://github.com/gakonst/nanocode", rev = "%s" }\n' "$crate" "$u1"
+            printf '%s = { git = "https://github.com/nanocodexyz/nanocode", rev = "%s" }\n' "$crate" "$u1"
         done
-        printf '\n[patch."https://github.com/gakonst/nanocode"]\n'
+        printf '\n[patch."https://github.com/nanocodexyz/nanocode"]\n'
         printf 'nanocode-code-mode-engine = { path = "vendor/nanocode-code-mode-engine" }\n'
     } >"$kata/Cargo.toml"
     printf '[package]\nname = "kata-agent-nanocode"\nversion = "0.0.1"\nedition = "2021"\n' \

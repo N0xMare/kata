@@ -7,7 +7,7 @@
 /// is on disk: the crate the workspace's `[patch]` builds, its patch file,
 /// and the interpreter host this crate depends on.** The roots are read out
 /// of the workspace manifest, not out of `build.rs`: the path the
-/// `[patch."https://github.com/gakonst/nanocode"]` entry routes
+/// `[patch."https://github.com/nanocodexyz/nanocode"]` entry routes
 /// `nanocode-code-mode-engine` to, that path's `.patch` sibling, which
 /// `scripts/nanocode-vendor.py` derives the tree from, and the manifest and
 /// `src/` of the path the workspace dependency `kata-code-mode-host` names.
@@ -25,7 +25,7 @@ fn the_engine_digest_is_the_blake3_of_the_engine_as_kata_runs_it() {
         .expect("the workspace manifest reads")
         .parse()
         .expect("the workspace manifest parses");
-    let engine = manifest["patch"]["https://github.com/gakonst/nanocode"]
+    let engine = manifest["patch"]["https://github.com/nanocodexyz/nanocode"]
         ["nanocode-code-mode-engine"]["path"]
         .as_str()
         .expect("the workspace patches the engine to a path");

@@ -1,4 +1,4 @@
-//! kata's embedding of the nanocode agent harness (`github.com/gakonst/nanocode`).
+//! kata's embedding of the nanocode agent harness (`github.com/nanocodexyz/nanocode`).
 //!
 //! nanocode's agent loop runs in the worker, and every tool call it makes goes
 //! through nanocode's host seam (`ShellExecutor`, `ForegroundExecutor` and

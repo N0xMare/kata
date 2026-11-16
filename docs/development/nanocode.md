@@ -1,6 +1,6 @@
 # nanocode in kata
 
-kata embeds [nanocode](https://github.com/gakonst/nanocode) as a library
+kata embeds [nanocode](https://github.com/nanocodexyz/nanocode) as a library
 (`crates/agent-nanocode`). nanocode publishes no releases kata can pin, so kata pins
 one upstream commit and tracks nanocode's `master` by moving that pin deliberately.
 
@@ -33,7 +33,7 @@ one upstream commit and tracks nanocode's `master` by moving that pin deliberate
   mark in the request the mock receives. `harness_identity` folds the blocks.
 - **One vendored crate**, `vendor/nanocode-code-mode-engine`: nanocode's
   `crates/runtime/code-mode-engine`, the QuickJS worker that runs Code Mode cells.
-  The workspace `[patch."https://github.com/gakonst/nanocode"]` entry builds every
+  The workspace `[patch."https://github.com/nanocodexyz/nanocode"]` entry builds every
   dependency on that crate from this copy, so it is part of a fresh clone and
   `cargo build --locked` needs nothing kata does not already fetch.
 

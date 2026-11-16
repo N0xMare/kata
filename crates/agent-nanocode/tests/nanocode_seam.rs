@@ -16,7 +16,7 @@
 //! * `nanocode_rev_matches_the_lockfile` refuses a lockfile in which any package
 //!   named `nanocode*`, or any git package from the nanocode repository in any
 //!   spelling (`is_nanocode_source`), has a source other than exactly
-//!   `git+https://github.com/gakonst/nanocode?rev=<NANOCODE_REV>#<NANOCODE_REV>`
+//!   `git+https://github.com/nanocodexyz/nanocode?rev=<NANOCODE_REV>#<NANOCODE_REV>`
 //!   (a `VENDORED_CRATES` crate instead has exactly one entry, a path package), and
 //!   a lockfile missing one of the crates kata depends on directly. That the path
 //!   package's bytes are upstream at `NANOCODE_REV` plus kata's patch is
@@ -221,7 +221,7 @@ fn tool_set_drift_names_what_moved_and_nothing_when_nothing_did() {
 
 /// The repository every nanocode package must come from, as cargo writes a git
 /// source: `git+<url>?rev=<manifest rev>#<resolved commit>`.
-const NANOCODE_REPOSITORY: &str = "https://github.com/gakonst/nanocode";
+const NANOCODE_REPOSITORY: &str = "https://github.com/nanocodexyz/nanocode";
 
 /// The crates kata depends on directly; everything else nanocode brings in is
 /// theirs. `nanocode-code-mode-engine` is the vendored one, a path dependency.
@@ -328,13 +328,13 @@ fn repository_identity(url: &str) -> Option<String> {
 #[test]
 fn nanocode_source_is_recognized_in_every_spelling() {
     for spelling in [
-        "git+https://github.com/gakonst/nanocode?rev=deadbeef#deadbeef",
-        "git+https://github.com/gakonst/nanocode.git?rev=deadbeef#deadbeef",
-        "git+https://github.com/gakonst/nanocode/?rev=deadbeef#deadbeef",
-        "git+https://github.com/gakonst/nanocode.git/#deadbeef",
-        "git+https://GitHub.com/Gakonst/NanoCode#deadbeef",
-        "git+http://github.com/gakonst/nanocode#deadbeef",
-        "git+ssh://git@github.com/gakonst/nanocode.git#deadbeef",
+        "git+https://github.com/nanocodexyz/nanocode?rev=deadbeef#deadbeef",
+        "git+https://github.com/nanocodexyz/nanocode.git?rev=deadbeef#deadbeef",
+        "git+https://github.com/nanocodexyz/nanocode/?rev=deadbeef#deadbeef",
+        "git+https://github.com/nanocodexyz/nanocode.git/#deadbeef",
+        "git+https://GitHub.com/NanoCodeXYZ/NanoCode#deadbeef",
+        "git+http://github.com/nanocodexyz/nanocode#deadbeef",
+        "git+ssh://git@github.com/nanocodexyz/nanocode.git#deadbeef",
     ] {
         assert!(
             is_nanocode_source(spelling),
@@ -342,9 +342,9 @@ fn nanocode_source_is_recognized_in_every_spelling() {
         );
     }
     for other in [
-        "git+https://github.com/gakonst/nanocode-fork#deadbeef",
+        "git+https://github.com/nanocodexyz/nanocode-fork#deadbeef",
         "git+https://github.com/someone/nanocode#deadbeef",
-        "git+https://gitlab.com/gakonst/nanocode#deadbeef",
+        "git+https://gitlab.com/nanocodexyz/nanocode#deadbeef",
         "registry+https://github.com/rust-lang/crates.io-index",
         "<no source: a path package>",
     ] {

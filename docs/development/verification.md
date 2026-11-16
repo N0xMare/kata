@@ -790,7 +790,7 @@ HANDED, not what it can REACH: it is not a sandbox. It runs as the nightly's use
 user's files readable and writable by absolute path and the network open, so one malicious
 push to nanocode's `master` is code execution as that user at the next nightly. Only the
 step's own fetch of `master`'s head follows `NIGHTLY_NANOCODE_URL`; the re-vendor and cargo
-resolve nanocode at `https://github.com/gakonst/nanocode` whatever it says.
+resolve nanocode at `https://github.com/nanocodexyz/nanocode` whatever it says.
 
 **A red L2** blocks every further push until it is TRIAGED: the red cell fixed, or
 bisected to the commit that owns it and that commit fixed or reverted. The push that

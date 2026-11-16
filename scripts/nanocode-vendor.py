@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """The vendored nanocode Code Mode engine: derive it, check it, record its patch, bump it.
 
-kata tracks nanocode (github.com/gakonst/nanocode) by git rev, with exactly one
+kata tracks nanocode (github.com/nanocodexyz/nanocode) by git rev, with exactly one
 crate vendored in-tree: `nanocode-code-mode-engine`, the native QuickJS worker,
 because kata patches a resource guard into it (memory, stack, per-cell wall and
 per-cell output limits) and nanocode has no public seam for those. The workspace
 `Cargo.toml` routes every dependency on that crate to `vendor/` with a
-`[patch."https://github.com/gakonst/nanocode"]` entry, so the copy is built from
+`[patch."https://github.com/nanocodexyz/nanocode"]` entry, so the copy is built from
 a fresh clone with no network path kata does not already take.
 
 THE VENDORED TREE IS A FUNCTION OF THREE INPUTS. `vendor/nanocode-code-mode-engine/`
@@ -62,7 +62,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-REPOSITORY = "https://github.com/gakonst/nanocode"
+REPOSITORY = "https://github.com/nanocodexyz/nanocode"
 CRATE = "nanocode-code-mode-engine"
 UPSTREAM_PATH = "crates/runtime/code-mode-engine"
 LICENCE_FILES = ("LICENSE-MIT", "LICENSE-APACHE")

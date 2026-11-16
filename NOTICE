@@ -85,7 +85,7 @@ them.
 3. nanocode — Rust git dependencies; one crate vendored and modified
 ==============================================================================
 
-Upstream:  https://github.com/gakonst/nanocode
+Upstream:  https://github.com/nanocodexyz/nanocode
 Revision:  the `rev` of the three nanocode entries in Cargo.toml
            (`NANOCODE_REV` in crates/agent-nanocode/src/lib.rs)
 License:   MIT OR Apache-2.0

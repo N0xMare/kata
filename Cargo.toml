@@ -181,7 +181,7 @@ commonware-conformance  = { git = "https://github.com/commonwarexyz/monorepo", r
 
 # The nanocode agent harness (`crates/agent-nanocode`): only its three direct
 # backend crates, never the `nanocode` facade, whose `Runtime` brings a session
-# store kata does not use. Pinned to one gakonst/nanocode commit because the host
+# store kata does not use. Pinned to one nanocodexyz/nanocode commit because the host
 # seam kata implements (`crates/core/process/src/lib.rs`) and the tools each
 # backend registers over it move between commits. A bump is a deliberate change:
 # `crates/agent-nanocode/tests/nanocode_seam.rs` goes red when it moves the host
@@ -194,9 +194,9 @@ commonware-conformance  = { git = "https://github.com/commonwarexyz/monorepo", r
 # `just nanocode-bump <rev>` moves these three revs, `NANOCODE_REV`, the lock, the
 # vendored engine below and the flake hash together
 # (docs/development/nanocode.md).
-nanocode-backend-codex     = { git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-nanocode-backend-claude    = { git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-nanocode-process-contracts = { git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-backend-codex     = { git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-backend-claude    = { git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-process-contracts = { git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
 # The vendored engine itself, for `crates/agent-nanocode`, which installs its
 # `NativeLimits` (the `[patch]` below routes nanocode's own dependents to it).
 nanocode-code-mode-engine  = { path = "vendor/nanocode-code-mode-engine" }
@@ -434,7 +434,7 @@ assert_is_empty = "allow"
 # must be exactly upstream at the revs above plus
 # `vendor/nanocode-code-mode-engine.patch`: `just nanocode-vendor-check` refuses
 # anything else, and `just verify` runs it for a change under `vendor/`.
-[patch."https://github.com/gakonst/nanocode"]
+[patch."https://github.com/nanocodexyz/nanocode"]
 nanocode-code-mode-engine = { path = "vendor/nanocode-code-mode-engine" }
 
 [profile.release]

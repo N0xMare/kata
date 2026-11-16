@@ -11,9 +11,9 @@ autotests = false
 autobenches = false
 
 [dependencies]
-nanocode-platform = { version = "0.6.7", git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-nanocode-sync = { version = "0.6.7", git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
-nanocode-tool-contracts = { version = "0.6.7", git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-platform = { version = "0.6.7", git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-sync = { version = "0.6.7", git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-tool-contracts = { version = "0.6.7", git = "https://github.com/nanocodexyz/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
 base64 = { version = "0.22.1" }
 base64-simd = { version = "0.8.0" }
 rquickjs = { version = "0.14.0", features = ["loader"] }
