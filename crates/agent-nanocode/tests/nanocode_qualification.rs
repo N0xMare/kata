@@ -658,6 +658,99 @@ fn claude_code_marks(head: &str, body: &Value) -> Vec<String> {
     marks
 }
 
+/// **Each Anthropic model gets nanocode's own system blocks for that model,
+/// less the Agent SDK identity**, read off the request bodies the mock
+/// RECEIVED for two models nanocode prompts differently (its per-model
+/// selection, `instructions::default_system_blocks`, which kata leaves to
+/// nanocode and edits only on the wire, `MessagesMark`):
+///
+/// - `claude-sonnet-4-6`: the upstream block without the Opus 5.5 paragraph
+///   ([`OPUS_5_5_PARAGRAPH`]) and closing with the total-tokens reminder
+///   ([`TOTAL_TOKENS_REMINDER`]), then the Code Mode instructions and no
+///   Bash-first steer;
+/// - `claude-opus-5-5`: the upstream block with the Opus 5.5 paragraph and no
+///   reminder, then the Code Mode instructions and nanocode's Bash-first steer
+///   for that model.
+///
+/// Neither request carries the identity. MEASURED at 8ec3b215.
+///
+/// **Would red if:** kata sent one set of blocks to every model (watched: its
+/// blocks before, nanocode's defaults for no model in particular: Sonnet sent
+/// the Opus 5.5 paragraph and no reminder), or the wire kept the identity
+/// (watched: `MessagesMark` sending the request unedited).
+#[tokio::test]
+async fn each_anthropic_model_gets_its_own_system_blocks_less_the_identity() {
+    async fn system_sent(model: &str) -> Vec<String> {
+        let mock = MockProvider::start(vec![claude_text_reply("ok")]).await;
+        let (mut session, _witness) = open(&anthropic(&mock), DoubleConfig::default());
+        let mut prompt = anthropic_prompt("go");
+        prompt.model_hint = Some(model.into());
+        let outcome = turn(session.as_mut(), &prompt).await;
+        assert!(
+            matches!(outcome, TurnOutcome::Completed { .. }),
+            "{model}: {outcome:?}"
+        );
+        let requests = mock.requests();
+        assert_eq!(requests.len(), 1, "{model}: one request");
+        assert_eq!(requests[0]["model"], model, "{model}: the request's model");
+        requests[0]["system"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{model}: system blocks: {}", requests[0]))
+            .iter()
+            .map(|block| block["text"].as_str().unwrap_or_default().to_owned())
+            .collect()
+    }
+    let identity = nanocode_backend_claude::subscription_wire::IDENTITY;
+    for (model, opus_paragraph, reminder, steered) in [
+        ("claude-sonnet-4-6", false, true, false),
+        ("claude-opus-5-5", true, false, true),
+    ] {
+        let system = system_sent(model).await;
+        assert!(
+            !system.iter().any(|text| text == identity),
+            "{model}: the identity was sent: {system:#?}"
+        );
+        let upstream = &system[0];
+        assert!(
+            upstream.starts_with("\nYou are an agent working with the user"),
+            "{model}: the upstream block opens the prompt: {upstream:?}"
+        );
+        assert_eq!(
+            upstream.contains(OPUS_5_5_PARAGRAPH),
+            opus_paragraph,
+            "{model}: the Opus 5.5 paragraph"
+        );
+        assert_eq!(
+            upstream.ends_with(TOTAL_TOKENS_REMINDER),
+            reminder,
+            "{model}: the total-tokens reminder"
+        );
+        assert!(
+            system[1].starts_with("Only exec and wait are top-level tools."),
+            "{model}: the Code Mode instructions follow: {:?}",
+            system[1]
+        );
+        assert_eq!(
+            system.iter().any(|text| text.contains(BASH_FIRST_STEER)),
+            steered,
+            "{model}: nanocode's Bash-first steer: {system:#?}"
+        );
+    }
+}
+
+/// The paragraph nanocode's upstream block closes with for `claude-opus-5-5`
+/// alone (its `OPUS_5_5_PARAGRAPH`, 8ec3b215).
+const OPUS_5_5_PARAGRAPH: &str = "\n\nDo build original games,";
+
+/// The reminder nanocode closes its upstream block with for the models its
+/// `TOTAL_TOKENS_REMINDER_MODELS` names (8ec3b215).
+const TOTAL_TOKENS_REMINDER: &str = "\n\n<total_tokens>15000000 tokens left</total_tokens>";
+
+/// How nanocode's Bash-first steer opens, the block it appends after the Code
+/// Mode instructions for the models its `bash-first.json` names (8ec3b215:
+/// `claude-fable-5-1` and `claude-opus-5-5`).
+const BASH_FIRST_STEER: &str = "While bypass permissions mode is active:";
+
 /// The session identity an API-key Messages request carries, as the mock
 /// RECEIVED it: the `x-claude-code-session-id` header's value and the
 /// `session_id` in `metadata.user_id` (a JSON string, nanocode's
@@ -685,9 +778,9 @@ fn claude_session_identity(head: &str, body: &Value) -> (Option<String>, Option<
 /// (nanocode's Claude finish check and persistence nudge run only on a
 /// `headless` agent, which kata does not build).
 ///
-/// **Would red if:** the turn kept nanocode's default system blocks, which
-/// open with the Agent SDK identity (watched: red), or its client
-/// were the subscription one.
+/// **Would red if:** the wire kept the Agent SDK identity that opens
+/// nanocode's default system blocks (watched: `MessagesMark` sending the
+/// request unedited), or its client were the subscription one.
 #[tokio::test]
 async fn an_api_key_anthropic_request_carries_no_claude_code_mark() {
     let mock = MockProvider::start(vec![claude_text_reply("DONE")]).await;

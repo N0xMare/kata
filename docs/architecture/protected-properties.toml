@@ -7341,18 +7341,18 @@ pins = "an API-key Anthropic turn's Messages request, as the mock received it, c
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "lib"
-test = "adapter::session::tests::claude_system_blocks_are_nanocodes_defaults_less_the_agent_sdk_identity"
+test = "adapter::session::tests::the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else"
 kind = "host-free"
 layer = "L1"
-pins = "the system blocks an API-key Anthropic turn sends are, as nanocode serialized them, its own code-only defaults less only the Agent SDK identity that opens them, so kata's copy of the Code Mode instructions is the pinned rev's text (red with the identity kept, and with one byte appended to the copy)"
+pins = "the Messages wire edit (`without_agent_sdk_identity`) on the first request a real nanocode code-only agent sends with its own blocks, for `claude-sonnet-4-6` and `claude-opus-5-5`, leaves the headers byte for byte and the body the same JSON but for the Agent SDK identity block that opened `system`; a subscription request, billing line first, is left byte for byte (red with `system` cleared, and with the identity matched anywhere in `system`)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
-binary = "lib"
-test = "adapter::session::tests::a_subscription_request_is_unchanged_by_the_claude_system_blocks"
+binary = "nanocode_qualification"
+test = "each_anthropic_model_gets_its_own_system_blocks_less_the_identity"
 kind = "host-free"
 layer = "L1"
-pins = "on nanocode's subscription wire kata's system blocks change nothing: the same headers and the same body bytes as nanocode's own defaults, the Agent SDK identity restored after the billing line (red with kata's side sent on an API-key client)"
+pins = "the request bodies the mock receives carry nanocode's own per-model blocks and no Agent SDK identity: for `claude-sonnet-4-6` the upstream block without the Opus 5.5 paragraph and closing with the total-tokens reminder, no Bash-first steer; for `claude-opus-5-5` the paragraph, no reminder, and nanocode's Bash-first steer; the Code Mode instructions second for both (red with one set of blocks sent to every model: Sonnet got the Opus 5.5 paragraph; and with `MessagesMark` sending the request unedited: the identity sent)"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -14027,18 +14027,18 @@ pins = "an API-key Anthropic turn's Messages request, as the mock received it, c
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "lib"
-test = "adapter::session::tests::claude_system_blocks_are_nanocodes_defaults_less_the_agent_sdk_identity"
+test = "adapter::session::tests::the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else"
 kind = "host-free"
 layer = "L1"
-pins = "the system blocks an API-key Anthropic turn sends are, as nanocode serialized them, its own code-only defaults less only the Agent SDK identity that opens them, so kata's copy of the Code Mode instructions is the pinned rev's text (red with the identity kept, and with one byte appended to the copy)"
+pins = "the Messages wire edit (`without_agent_sdk_identity`) on the first request a real nanocode code-only agent sends with its own blocks, for `claude-sonnet-4-6` and `claude-opus-5-5`, leaves the headers byte for byte and the body the same JSON but for the Agent SDK identity block that opened `system`; a subscription request, billing line first, is left byte for byte (red with `system` cleared, and with the identity matched anywhere in `system`)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
-binary = "lib"
-test = "adapter::session::tests::a_subscription_request_is_unchanged_by_the_claude_system_blocks"
+binary = "nanocode_qualification"
+test = "each_anthropic_model_gets_its_own_system_blocks_less_the_identity"
 kind = "host-free"
 layer = "L1"
-pins = "on nanocode's subscription wire kata's system blocks change nothing: the same headers and the same body bytes as nanocode's own defaults, the Agent SDK identity restored after the billing line (red with kata's side sent on an API-key client)"
+pins = "the request bodies the mock receives carry nanocode's own per-model blocks and no Agent SDK identity: for `claude-sonnet-4-6` the upstream block without the Opus 5.5 paragraph and closing with the total-tokens reminder, no Bash-first steer; for `claude-opus-5-5` the paragraph, no reminder, and nanocode's Bash-first steer; the Code Mode instructions second for both (red with one set of blocks sent to every model: Sonnet got the Opus 5.5 paragraph; and with `MessagesMark` sending the request unedited: the identity sent)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"

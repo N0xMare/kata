@@ -13,33 +13,35 @@ one upstream commit and tracks nanocode's `master` by moving that pin deliberate
   `crates/agent-nanocode/tests/nanocode_seam.rs` refuses a `Cargo.lock` that
   resolves any nanocode package to another commit, and a host tool set that moved.
 - **The Anthropic kind's system prompt, less one line.** kata builds the Claude
-  agent with its own system blocks (`claude_system_blocks` in
-  `crates/agent-nanocode/src/adapter/session.rs`): nanocode's default blocks
-  (`nanocode_backend_claude::upstream::system_blocks`) without the Claude Agent SDK
-  identity line that opens them (`subscription_wire::IDENTITY`), then the Code Mode
-  instructions a code-only agent gets. kata is not the Agent SDK, and an API key's
-  credits may refuse a request that says it is: measured on 2026-11-12, that one
-  line turns a key's 200 into a 400 `Your credit balance is too low`, as does the
-  `claude-code-20250219` beta, which nanocode sends only on its subscription wire.
-  The subscription wire puts the identity back after its billing line whatever the
-  blocks hold, so a subscription request is unchanged. nanocode exports no handle
-  to the Code Mode text, so kata holds a copy,
-  `crates/agent-nanocode/src/adapter/claude_code_mode.md` (nanocode's
-  `crates/backends/claude/prompts/code_mode.md`). The unit cell
-  `claude_system_blocks_are_nanocodes_defaults_less_the_agent_sdk_identity` reads
-  both prompts off the wire nanocode serializes and reds when the copy, or the
-  identity's place, moves; `nanocode_qualification`'s
-  `an_api_key_anthropic_request_carries_no_claude_code_mark` reds on the identity
-  line, the `claude-code-20250219` beta or a `metadata.user_id` naming an account in
-  the request the mock receives. Since `8ec3b215` nanocode sends every API-key
-  request `x-claude-code-session-id` and a `metadata.user_id` naming only the
-  session (upstream records this as what stock Claude Code sends on an API key);
-  the cell pins both to the session's id, and whether a key's credits refuse them
-  is not measured. nanocode's default blocks are now per-model
-  (`instructions::default_system_blocks`: for Sonnet it drops the Opus 5.5
-  paragraph and appends a total-tokens reminder); kata's blocks are one set for
-  every model, and the cell names those two edits. `harness_identity` folds the
-  blocks.
+  agent without system blocks of its own, so nanocode selects its default blocks for
+  the turn's model (`instructions::default_system_blocks`, crate-private at
+  `8ec3b215`: for most models it drops the Opus 5.5 paragraph that closes its upstream
+  block, for the models its `TOTAL_TOKENS_REMINDER_MODELS` names it appends a
+  total-tokens reminder, and for those its `bash-first.json` names, `claude-opus-5-5`
+  and `claude-fable-5-1`, it appends a Bash-first steer opening "While bypass
+  permissions mode is active:" after the Code Mode instructions a code-only agent
+  gets). The Messages client's HTTP layer, `MessagesMark` in
+  `crates/agent-nanocode/src/adapter/session.rs`, then sends every request without
+  the Claude Agent SDK identity line that opens those blocks
+  (`without_agent_sdk_identity`, `subscription_wire::IDENTITY`): kata is not the
+  Agent SDK, and an API key's credits may refuse a request that says it is: measured
+  on 2026-11-12, that one line turns a key's 200 into a 400 `Your credit balance is
+  too low`, as does the `claude-code-20250219` beta, which nanocode sends only on its
+  subscription wire. The edit re-serializes the body (the same JSON, its members'
+  order aside) and leaves a subscription request, whose billing line comes first,
+  untouched. `nanocode_qualification`'s
+  `each_anthropic_model_gets_its_own_system_blocks_less_the_identity` reads the
+  request bodies the mock receives for `claude-sonnet-4-6` and `claude-opus-5-5` and
+  pins each model's own blocks and the identity's absence; the unit cell
+  `the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else` pins that the edit
+  removes that block alone; `an_api_key_anthropic_request_carries_no_claude_code_mark`
+  reds on the identity line, the `claude-code-20250219` beta or a `metadata.user_id`
+  naming an account in the request the mock receives. Since `8ec3b215` nanocode
+  sends every API-key request `x-claude-code-session-id` and a `metadata.user_id`
+  naming only the session (upstream records this as what stock Claude Code sends on
+  an API key); the cell pins both to the session's id, and whether a key's credits
+  refuse them is not measured. `harness_identity` folds the one block kata removes;
+  the blocks themselves follow `nanocode_rev` and the stage's model.
 - **One vendored crate**, `vendor/nanocode-code-mode-engine`: nanocode's
   `crates/runtime/code-mode-engine`, the host that runs Code Mode cells in djs,
   nanocode's own JavaScript engine (`crates/patches/djs` upstream, which kata
@@ -791,15 +793,13 @@ The recipe does not finish the bump. After it:
   expiry then refuses the turn). `the_offline_status_reads_the_state_nanocode_wrote`
   (`crates/agent-nanocode/src/credential.rs`) reds on a rename; run it at the new
   rev.
-- Re-copy the Claude Code Mode instructions when
-  `claude_system_blocks_are_nanocodes_defaults_less_the_agent_sdk_identity` is red
-  (`crates/backends/claude/prompts/code_mode.md` at the new rev over
-  `crates/agent-nanocode/src/adapter/claude_code_mode.md`), and re-read the
+- Re-read nanocode's per-model system blocks when
+  `each_anthropic_model_gets_its_own_system_blocks_less_the_identity` is red, and the
   default blocks for a new Claude Code or Agent SDK identity line: the qualification
   cell refuses the two nanocode names at `8ec3b215` (unchanged since `2ac77424`),
-  not one upstream adds later. Since `8ec3b215` nanocode's defaults are per-model
-  (`instructions::default_system_blocks`); the unit cell names the edits it makes
-  for the model it builds (`with_sonnet_edits`), so a new per-model edit reds it.
+  not one upstream adds later, and the wire edit removes only the identity that
+  opens the blocks (`the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else`
+  reds when it moves).
 - Re-read how nanocode presents the host tools to the model: since `8ec3b215` the
   Responses kind sends them inside a `functions` namespace, which
   `the_model_facing_tool_list_is_the_pinned_set` flattens and pins

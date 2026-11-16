@@ -62,9 +62,7 @@ mod toolhost_client;
 pub use session::NanocodeSession;
 
 pub(crate) use seam::{WORKSPACE, host_tool_definitions};
-pub(crate) use session::{
-    CAPSULE_SHELL, CAPSULE_STATEMENT, PLATFORM, TIMEZONE, claude_system_blocks,
-};
+pub(crate) use session::{CAPSULE_SHELL, CAPSULE_STATEMENT, PLATFORM, TIMEZONE};
 
 /// The credential the worker loads for a harness turn, carried to the adapter
 /// in a [`kata_types::agent::HarnessCredential`]. The worker builds it before

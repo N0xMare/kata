@@ -11,8 +11,9 @@
 //!    which its environment states to the model.
 //! 4. Build the agent over kata's seam, always with the capsule's execution
 //!    environment, so nanocode probes nothing on the host. The Anthropic kind
-//!    sends kata's system blocks ([`claude_system_blocks`]): nanocode's
-//!    defaults without the Claude Agent SDK identity.
+//!    takes nanocode's own system blocks for the turn's model, and its client
+//!    sends them without the Claude Agent SDK identity that opens them
+//!    ([`without_agent_sdk_identity`]).
 //! 5. Tool-set check: the host tool set is exactly kata's, with no dynamic or
 //!    attachable provider.
 //! 6. Prompt. The issuance watermark is marked `ModelTokens` INSIDE the model
@@ -224,31 +225,42 @@ pub(crate) const TIMEZONE: &str = "UTC";
 /// The platform the Anthropic kind's environment states: every capsule is Linux.
 pub(crate) const PLATFORM: &str = "linux";
 
-/// The Code Mode instructions nanocode's Claude backend appends to its default
-/// system prompt for a code-only agent (its `prompts/code_mode.md` at
-/// [`crate::NANOCODE_REV`]). kata holds the copy because it supplies the
-/// Anthropic kind's system blocks itself ([`claude_system_blocks`]), and nanocode
-/// exports no handle to the text. A unit cell
-/// (`claude_system_blocks_are_nanocodes_defaults_less_the_agent_sdk_identity`)
-/// pins the copy to the bytes nanocode itself sends.
-const CLAUDE_CODE_MODE: &str = include_str!("claude_code_mode.md");
-
-/// The system prompt an Anthropic turn sends: nanocode's own default blocks for
-/// a code-only agent, less the Claude Agent SDK identity line that opens them
-/// (`subscription_wire::IDENTITY`). kata is not the Agent SDK, and an API key's
-/// credits may refuse a request that claims to be (measured: that one line
-/// turns a key's 200 into a 400 "credit balance is too low"). nanocode's
-/// subscription wire puts the identity back after its billing line whatever the
-/// blocks hold (`subscription_wire::prepare`), so a subscription request's
-/// system prompt is unchanged by it.
-pub(crate) fn claude_system_blocks() -> Vec<serde_json::Value> {
-    let mut blocks = nanocode_backend_claude::upstream::system_blocks();
-    blocks.retain(|block| {
-        block.get("text").and_then(serde_json::Value::as_str)
-            != Some(nanocode_backend_claude::subscription_wire::IDENTITY)
-    });
-    blocks.push(serde_json::json!({"type": "text", "text": CLAUDE_CODE_MODE}));
-    blocks
+/// A Messages `request` without the Claude Agent SDK identity
+/// (`subscription_wire::IDENTITY`) that opens nanocode's default system prompt
+/// for every model: its `system` array's first block when that block's text is
+/// exactly the identity; any other request (one whose first block is anything
+/// else, a subscription request's billing line among them, or a body that is
+/// not a JSON object with a `system` array) goes as it came. kata is not the
+/// Agent SDK, and an API key's credits may refuse a request that claims to be
+/// (measured: that one line turns a key's 200 into a 400 "credit balance is too
+/// low"). The rest of the prompt is nanocode's own selection for the turn's
+/// model (its `instructions::default_system_blocks`, which no public API
+/// exposes, so kata leaves the selection to nanocode and edits the wire). The
+/// edited body is the same JSON re-serialized: its members' order may differ,
+/// its values do not.
+fn without_agent_sdk_identity(mut request: layer::Request) -> layer::Request {
+    let Ok(mut body) = serde_json::from_slice::<serde_json::Value>(&request.body) else {
+        return request;
+    };
+    let Some(system) = body
+        .get_mut("system")
+        .and_then(serde_json::Value::as_array_mut)
+    else {
+        return request;
+    };
+    if system
+        .first()
+        .and_then(|block| block.get("text"))
+        .and_then(serde_json::Value::as_str)
+        != Some(nanocode_backend_claude::subscription_wire::IDENTITY)
+    {
+        return request;
+    }
+    system.remove(0);
+    if let Ok(bytes) = serde_json::to_vec(&body) {
+        request.body = bytes;
+    }
+    request
 }
 
 /// What kata tells a Responses-kind model about where its tools run, sent as
@@ -592,7 +604,6 @@ impl NanocodeSession {
         let mut builder = Claude::builder(client, model)
             .tools_factory(move |handle| factory_seam.install_claude_tools(&handle))
             .code_only(true)
-            .system_blocks(claude_system_blocks())
             .workspace(WORKSPACE)
             .environment(environment)
             .session_id(self.session_id.as_str());
@@ -1447,7 +1458,8 @@ where
 }
 
 /// Marks the issuance watermark `ModelTokens` on every Messages request the
-/// Anthropic kind's client makes, before the request leaves: the client's HTTP
+/// Anthropic kind's client makes, and sends it [`without_agent_sdk_identity`],
+/// before the request leaves: the client's HTTP
 /// layer sees each request it sends, nanocode's own retries of one included,
 /// and with an API key the client sends nothing but the Messages POST. Once
 /// the turn's gate is closed, every request is refused without reaching the
@@ -1475,7 +1487,7 @@ impl nanocode_backend_claude::transport::Layer for MessagesMark {
                 Err(layer::Error::new(TurnStopped.to_string()).unsent(true))
             });
         }
-        next.send(request)
+        next.send(without_agent_sdk_identity(request))
     }
 }
 
@@ -1782,12 +1794,12 @@ mod tests {
         }
     }
 
-    /// The first Messages request a real nanocode code-only Claude agent sends
-    /// on `client`: with nanocode's default system blocks when `blocks` is
-    /// `None`, else with `blocks`. The capsule's environment is the session's.
+    /// The first Messages request a real nanocode code-only Claude agent for
+    /// `model` sends on `client`, with nanocode's own system blocks. The
+    /// capsule's environment is the session's.
     async fn first_claude_request(
         client: nanocode_backend_claude::ClaudeClient,
-        blocks: Option<Vec<serde_json::Value>>,
+        model: &str,
     ) -> layer::Request {
         use nanocode_backend_claude::{Claude, ClaudeEnvironment, ClaudeTools};
         super::super::platform::install().expect("kata's platform host installs");
@@ -1798,17 +1810,14 @@ mod tests {
             .platform(super::PLATFORM)
             .shell(super::CAPSULE_SHELL)
             .date("2026-11-12".to_owned());
-        let mut builder =
-            Claude::builder(client.with_http_layer(capture.clone()), "claude-sonnet-4-6")
-                .tools_factory(|_| Ok(ClaudeTools::new()))
-                .code_only(true)
-                .workspace(super::WORKSPACE)
-                .environment(environment)
-                .session_id("0192d3c4-0000-7000-8000-000000000000");
-        if let Some(blocks) = blocks {
-            builder = builder.system_blocks(blocks);
-        }
-        let (agent, _events) = builder.build().expect("a Claude agent with no tool builds");
+        let (agent, _events) = Claude::builder(client.with_http_layer(capture.clone()), model)
+            .tools_factory(|_| Ok(ClaudeTools::new()))
+            .code_only(true)
+            .workspace(super::WORKSPACE)
+            .environment(environment)
+            .session_id("0192d3c4-0000-7000-8000-000000000000")
+            .build()
+            .expect("a Claude agent with no tool builds");
         let turn = agent.prompt("go").await.expect("the turn is admitted");
         let _ = tokio::time::timeout(std::time::Duration::from_secs(30), turn.result())
             .await
@@ -1835,105 +1844,49 @@ mod tests {
         )
     }
 
-    /// nanocode's per-model edits of its default blocks for the model these
-    /// cells drive, `claude-sonnet-4-6` (MEASURED at 8ec3b215, nanocode's
-    /// `instructions::default_system_blocks`), applied to `blocks`, whose
-    /// first block is the upstream block kata sends unedited: the Opus 5.5
-    /// paragraph that closes it removed (nanocode keeps it for
-    /// `claude-opus-5-5` alone), and the total-tokens reminder appended
-    /// (nanocode's `TOTAL_TOKENS_REMINDER_MODELS`). kata's blocks
-    /// ([`super::claude_system_blocks`]) are the same for every model, so they
-    /// make neither edit.
-    fn with_sonnet_edits(mut blocks: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
-        let text = blocks[0]["text"]
-            .as_str()
-            .expect("the upstream block has text")
-            .to_owned();
-        let paragraph = text
-            .find("\n\nDo build original games,")
-            .expect("the upstream block closes with the Opus 5.5 paragraph");
-        blocks[0]["text"] = format!(
-            "{}\n\n<total_tokens>15000000 tokens left</total_tokens>",
-            &text[..paragraph]
-        )
-        .into();
-        blocks
-    }
-
-    /// **An API-key Anthropic request's system prompt is nanocode's own
-    /// default, block for block, less the Claude Agent SDK identity that opens
-    /// it and nanocode's per-model edits** ([`with_sonnet_edits`]), both read
-    /// off the wire nanocode serialized: so kata's copy of the Code Mode
-    /// instructions ([`super::CLAUDE_CODE_MODE`]) is the pinned rev's text, and
-    /// a bump that moves it, moves the identity off the first block, or edits
-    /// the defaults for this model in any other way goes red here.
+    /// **The API-key wire's edit removes the Agent SDK identity and nothing
+    /// else, for every model; a subscription request goes as it came.** The
+    /// first request a real nanocode code-only agent sends with its own
+    /// per-model defaults, captured before it leaves, for two models nanocode
+    /// prompts differently: [`super::without_agent_sdk_identity`] leaves its
+    /// headers byte for byte, and its body the same JSON but for the identity
+    /// block that opened `system`. A subscription request (its billing line
+    /// first, the identity second) is left byte for byte.
     ///
-    /// **Would red if:** kata's blocks kept the identity (watched: the
-    /// defaults whole), or its Code Mode copy drifted from nanocode's (watched:
-    /// one byte appended).
+    /// **Would red if:** the edit removed any block but the identity (watched:
+    /// `system` cleared), or reached a subscription request (watched: the
+    /// identity matched anywhere in `system`).
     #[tokio::test]
-    async fn claude_system_blocks_are_nanocodes_defaults_less_the_agent_sdk_identity() {
-        let defaults = system_of(&first_claude_request(api_key_client(), None).await);
-        let kata = system_of(
-            &first_claude_request(api_key_client(), Some(super::claude_system_blocks())).await,
-        );
-        assert_eq!(
-            defaults[0]["text"],
-            nanocode_backend_claude::subscription_wire::IDENTITY,
-            "nanocode's defaults open with the Agent SDK identity"
-        );
-        assert_eq!(with_sonnet_edits(kata), defaults[1..]);
-    }
-
-    /// **A subscription request is the one nanocode sends with its own
-    /// defaults, but for nanocode's per-model edits** ([`with_sonnet_edits`]):
-    /// its wire puts the Agent SDK identity back after the billing line
-    /// whatever the blocks hold, so kata's blocks change nothing else on that
-    /// path: the same headers (the Claude Code betas, user agent and session
-    /// among them) and the same body, the identity in it, but the billing
-    /// line's `cch=` digest, which covers the body the edits change.
-    ///
-    /// **Would red if:** kata's blocks reached a request nothing restores the
-    /// identity in (watched: kata's side sent on an API-key client), or kata's
-    /// Code Mode copy drifted (watched: one byte appended).
-    #[tokio::test]
-    async fn a_subscription_request_is_unchanged_by_the_claude_system_blocks() {
-        let subscription = || {
-            api_key_client()
-                .subscription_compatibility()
-                .bind_subscription_session("0192d3c4-0000-7000-8000-000000000001")
-        };
-        let defaults = first_claude_request(subscription(), None).await;
-        let kata = first_claude_request(subscription(), Some(super::claude_system_blocks())).await;
-        assert_eq!(kata.headers, defaults.headers);
-        let body = |request: &layer::Request| -> serde_json::Value {
-            serde_json::from_slice(&request.body).expect("a JSON Messages body")
-        };
-        let mut sent = body(&kata);
-        let system = sent["system"].as_array_mut().expect("system blocks");
-        assert_eq!(
-            system[1]["text"],
-            nanocode_backend_claude::subscription_wire::IDENTITY,
-            "the subscription wire carries the identity"
-        );
-        let edited = with_sonnet_edits(system.split_off(2));
-        system.extend(edited);
-        let without_digest = |mut body: serde_json::Value| {
-            let billing = body["system"][0]["text"]
-                .as_str()
-                .expect("the billing line")
-                .to_owned();
-            let (head, digest) = billing
-                .split_once(" cch=")
-                .expect("the billing line carries its digest");
-            assert!(
-                digest.len() == "00000;".len() && digest.ends_with(';'),
-                "{billing}"
+    async fn the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else() {
+        let identity = nanocode_backend_claude::subscription_wire::IDENTITY;
+        for model in ["claude-sonnet-4-6", "claude-opus-5-5"] {
+            let sent = first_claude_request(api_key_client(), model).await;
+            let edited = super::without_agent_sdk_identity(sent.clone());
+            assert_eq!(edited.headers, sent.headers, "{model}");
+            let mut expected: serde_json::Value =
+                serde_json::from_slice(&sent.body).expect("a JSON Messages body");
+            let system = expected["system"].as_array_mut().expect("system blocks");
+            assert_eq!(
+                system[0]["text"], identity,
+                "{model}: nanocode opens with it"
             );
-            body["system"][0]["text"] = head.into();
-            body
-        };
-        assert_eq!(without_digest(sent), without_digest(body(&defaults)));
+            system.remove(0);
+            let edited: serde_json::Value =
+                serde_json::from_slice(&edited.body).expect("a JSON Messages body");
+            assert_eq!(edited, expected, "{model}");
+        }
+        let subscription = api_key_client()
+            .subscription_compatibility()
+            .bind_subscription_session("0192d3c4-0000-7000-8000-000000000001");
+        let sent = first_claude_request(subscription, "claude-sonnet-4-6").await;
+        assert_eq!(
+            system_of(&sent)[1]["text"],
+            identity,
+            "billing line, then it"
+        );
+        let edited = super::without_agent_sdk_identity(sent.clone());
+        assert_eq!(edited.headers, sent.headers);
+        assert_eq!(edited.body, sent.body);
     }
 
     /// **kata's own refusal of a Messages request reads as the gate's, and no

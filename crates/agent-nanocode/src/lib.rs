@@ -91,9 +91,11 @@ pub fn install_code_mode_limits() {
 ///   registers them (rooted at the capsule's `/work`, sorted by name), and the
 ///   instructions kata itself gives the backend (`instructions`: the working
 ///   directory, shell, time zone or platform, and the Responses kind's capsule
-///   statement; the Anthropic kind's system blocks, which kata supplies itself:
-///   nanocode's defaults less the Agent SDK identity, and kata's copy of the
-///   Code Mode instructions).
+///   statement; for the Anthropic kind, the one edit kata makes to the system
+///   prompt nanocode selects for the turn's model, `removed_system_block`:
+///   the Agent SDK identity its client's wire removes. The per-model blocks
+///   themselves are nanocode's, a function of `nanocode_rev` and of the
+///   model the stage declares).
 ///
 /// Every input is a build constant and the tool sets are built over an inert
 /// host: pure construction, no I/O.
@@ -148,7 +150,7 @@ pub fn harness_identity() -> Result<serde_json::Value, String> {
                 "working_directory": adapter::WORKSPACE,
                 "shell": adapter::CAPSULE_SHELL,
                 "platform": adapter::PLATFORM,
-                "system_blocks": adapter::claude_system_blocks(),
+                "removed_system_block": nanocode_backend_claude::subscription_wire::IDENTITY,
             },
         },
     }))
@@ -327,7 +329,7 @@ mod tests {
                 "working_directory": "/work",
                 "shell": "sh",
                 "platform": "linux",
-                "system_blocks": adapter::claude_system_blocks(),
+                "removed_system_block": "You are a Claude agent, built on Anthropic's Claude Agent SDK.",
             })
         );
         for backend in ["codex", "claude"] {
