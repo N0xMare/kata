@@ -123,7 +123,7 @@ oci-live-smoke: _workspace-bins
     # ONE MODE PER BINARY, BY ITS CELLS' SHAPE. A binary whose live cells are
     # `#[ignore]`d runs `--run-ignored only`: its host-free cells already ran in
     # `just test`, in parallel, and `all` would re-run them here serially (74
-    # `agent_turn_capsule` cells, 92.6 s of step 1 at ba3b5c727, after the one
+    # `agent_turn_capsule` cells, 92.6 s of step 1, after the one
     # ignored cell the filter claimed had been deleted). `sandbox_seccomp_tests` is
     # the capability-conditional exception: none of its cells is ignored, each
     # asserts only under `KATA_SANDBOX_REQUIRE_LIVE`, so it runs `all` with the knob.
@@ -392,7 +392,7 @@ build:
 # The debug binaries every smoke boots: the workspace bins build, never a `-p` list.
 # Resolver 2 unifies features per selected package set, so `cargo build -p kata` after
 # the workspace build was a second variant (15 crates, 43.72 s, recompiled in
-# `oci-live-smoke`'s preamble at ba3b5c727) and a `target/debug/kata` linked against
+# `oci-live-smoke`'s preamble) and a `target/debug/kata` linked against
 # features the suite never judged (`every_tier_builds_its_debug_binaries_with_the_workspace`).
 build-debug: _workspace-bins
 

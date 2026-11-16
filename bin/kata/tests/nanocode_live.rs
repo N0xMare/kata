@@ -921,7 +921,7 @@ fn the_raw_cas_read_returns_an_inline_and_a_file_backed_object() {
     );
 }
 
-/// The `implement` chain N6 A1 recorded on `nanocode-anthropic` at `4da3b2fe2aa4`
+/// The `implement` chain N6 A1 recorded on `nanocode-anthropic` in the 0.0.1 round
 /// (execution `01M784XRE9PVN2223VSYDQ71Q2`; payloads cut to the fields read here):
 /// attempt 0 was accepted and its answer failed the stage's `outputs`, so validation
 /// retried; attempt 1 was accepted and amended with its `parsed` output.

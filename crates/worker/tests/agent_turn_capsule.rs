@@ -2940,7 +2940,7 @@ fn durable_payload(
 /// one request.
 ///
 /// **Would red if:** the turn were classified by the bytes that left (watched,
-/// with the adapter's provider-failure arm removed — the a81296c51
+/// with the adapter's provider-failure arm removed — the earlier
 /// classification: `proven_ambiguous`, no class, an `Unavailable` charge), or a
 /// refusal of the one request were charged as unknown (watched, with
 /// `Observed::failed_turn_charge`'s `Nothing` arm removed: an `Unavailable`
@@ -2997,7 +2997,7 @@ async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_no
 /// against the same mock completes on its next answer.
 ///
 /// **Would red if:** the turn were classified by the bytes that left (watched,
-/// with the adapter's provider-failure arm removed — the a81296c51
+/// with the adapter's provider-failure arm removed — the earlier
 /// classification: `proven_ambiguous`, which the main never re-runs).
 #[tokio::test]
 async fn a_transient_nanocode_failure_is_not_performed_and_a_fresh_attempt_completes() {

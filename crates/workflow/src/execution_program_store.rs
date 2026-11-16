@@ -785,7 +785,7 @@ workflow(
     /// `(operational stamp, the ONE invocation-envelope schema a directory at that
     /// stamp holds)`, the same discipline as [`PROGRAM_SCHEMA_BY_OPERATIONAL_STAMP`].
     /// It starts where the pairing first held: invocation schema 2 landed with the
-    /// stamp's move to 40 (48ae71c69), and 3 with its move to 42 (5d02b8b6c).
+    /// stamp's move to 40, and 3 with its move to 42.
     const INVOCATION_SCHEMA_BY_OPERATIONAL_STAMP: &[(i64, u32)] = &[
         (40, 2),
         (41, 2),
@@ -804,7 +804,7 @@ workflow(
 
     /// `(operational stamp, the ONE execution-contract schema a directory at that
     /// stamp holds)`, the same discipline again. It starts where the pairing first
-    /// held: contract schema 12 landed with the stamp's move to 40 (48ae71c69),
+    /// held: contract schema 12 landed with the stamp's move to 40,
     /// 13 with its move to 46, and 14 with its move to 49; 10 and 11 landed
     /// without one (stamps 31 and 33), which is why no row is older.
     const CONTRACT_SCHEMA_BY_OPERATIONAL_STAMP: &[(i64, u32)] = &[

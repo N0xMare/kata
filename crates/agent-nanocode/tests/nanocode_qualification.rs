@@ -681,7 +681,7 @@ fn claude_code_marks(head: &str, body: &Value) -> Vec<String> {
 /// one: the key arrives as `x-api-key` and the system prompt is there.
 ///
 /// **Would red if:** the turn kept nanocode's default system blocks, which
-/// open with the Agent SDK identity (watched: red at 76a343c54), or its client
+/// open with the Agent SDK identity (watched: red), or its client
 /// were the subscription one.
 #[tokio::test]
 async fn an_api_key_anthropic_request_carries_no_claude_code_mark() {
@@ -3840,7 +3840,7 @@ const TRANSIENT_ATTEMPTS: NonZeroU32 = NonZeroU32::new(2).unwrap();
 ///
 /// **Would red if:** the adapter classified the failure by the bytes that left
 /// rather than by nanocode's typed error (watched, both kinds, with
-/// `NanocodeSession::outcome`'s provider-failure arm removed — the a81296c51
+/// `NanocodeSession::outcome`'s provider-failure arm removed — the earlier
 /// classification: `Ambiguous { issued: ModelTokens, .. }`), or a refusal of
 /// the one request were charged as unknown (watched, with
 /// `Observed::failed_turn_charge`'s `Nothing` arm removed: `Unknown`).
@@ -3884,7 +3884,7 @@ async fn a_provider_refusal_fails_the_turn_with_the_providers_reason() {
 ///
 /// **Would red if:** the adapter classified the failure by the bytes that left
 /// (watched, both kinds, with `NanocodeSession::outcome`'s provider-failure arm
-/// removed — the a81296c51 classification: `Ambiguous { issued: ModelTokens, ..
+/// removed — the earlier classification: `Ambiguous { issued: ModelTokens, ..
 /// }`).
 #[tokio::test]
 async fn a_transient_failure_past_the_harness_retries_is_classed_transient() {

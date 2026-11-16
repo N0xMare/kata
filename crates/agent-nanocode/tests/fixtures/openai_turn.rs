@@ -102,7 +102,7 @@ pub fn open_scoped(
 /// `the_turn_bound_is_at_most_half_of_nextests_kill`). A turn still running at
 /// the bound fails its cell here, the panic naming the turn; nextest's kill
 /// names nothing (a bare `TIMEOUT`). The bound comes first for a turn its cell
-/// began within the other half. In the full suite at 76dd9135f no passing cell
+/// began within the other half. In a measured full-suite run no passing cell
 /// that runs such a turn in its own process took over 20.1 s all told.
 pub const TURN_BOUND: Duration = Duration::from_secs(30);
 

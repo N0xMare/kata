@@ -119,12 +119,12 @@
 # --force` at the commit HEAD already names rewrites `.git/index` (measured: its mtime
 # advances while HEAD and logs/HEAD do not), and bin/kata/build.rs re-runs on `index`, so
 # the L2 nightly at the revision L1 had just built recompiled `kata` in three profiles
-# (162 s of 669 s at 34d5c77c8). Every git read here passes `--no-optional-locks` for the
+# (162 s of 669 s). Every git read here passes `--no-optional-locks` for the
 # same reason: a plain `git status` refreshes a stat-dirty index. `--self-test` proves
 # both on a scratch repository.
 #
 # THE TARGET DIR IS PRUNED BY AGE AFTER EVERY RUN, green or red. The persistent target
-# dir otherwise only grows (666 GB at ba3b5c727, 64% of its `deps` entries older than a
+# dir otherwise only grows (666 GB measured, 64% of its `deps` entries older than a
 # week). Once the tiers finish — the pid file still held, so no other snapshot reads it
 # — scripts/prune-target.sh deletes every artifact no build has read in
 # $GATE_SNAPSHOT_SWEEP_DAYS days (default 3, the owner's ruling; its header states the

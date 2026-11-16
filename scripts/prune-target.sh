@@ -4,7 +4,7 @@
 #
 # The gate snapshot's worktree and the nightly's own worktree each keep ONE target dir
 # across runs, so a run starts on the last one's build — and, unpruned, it only grows
-# (666 GB in the snapshot worktree at ba3b5c727, 64% of its 1.03M `deps` entries older
+# (666 GB in the snapshot worktree, 64% of its 1.03M `deps` entries older
 # than a week). `cargo sweep --time <days>` deletes every artifact no build has READ in
 # that many days, every nested target dir included (`target/lint`, the musl builds):
 # cargo-sweep 0.8 judges by ATIME, and a no-op cargo build refreshes the atime of what it

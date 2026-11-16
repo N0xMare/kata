@@ -913,8 +913,8 @@ fn scoped_build_offenders(justfile: &Justfile, root: &str) -> (usize, Vec<String
 ///
 /// REFUSED: a reachable `cargo build` line building a package-scoped host variant
 /// ([`scoped_build_offenders`]) — resolver 2 unifies features per selected package set,
-/// so `cargo build -p kata` after the workspace build recompiled 15 crates (43.72 s at
-/// ba3b5c727, in `oci-live-smoke`'s preamble) and left a `target/debug/kata` linked
+/// so `cargo build -p kata` after the workspace build recompiled 15 crates (43.72 s,
+/// in `oci-live-smoke`'s preamble) and left a `target/debug/kata` linked
 /// against a different feature set than the one the suite judged; a `build-debug` or
 /// `oci-live-smoke` that does not reach `_workspace-bins`. NOT refused: the
 /// `x86_64-unknown-linux-musl` builds of the static capsule binaries.
@@ -1105,7 +1105,7 @@ fn nix_paths_function_pins_the_lock(script: &str) -> bool {
 /// L1 builds no Nix package of kata and resolves no floating channel.
 ///
 /// REFUSED, from either L1 tier: a Nix realisation of the flake's own `kata` package
-/// ([`l1_nix_offenders`]) — at ba3b5c727 `factory-self-improve-preflight-smoke` built
+/// ([`l1_nix_offenders`]) — `factory-self-improve-preflight-smoke` once built
 /// `.#kata` (a cold `cargo build --workspace --release` under Nix, ~210 s of every L1)
 /// for the one binary its capsule execs, work verification.md assigns to L2's
 /// `flake-checks`; a `nix build`/`shell`/`run`/`eval`/`path-info`/`develop`/`profile`
@@ -1603,7 +1603,7 @@ fn compile_lines(justfile: &Justfile, root: &str) -> Vec<String> {
 /// REFUSED: a `_gate-common-preflight` that does not reach `htree-preflight` and
 /// `dev-loop-check` by unconditional calls; any compiling `cargo` line
 /// ([`compile_lines`]) reachable from it — the preflight's old nextest line made the
-/// commit tier pay its first workspace test build (99 s at ba3b5c727) serially ahead of
+/// commit tier pay its first workspace test build (99 s) serially ahead of
 /// the `[parallel]` group, and made a docs-only `just verify` compile the workspace; `gate`
 /// or `gate-hosted` calling it at top level (serially) rather than through a member of
 /// the `[parallel]` `_gate-commit-build`, or calling `_gate-commit-core` before `fmt`;
@@ -5070,9 +5070,9 @@ fn run_mode_offenders(lines: &[(String, String)], binaries: &BinaryCells) -> Vec
 /// containment lane; `--run-ignored only` selecting no ignored cell of a binary — a
 /// clause that runs nothing; `--run-ignored only` on a capability-conditional binary
 /// whose selection holds a non-ignored cell — a knob-asserted cell that then asserts
-/// nowhere, since `just test` runs it without the knob, where it skips. At ba3b5c727 `oci-live-smoke`'s first step re-ran 74
+/// nowhere, since `just test` runs it without the knob, where it skips. `oci-live-smoke`'s first step once re-ran 74
 /// `agent_turn_capsule` cells (92.6 s of 225.6 s) while its comment claimed one ignored
-/// git-view cell that 6864208e6 had deleted. NOT refused: `--run-ignored all` on a
+/// git-view cell that had been deleted. NOT refused: `--run-ignored all` on a
 /// capability-conditional binary (`sandbox_seccomp_tests` asserts under the knob).
 ///
 /// COUNTERFACTUAL: on synthetic input, `all` over a mixed host-free binary is named,

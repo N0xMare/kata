@@ -501,7 +501,7 @@ kata (the verdict `kata login status --check` gives `openai-chatgpt.json` must r
 it ran, to `target/test-logs/live-agents/nanocode-<cell>.json`. It spends model budget,
 so a maintainer runs it by hand, outside every gate.
 
-Its two `nanocode_anthropic` cells ran once at `4da3b2fe2aa4` (the 0.0.1 round): A2
+Its two `nanocode_anthropic` cells ran once in the 0.0.1 round: A2
 (`a2_the_agent_change_pack_lands_on_nanocode_anthropic_live`) passed; A1
 (`a1_a_real_nanocode_anthropic_turn_in_a_real_capsule_live`) failed on two rig defects,
 since fixed. The rig read the FIRST completed `event_accepted`
@@ -521,7 +521,7 @@ the model: the cells' pack declares a flat `outputs` table, which is sent to no 
 shape in its prompt (operator guide, "A stage's `produces=` contract as the turn's output
 schema"); every prompt `nanocode_live` runs now does
 (`every_one_turn_prompt_states_the_answer_shape_its_outputs_check`). A rerun round ran
-both cells once more at `1dbee018d14f`, on the fixed rig: A1 and A2 passed. A1's run
+both cells once more, on the fixed rig: A1 and A2 passed. A1's run
 settled on attempt 0 with no validation retry (one `implement` attempt, read a second
 time through `ledger.py`), so the rerun did not exercise the retried-attempt read, which
 stays pinned host-free only.
@@ -605,7 +605,7 @@ the barrier, P1-host's resumed main exited refusing recovery on git refs and loo
 the power loss had emptied, and the rig recorded that node as not restarted: outcome
 `fail`, settlement `other`, the main's last `Error:` line leading its detail and outcome
 source; a forced VOID P2-host exercised the copy-out and `--retire` path. Funded, on
-`nanocode-anthropic` in the 0.0.1 round at `4da3b2fe2aa4` (the E9 VM, one try per
+`nanocode-anthropic` in the 0.0.1 round (the E9 VM, one try per
 case): P1-host, P3-host and P4-host passed, and P2-host FAILED on the rig, not on kata.
 kata settled its attempt PROVEN AMBIGUOUS, "the main restarted" (NOT re-delivered by
 its own reason; the rig did not check it). `judge_p2`, shared by both columns, required
@@ -625,7 +625,7 @@ and the usage rows, the settled attempt's own known charge, and PROVEN AMBIGUOUS
 only on both the `failed` status and the typed verdict). What stays live is the reading itself, the
 effect oracles after it, and which leg each column passes: the mock process-column P2
 (`e3_p2_model_call_in_flight_live`, L1) pins the worker-death leg, and only P2-host's
-funded run pins the restart leg. A rerun round ran it once at `1dbee018d14f` (a fresh
+funded run pins the restart leg. A rerun round ran it once (a fresh
 E9 VM; `P1-host` first, as a shakedown, also passed): P2-host passed, the call open at
 the kill, the attempt settled through the restart leg, and every P2 oracle holding. The
 host column has not run on `nanocode-openai`.

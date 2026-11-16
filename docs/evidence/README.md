@@ -7,9 +7,9 @@ This page records the real-model runs that kata's pre-release claims rest on:
 - **E3**: kill the main, the worker or the host at fixed points, and check the settlement;
 - **E9**: a clean machine, from clone to a first E1 run.
 
-Three rounds produced the records: the counted parity round at `34d5c77c8ff7` (E1
-and E2), the 0.0.1 round at `4da3b2fe2aa4` (E3 and E9), and a rerun round at
-`1dbee018d14f` (E3's `P1-host` and `P2-host`). The 0.0.1 round's
+Three rounds produced the records: the counted parity round (E1 and E2), the
+0.0.1 round (E3 and E9), and a rerun round (E3's `P1-host` and `P2-host`); each
+record names the build it ran on. The 0.0.1 round's
 spend, which the round's own tally (`spend-tally.py`, uncommitted, over the 21
 executions' databases: its records, plus one precondition turn on each Anthropic
 model and `just live-nanocode`'s two `nanocode_anthropic` cells, which leave no
@@ -64,7 +64,7 @@ inconsistent (`scripts/evidence-page.py` states the refused set).
 - **Harnesses.** E1 and E2 ran on two parity pairs, each a stock vendor
   harness (the baseline) beside kata's embedded nanocode harness for the same
   provider, both on the pair's one model and reasoning effort. The baselines
-  ran once, in the counted round at `34d5c77c8ff7`: kata no longer carries
+  ran once, in the counted round: kata no longer carries
   their adapters, and the check refuses a baseline record at any other
   `kata_sha`:
 
@@ -536,7 +536,7 @@ allocates (a file replaced by rename among them). A `P4-host` pass therefore
 does not show that kata made its own writes between the submit and the push
 durable.
 
-The 0.0.1 round ran E3 at `4da3b2fe2aa4`: the process column once per case on
+The 0.0.1 round ran E3: the process column once per case on
 each arm, `P4` against the real fixture forge (`N0xMare/kata-e2-fixture`, read
 with `git ls-remote` and `gh`), and the host column on `nanocode-anthropic` only;
 its `nanocode-openai` cells were not run. No record is void. `P2-host` is a
@@ -552,7 +552,7 @@ The record stays a `fail`. The judge now reads the settlement off the chain
 P2 oracle.
 
 The rerun round ran the host column's `P1-host` (first, as a shakedown of the VM) and
-`P2-host` once each at `1dbee018d14f`, on `nanocode-anthropic`, on a fresh E9 VM, with
+`P2-host` once each, on `nanocode-anthropic`, on a fresh E9 VM, with
 the fixed judge; both passed and neither is void. `P2-host`'s call was open at the kill
 (`started 1, completed 0, open true` in kata's progress frames), kata settled the attempt
 PROVEN AMBIGUOUS with "the main restarted … NOT re-delivered", and every P2 oracle held:
@@ -652,7 +652,7 @@ from those files, and the record's `outcome_source` reads `e9-verdict.txt:`
 and its first line.
 
 The 0.0.1 round ran E9 once, on `nanocode-anthropic` under kata's own
-`anthropic-api-key` login, on a fresh VM at `4da3b2fe2aa4`. The `nanocode-openai`
+`anthropic-api-key` login, on a fresh VM. The `nanocode-openai`
 case, whose login needs the owner's device-code sign-in in the guest, was not run.
 
 <!-- evidence:E9:begin -->

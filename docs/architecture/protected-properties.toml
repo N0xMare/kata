@@ -2154,7 +2154,7 @@ pins = "an `exec_command` dropped while its `Exec` waits for room in a full queu
 [[property.unpinned]]
 missing = "clause"
 clause = "C6b, C6c: spool kinds other than the capture spool"
-reason = "no on-disk adapter transcript spool or terminal-callback spool was found in `crates/agent-nanocode/src`, `crates/agent/src` or `crates/worker/src` at de9fec81b; the only spool is `<attempt root>/capture/` (`ATTEMPT_SPOOL_DIRECTORY`). If that holds the md's spool definition is STALE (a fix-round finding), not a cell gap (S7 review 4.3/5.3) synthesis did not confirm the absence; the fix round greps before choosing 'stale md' over 'unpinned'. Rests on reading; mutation has not confirmed it. Owner packet: acknowledge; a cell in the first lane after the tag. [L3 B-182]"
+reason = "no on-disk adapter transcript spool or terminal-callback spool was found in `crates/agent-nanocode/src`, `crates/agent/src` or `crates/worker/src` at 0.0.1; the only spool is `<attempt root>/capture/` (`ATTEMPT_SPOOL_DIRECTORY`). If that holds the md's spool definition is STALE (a fix-round finding), not a cell gap (S7 review 4.3/5.3) synthesis did not confirm the absence; the fix round greps before choosing 'stale md' over 'unpinned'. Rests on reading; mutation has not confirmed it. Owner packet: acknowledge; a cell in the first lane after the tag. [L3 B-182]"
 acknowledged = true
 
 [[property.cell]]
@@ -7625,7 +7625,7 @@ acknowledged = true
 [[construct.unpinned]]
 missing = "clause"
 clause = "R3: a refused turn publishes nothing: no response, no `/work` delta, no capture"
-reason = "no cell found; the `agent_turn.rs` module doc cites `a_refused_turn_is_proven_not_performed_and_publishes_no_delta`, a function that does not exist at de9fec81b - a stale citation. Owner packet: acknowledge; a cell in the first lane after the tag. (drafted as `missing = \"cells\"`; the entry holds that class of cell, so the record names its clause) [L3 B-141]"
+reason = "no cell found; the `agent_turn.rs` module doc cites `a_refused_turn_is_proven_not_performed_and_publishes_no_delta`, a function that does not exist at 0.0.1 - a stale citation. Owner packet: acknowledge; a cell in the first lane after the tag. (drafted as `missing = \"cells\"`; the entry holds that class of cell, so the record names its clause) [L3 B-141]"
 acknowledged = true
 
 [[construct.unpinned]]
@@ -9216,7 +9216,7 @@ acknowledged = true
 [[construct.unpinned]]
 missing = "clause"
 clause = "A nanocode capsule arriving with a secret mount or a secret env entry is refused."
-reason = "the secret-ENV half has a mechanism (`capsule_agent_env_secret_named`) whose holders are filed under agent-turn (`config_check_tests::kata_config_check_refuses_every_agent_block...`, unread here); the secret-MOUNT half has no mechanism at de9fec81b — no secret mount exists in `BundleMounts` or the capsule contract (only a stale doc comment on `TurnCredentialRef`); the md's Tool host section no longer states it (removed in the ledger repair), and no cell can pin it — no existing holder fits: No test builds or decodes an Agent capsule with a credential-shaped env key: `Capsule::new` runs `refuse_declared_agent_env`, but its tests (execution_contract.rs) cover only `capsule_agent_env_channel_owned`. `config_check_tests::kata_config_check_refuses_every_agent_block_the_check_refuses_on_config_alone` refuses `env = { VENDOR_TOKEN }` (`capsule_agent_env_secret_named`), but at the CHECK/config door, not at capsule arrival. The secret-MOUNT half has no mechanism, so no cell can pin it. Rests on reading; mutation has not confirmed it. Owner packet: file the existing holder; acknowledge only if none fits. [L3 B-145]"
+reason = "the secret-ENV half has a mechanism (`capsule_agent_env_secret_named`) whose holders are filed under agent-turn (`config_check_tests::kata_config_check_refuses_every_agent_block...`, unread here); the secret-MOUNT half has no mechanism at 0.0.1 — no secret mount exists in `BundleMounts` or the capsule contract (only a stale doc comment on `TurnCredentialRef`); the md's Tool host section no longer states it (removed in the ledger repair), and no cell can pin it — no existing holder fits: No test builds or decodes an Agent capsule with a credential-shaped env key: `Capsule::new` runs `refuse_declared_agent_env`, but its tests (execution_contract.rs) cover only `capsule_agent_env_channel_owned`. `config_check_tests::kata_config_check_refuses_every_agent_block_the_check_refuses_on_config_alone` refuses `env = { VENDOR_TOKEN }` (`capsule_agent_env_secret_named`), but at the CHECK/config door, not at capsule arrival. The secret-MOUNT half has no mechanism, so no cell can pin it. Rests on reading; mutation has not confirmed it. Owner packet: file the existing holder; acknowledge only if none fits. [L3 B-145]"
 acknowledged = true
 
 [[construct.unpinned]]
