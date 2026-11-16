@@ -58,9 +58,13 @@
 # original starvation trigger — keep them one-at-a-time). It is distinct
 # from `heavy-io` only so the two groups read clearly; both are
 # max-threads=1.
+#
+# `proc-fd-scan` is not a load group: it keeps two tests from running at the same
+# time; see its override below.
 [test-groups]
 heavy-io = { max-threads = 1 }
 heavy-io-soak = { max-threads = 1 }
+proc-fd-scan = { max-threads = 1 }
 
 [profile.default]
 # The load-sensitive GIANTS are excluded from the default
@@ -154,6 +158,25 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 filter = 'package(kata-worker) & test(=a_wide_guest_directory_is_removed_in_time_linear_in_its_entries)'
 test-group = "heavy-io"
 slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# REFUSED: a nix cell that scans for runtime roots (`nix-store --query --roots`,
+# `nix store gc`) running while kata-worker's 30 000-level chain cell holds a
+# descriptor in its chain. nix reads every `/proc/<pid>/fd/<n>` link of the uid,
+# the kernel answers ENAMETOOLONG for a descriptor whose path is longer than a page,
+# and nix fails the call on it ("reading symlink '/proc/<pid>/fd/<n>': File name
+# too long"). Both cells are right: the chain cell must hold descriptors that deep to
+# remove the chain, and nix's scan is the thing the nix cells check. Neither side can
+# be fixed alone, so the group holds BOTH: a group of the nix cells alone still lets
+# the chain cell run beside one of them. Reproduced with these 23 cells at
+# `--test-threads 64`: red in 10 of 10 runs (2-7 nix cells each), and 0 of 10 with the
+# chain cell left out.
+filter = '''
+    (package(kata-core) & (binary(=nix_environment_plane) | binary(=node_environment_binding)))
+    | (package(kata-worker) & binary(=capsule_worker_context)
+        & test(=a_guest_directory_chain_of_any_depth_does_not_keep_the_attempt_root))
+'''
+test-group = "proc-fd-scan"
 
 [[profile.default.overrides]]
 # Current recovery also reaches the per-euid immutable inspection lock. Keep
