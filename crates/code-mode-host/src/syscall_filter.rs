@@ -1199,7 +1199,13 @@ mod tests {
                 .expect("its threads")
                 .flatten()
             {
-                let state = std::fs::read_to_string(task.path().join("status")).expect("a status");
+                // `adversary-thread` is joined once the kernel clears its tid,
+                // which precedes the removal of its task entry: listed here, it
+                // can be gone by this read. A gone thread runs nothing.
+                let state = match std::fs::read_to_string(task.path().join("status")) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                    read => read.expect("a status"),
+                };
                 let field = |name: &str| {
                     state
                         .lines()
