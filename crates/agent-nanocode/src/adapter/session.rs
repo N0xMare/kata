@@ -71,9 +71,9 @@
 //! handshake, was cancelled through the token, or latched), `prompt` ends it the
 //! same way BEFORE it hands the outcome back. Each bounded step has a fallback
 //! that does not wait, so the outcome can be recorded while a capsule process
-//! is still being killed on stdin EOF (step 2), and a Code Mode cell inside one
-//! long native step outlives the outcome (step 4), which the turn's evidence
-//! then records:
+//! is still being killed on stdin EOF (step 2), and a Code Mode host whose
+//! shutdown outlives its grace is still live at the outcome (step 4), which the
+//! turn's evidence then records:
 //!
 //! 1. the gate closes: from here the client queues no frame but a kill or
 //!    `Shutdown`, and a frame a seam call queued before the close precedes
@@ -103,36 +103,34 @@
 //!    `close` then kills the toolhost itself, the capsule's pid 1;
 //! 3. the seam ends: every call nanocode still holds returns;
 //! 4. nanocode's agent, held by the session from the moment it is built, is
-//!    shut down within [`TURN_END_GRACE`] and dropped, which ends every Code
-//!    Mode cell already running when the shutdown raises the interrupt, once
-//!    it reaches an interrupt check (a failed codex turn detaches its cells
-//!    rather than ending them, and merely dropping the agent mid-turn leaves a
-//!    cell running). A shutdown past its grace is abandoned. It does not end a
-//!    cell inside one native step the interpreter's interrupt cannot reach (a
-//!    default-comparator sort of millions of numbers). MEASURED: at nanocode
-//!    8c8f848 the shutdown returned within its grace with such a sort running;
-//!    at ee0f8ba1, and again at each pin since, through 2ac77424, a failed turn's shutdown
-//!    waited on the sorting cell until the grace expired and `prompt` returned
-//!    with the sort still running (at ee0f8ba1 its thread ended about 3 s
-//!    later). Such a cell runs on in this process after the outcome until that
-//!    one step returns: the step has no wall, and
-//!    only the heap cap bounds what it can work on. Read from the vendored
-//!    engine, not measured: a cell whose `Start` the interpreter's thread
-//!    receives only after the shutdown raised the interrupt is not ended
-//!    either, since `run_worker` clears the interrupt on every `Start`; it runs
-//!    until its own end, the wall limit, or the drop of the engine host it runs
-//!    on, whose `Drop` raises the interrupt again (that the turn's end drops
-//!    that host is not established: nanocode's cell actor owns it while the
-//!    cell runs). So once the shutdown returns or its grace expires, the
-//!    turn's evidence records the Code Mode workers still live in the process
-//!    (`CodeModeWorkersLive`, read off the vendored engine's live-worker
-//!    counter; a worker counts from its spawn until its thread ends, so the
-//!    worker running either cell above is counted). The count is
-//!    process-wide, idle workers and another attempt's included: it is never
-//!    below the workers this turn left running, and `0` says none did. The
-//!    worker publishes the evidence of a turn that completed and names a
-//!    nonzero count, from the evidence or `close`'s report, in the refusal of
-//!    one that did not.
+//!    shut down within [`TURN_END_GRACE`] and dropped (a failed codex turn
+//!    detaches its cells rather than ending them, and merely dropping the
+//!    agent mid-turn leaves a cell running). A shutdown past its grace is
+//!    abandoned. Under kata's Code Mode backend, which every worker installs
+//!    (`crate::install_code_mode_limits`), each cell runs in an interpreter
+//!    process of its own, and the shutdown's `terminate` of each Code Mode
+//!    host returns only once the host's supervisor has killed and reaped that
+//!    process, a cell inside one long native step the engine's interrupt
+//!    cannot reach (a default-comparator sort of millions of numbers)
+//!    included; an abandoned shutdown leaves the host to its drop, on which the
+//!    supervisor does the same. MEASURED at 8ec3b215: `kata-worker`'s
+//!    `no_nanocode_cell_outlives_the_shutdown_a_native_step_included` (a failed
+//!    turn's sorting cell) and `nanocode_qualification`'s
+//!    `a_turn_end_whose_cells_reach_an_interrupt_check_records_no_live_worker`.
+//!    Without the backend (no worker runs so), nanocode's own host runs a cell
+//!    inline on a tokio worker thread, and a cell inside such a native step
+//!    runs on in this process after the outcome until that step returns
+//!    (MEASURED at 8ec3b215 on a cancelled turn:
+//!    `nanocode_thread_backend`'s `an_unconfirmed_cancel_is_ambiguous_at_the_crossed_class`).
+//!    So once the shutdown returns or its grace expires, the turn's evidence
+//!    records the Code Mode hosts still live in the process
+//!    (`CodeModeWorkersLive`, read off `kata_code_mode_host::live_workers`: a
+//!    host counts from its supervisor's start until that supervisor has
+//!    reaped its interpreter). The count is process-wide, another attempt's
+//!    hosts included: it is never below the hosts this turn left running, and
+//!    `0` says none did. The worker publishes the evidence of a turn that
+//!    completed and names a nonzero count, from the evidence or `close`'s
+//!    report, in the refusal of one that did not.
 //!
 //! A turn whose future the worker's deadline race DROPS, before or part-way
 //! through these steps, has `close` run every step that did not complete. The
@@ -1013,7 +1011,7 @@ fn provider_failed(
 }
 
 /// The model provider's failure `error` ends the turn on, classified from
-/// nanocode's own typed error (nanocode 2ac77424), with the provider's account
+/// nanocode's own typed error (nanocode 8ec3b215), with the provider's account
 /// of it; `None` for every other error.
 ///
 /// Two codes the provider names in its error answer are classified by name,

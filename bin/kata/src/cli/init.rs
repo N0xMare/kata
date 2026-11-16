@@ -1294,7 +1294,7 @@ mod tests {
 
     /// **The model id `kata init` writes is one nanocode knows.** The block's `model` parses through nanocode's own
     /// `Model::known` (`nanocode_backend_codex::Model`, re-exported from
-    /// `nanocode-types-core`'s `Model::known` at the vendored rev 2ac77424), not
+    /// `nanocode-types-core`'s `Model::known` at the pinned rev 8ec3b215), not
     /// only through its `FromStr`, which maps every other non-empty id to a
     /// `Custom` model and so would hand a misspelt or retired id to the
     /// provider. A nanocode bump that drops or renames the id reds here.

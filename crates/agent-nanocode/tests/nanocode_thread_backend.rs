@@ -84,9 +84,10 @@ fn worker_cpu_ticks() -> std::collections::BTreeMap<u32, u64> {
 }
 
 /// Runs `cell` on a multi-thread tokio runtime of four workers and shuts the
-/// runtime down without waiting for them, as a thread nobody joins was left
-/// at 2ac77424: a worker held inside a native step past the cell's end keeps
-/// the process, not the cell, running.
+/// runtime down without waiting for them: with no backend a cell runs inline
+/// on a tokio worker (8ec3b215, `EmbeddedHost::read_event`), so a worker held
+/// inside a native step past the cell's end would hold the runtime's drop;
+/// shut down in the background, it keeps the process, not the cell, running.
 fn on_a_multi_thread_runtime(cell: impl std::future::Future<Output = ()>) {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(4)
@@ -177,7 +178,8 @@ async fn an_anthropic_cancel_nanocode_does_not_confirm() {
 /// Mode cell that, inside its 60 s yield, runs one long native sort
 /// ([`quickjs_threads::A_LONG_NATIVE_STEP`]), so the cell is the turn's tool
 /// call in flight. The operator's cancel fires once the kernel's account sees
-/// the cell's QuickJS thread burn CPU (the cancel lands inside the step).
+/// a tokio worker thread burn CPU, the cell running inline on it (the cancel
+/// lands inside the step).
 /// MEASURED at 2ac77424 (lane ur-u4u5, this cell's shape and one whose cell
 /// yielded before the sort with the next model request stalled), and at
 /// 8ec3b215 in this cell's shape: nanocode

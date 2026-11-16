@@ -254,7 +254,8 @@ pub const fn nanocode_openai_coverage(requirement: Requirement) -> Coverage {
             Tier::Hermetic,
         ),
         // A call reporting no usage leaves the turn's usage unknown. Residual,
-        // MEASURED at 2ac77424 and the same on the Messages kind: a usage
+        // read from nanocode's parsers at 8ec3b215 (MEASURED at 2ac77424) and
+        // the same on the Messages kind: a usage
         // object that is present but omits a class reads that class as 0
         // (nanocode's parser defaults every class), so kata cannot tell an
         // omitted class from a stated zero. The row covers an absent usage
@@ -361,7 +362,8 @@ pub const fn nanocode_anthropic_coverage(requirement: Requirement) -> Coverage {
         ),
         // The Messages API states usage on every response, and a response
         // without it does not parse: the call fails and is never metered.
-        // Residual, MEASURED at 2ac77424 and the same on the Responses kind: a
+        // Residual, read from nanocode's parsers at 8ec3b215 (MEASURED at
+        // 2ac77424) and the same on the Responses kind: a
         // usage object that is present but omits a class reads that class as
         // 0 (nanocode's parser defaults every class), so kata cannot tell an
         // omitted class from a stated zero. The row covers an absent usage

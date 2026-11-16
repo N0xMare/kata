@@ -83,7 +83,8 @@ async fn cells_run_in_one_child_and_burn_no_cpu_here() {
 /// One native step no interrupt reaches: a default-comparator sort of 200,000
 /// references to two distinct 1 MiB strings of equal bytes, so every compare is
 /// a whole 1 MiB `memcmp` (`kata-agent-nanocode`'s
-/// `quickjs_threads::A_LONG_NATIVE_STEP`, MEASURED there at about a minute).
+/// `quickjs_threads::A_LONG_NATIVE_STEP`, MEASURED there on djs at nanocode
+/// 8ec3b215 at about 35 s).
 const A_LONG_NATIVE_STEP: &str = "const one = \"x\".repeat(1 << 20);\n\
      const other = \"x\".repeat(1 << 20);\n\
      const strings = Array.from({ length: 200000 }, (_, i) => (i % 2 ? one : other));\n\

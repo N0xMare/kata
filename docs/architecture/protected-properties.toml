@@ -5976,7 +5976,7 @@ binary = "nanocode_qualification"
 test = "a_call_reporting_no_usage_leaves_the_usage_unknown"
 kind = "host-free"
 layer = "L1"
-pins = "a nanocode model call that reports no usage leaves the turn's usage `None`, never zero; residual, MEASURED at 2ac77424 on both kinds: a usage object that is present but omits a class reads that class as 0, which this cell does not cover"
+pins = "a nanocode model call that reports no usage leaves the turn's usage `None`, never zero; residual, read from nanocode's `Usage` parsers at 8ec3b215 on both kinds (every class `#[serde(default)]`; MEASURED at 2ac77424): a usage object that is present but omits a class reads that class as 0, which this cell does not cover"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -6352,7 +6352,7 @@ binary = "lib"
 test = "cli::init::tests::the_nanocode_init_model_is_one_nanocode_knows"
 kind = "host-free"
 layer = "L1"
-pins = "the model id the `kata init` block writes (`gpt-6-luna`) is nanocode's `Luna` in its own `Model::known` catalog at the vendored rev 2ac77424, not only a `FromStr` parse (which takes any non-empty id as a custom model); watched RED with the block naming `gpt-6-lune`, and a bump that retires the id reds it"
+pins = "the model id the `kata init` block writes (`gpt-6-luna`) is nanocode's `Luna` in its own `Model::known` catalog at the pinned rev 8ec3b215, not only a `FromStr` parse (which takes any non-empty id as a custom model); watched RED with the block naming `gpt-6-lune`, and a bump that retires the id reds it"
 
 [[construct.cell]]
 package = "kata"
@@ -7320,7 +7320,7 @@ binary = "nanocode_qualification"
 test = "an_anthropic_call_stating_no_usage_is_never_metered"
 kind = "host-free"
 layer = "L1"
-pins = "the Anthropic kind: a `message_start` stating no `usage` does not parse, so the call fails and the turn is ambiguous at `ModelTokens` naming the missing field, with no second request; a turn cancelled while its first request is unanswered is `Cancelled` with usage `None`, never zero; residual, MEASURED at 2ac77424 on both kinds: a usage object that is present but omits a class reads that class as 0, which this cell does not cover"
+pins = "the Anthropic kind: a `message_start` stating no `usage` does not parse, so the call fails and the turn is ambiguous at `ModelTokens` naming the missing field, with no second request; a turn cancelled while its first request is unanswered is `Cancelled` with usage `None`, never zero; residual, read from nanocode's `Usage` parsers at 8ec3b215 on both kinds (every class `#[serde(default)]`; MEASURED at 2ac77424): a usage object that is present but omits a class reads that class as 0, which this cell does not cover"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -13870,7 +13870,7 @@ binary = "nanocode_qualification"
 test = "a_call_reporting_no_usage_leaves_the_usage_unknown"
 kind = "host-free"
 layer = "L1"
-pins = "a nanocode model call that reports no usage leaves the turn's usage `None`, never zero; residual, MEASURED at 2ac77424 on both kinds: a usage object that is present but omits a class reads that class as 0, which this cell does not cover"
+pins = "a nanocode model call that reports no usage leaves the turn's usage `None`, never zero; residual, read from nanocode's `Usage` parsers at 8ec3b215 on both kinds (every class `#[serde(default)]`; MEASURED at 2ac77424): a usage object that is present but omits a class reads that class as 0, which this cell does not cover"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -13878,7 +13878,7 @@ binary = "nanocode_qualification"
 test = "an_anthropic_call_stating_no_usage_is_never_metered"
 kind = "host-free"
 layer = "L1"
-pins = "the Anthropic kind: a `message_start` stating no `usage` does not parse, so the call fails and the turn is ambiguous at `ModelTokens` naming the missing field, with no second request; a turn cancelled while its first request is unanswered is `Cancelled` with usage `None`, never zero; residual, MEASURED at 2ac77424 on both kinds: a usage object that is present but omits a class reads that class as 0, which this cell does not cover"
+pins = "the Anthropic kind: a `message_start` stating no `usage` does not parse, so the call fails and the turn is ambiguous at `ModelTokens` naming the missing field, with no second request; a turn cancelled while its first request is unanswered is `Cancelled` with usage `None`, never zero; residual, read from nanocode's `Usage` parsers at 8ec3b215 on both kinds (every class `#[serde(default)]`; MEASURED at 2ac77424): a usage object that is present but omits a class reads that class as 0, which this cell does not cover"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"

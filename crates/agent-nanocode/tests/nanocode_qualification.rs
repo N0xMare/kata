@@ -211,8 +211,8 @@ async fn usage_is_summed_per_model_call_with_cached_tokens_split_out() {
     );
 }
 
-/// MEASURED at nanocode 1651198b, and again at the pin 2ac77424 (upstream
-/// f6dfa4ec): a Codex response with
+/// MEASURED at nanocode 1651198b, and again at each pin since, through
+/// 8ec3b215: a Codex response with
 /// neither a final message nor an exec or wait call does not fail the turn.
 /// nanocode appends one `<empty_response>` user message and samples again, so
 /// one kata turn sends a second model request, and that request's usage is
@@ -407,7 +407,7 @@ fn claude_reply_stating_no_usage() -> Reply {
 /// **An Anthropic call that states no usage is never metered, and a turn on
 /// which no call completed has no usage, never zero.** The Messages API
 /// states usage on every response; a `message_start` without it does not
-/// parse in nanocode's Messages client (MEASURED at 2ac77424: `missing field
+/// parse in nanocode's Messages client (MEASURED at 8ec3b215: `missing field
 /// usage`), so the call FAILS rather than completing unmetered: the turn is
 /// ambiguous at `ModelTokens` (the request left) and names the missing field,
 /// and no second request follows it (the mock's own log). An ambiguous outcome
@@ -415,9 +415,10 @@ fn claude_reply_stating_no_usage() -> Reply {
 /// cancelled while its first request is unanswered is `Cancelled` with usage
 /// `None`.
 ///
-/// MEASURED at 2ac77424, and the same on the Responses kind: a usage object
-/// that is present but omits a class (`{}` omits them all) reads that class as
-/// 0, since nanocode's parsers default every class, so kata cannot tell an
+/// Read from nanocode's `Usage` parsers at 8ec3b215 (every class
+/// `#[serde(default)]`; MEASURED at 2ac77424), and the same on the Responses
+/// kind: a usage object that is present but omits a class (`{}` omits them
+/// all) reads that class as 0, since nanocode's parsers default every class, so kata cannot tell an
 /// omitted class from a stated zero. This cell does not claim that case.
 ///
 /// **Would red if:** a failed call's usage were zero-filled into its outcome
@@ -1614,7 +1615,7 @@ async fn the_first_messages_request_marks_model_tokens() {
 /// is `MessagesMark`'s, taken as a request reaches the client's HTTP layer. An
 /// API key that is not a valid HTTP header value fails the first request
 /// while nanocode's client builds its headers, before the layer (MEASURED at
-/// 2ac77424: `Claude authentication unavailable: the Claude API key is not a
+/// 8ec3b215: `Claude authentication unavailable: the Claude API key is not a
 /// valid HTTP header value`). So the turn is `Refused{model_unreachable}`
 /// naming nanocode's reason, the watermark is clean, and the mock's own log
 /// holds no request.
@@ -1914,7 +1915,7 @@ async fn an_anthropic_confirmed_cancel_carries_partial_usage() {
 
 /// MEASURED: a stop at the wall deadline while the WebSocket handshake is still
 /// unanswered, nanocode's `Connect` attempt in flight. On nanocode 8c8f8485, and
-/// again at each pin since, through 2ac77424, the `Generation` attempt is CALLED
+/// again at each pin since, through 8ec3b215, the `Generation` attempt is CALLED
 /// before that handshake answers (both attempts reach [`IssuanceMark`] at once,
 /// the body waiting on the socket), so the watermark is already `ModelTokens`
 /// when the worker reads it: the stop is ambiguous, never a
@@ -3981,9 +3982,10 @@ async fn the_session_id_is_rederived_from_the_seed() {
 /// A model call that reports no usage leaves the turn's usage UNKNOWN, never
 /// zero.
 ///
-/// MEASURED at 2ac77424, and the same on the Messages kind: a usage object
-/// that is present but omits a class reads that class as 0, since nanocode's
-/// parsers default every class. This cell does not claim that case.
+/// Read from nanocode's `Usage` parsers at 8ec3b215 (every class
+/// `#[serde(default)]`; MEASURED at 2ac77424), and the same on the Messages
+/// kind: a usage object that is present but omits a class reads that class as
+/// 0, since nanocode's parsers default every class. This cell does not claim that case.
 #[tokio::test]
 async fn a_call_reporting_no_usage_leaves_the_usage_unknown() {
     let mock = MockProvider::start(vec![Reply::Events(vec![

@@ -231,9 +231,9 @@ impl AdapterKind {
     ///
     /// * `NanocodeOpenai` — nanocode's public `OpenAiBuilder::strict_json_schema`
     ///   (`StrictJsonSchema { type: "json_schema", strict: true, name, schema }`
-    ///   as the Responses `text.format`, nanocode `2ac77424`); unpatched.
+    ///   as the Responses `text.format`, nanocode `8ec3b215`); unpatched.
     /// * `NanocodeAnthropic` — no: nanocode's Messages client's
-    ///   `OutputConfig` carries `effort` only (nanocode `2ac77424`).
+    ///   `OutputConfig` carries `effort` only (nanocode `8ec3b215`).
     ///
     /// Capsule assembly fills [`AgentTurnSpec::output_schema`] only for a kind
     /// answering true, and `Capsule::new` refuses a schema on any other

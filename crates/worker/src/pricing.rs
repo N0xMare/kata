@@ -143,13 +143,14 @@ fn parse_year_month(s: &str) -> Option<(i32, u32)> {
 ///
 /// Anthropic's list prices per MTok, as of [`PRICE_TABLE_AS_OF`] (source and
 /// fetch date there), for the Claude 5 ids a `nanocode_anthropic` turn can pin
-/// (nanocode's `ClaudeModel`, 2ac77424) that the page prices at a flat rate.
+/// (nanocode's `ClaudeModel`, 8ec3b215) that the page prices at a flat rate.
 /// Cache reads are 0.025× input on Fable 5.1 and Mythos 5.1, 0.05× on Opus 5.5
 /// and Sonnet 5.5 (the page's footnotes); a cache WRITE is priced at the 5-minute write
 /// rate, 1.25× input, because that is the only write a priced turn makes: nanocode
-/// requests a one-hour TTL only when `cache_one_hour` is set or for a top-level
-/// SUBSCRIPTION session (its `cache_ttl`, 2ac77424) — kata sets neither, and a
-/// subscription turn is never priced. Long context is billed at these standard
+/// requests a one-hour TTL only when `cache_one_hour` is set (its builder's, or a
+/// restored session's), or, on a SUBSCRIPTION session, once a request follows the
+/// last by over five minutes (its `cache_ttl` and `outlived_cache`, 8ec3b215) —
+/// kata sets neither, and a subscription turn is never priced. Long context is billed at these standard
 /// rates on every row here (Anthropic: "Claude 4.6 and later models (except
 /// Claude Haiku 5.5) include the full 1M token context window at standard
 /// pricing").
@@ -164,7 +165,9 @@ fn parse_year_month(s: &str) -> Option<(i32, u32)> {
 /// tokens it pays the higher tier) and a turn's summed usage cannot say which
 /// requests crossed; `claude-fable-5-5`, which nanocode names, is on neither of
 /// Anthropic's pages; the legacy `claude-opus-5`, `claude-sonnet-5` and
-/// `claude-fable-5` are ids nanocode refuses, so no priced adapter runs them.
+/// `claude-fable-5` are ids nanocode refuses, so no priced adapter runs them;
+/// `claude-fable-5-2` and `claude-mythos-5-2`, which nanocode names since
+/// 8ec3b215, have no price fetched for them yet.
 /// Not modelled: the 1.1× US `inference_geo`
 /// multiplier and fast mode, neither of which kata or nanocode requests, and the
 /// Batch API, which an agent turn never uses.

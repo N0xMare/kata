@@ -303,7 +303,7 @@ impl Observed {
 /// The fields of a `tool.result` kata records, in either kind's payload: the
 /// call's id and nanocode's status word. Nothing of the result is read here,
 /// so the Responses kind's tool output and the Messages kind's `{text}` /
-/// `{content_blocks}` decode alike (nanocode 2ac77424: the codex backend's
+/// `{content_blocks}` decode alike (nanocode 8ec3b215: the codex backend's
 /// `ToolResultEvent`, the claude backend's `tool.result` object).
 #[derive(serde::Deserialize)]
 struct ToolResultHead {

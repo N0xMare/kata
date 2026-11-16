@@ -134,8 +134,11 @@ needs:
   `terminate`) goes to the backend: the host runs no cell itself. A spawn the
   backend refuses fails with the backend's text. Without a backend, every host is
   upstream's. Under a backend, `take_stored` returns nothing: a cell's writes reach
-  the host with its terminal event, so a cell its host terminated keeps none (at
-  `2ac77424` nanocode kept none either).
+  the host with its terminal event, so a cell its host terminated keeps none. This
+  differs from upstream at `8ec3b215`, which keeps a terminated cell's writes
+  (`CellTerminal::Terminated { stored }`, filled from `take_stored`); at `2ac77424`
+  nanocode kept none either. A model whose cell kata terminates (its wall, a turn's
+  end) and that reads a value the cell wrote finds it absent under kata.
 - `set_stored_loader(..)`: what answers a cell's `load` of a key the stored values
   its `start_cell` was given lack. kata's interpreter process starts every cell
   with none and loads each key from its parent as the cell asks (below).
