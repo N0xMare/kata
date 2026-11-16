@@ -686,14 +686,27 @@ steps in order and stops at the first failure:
    rev, along with whatever the new rev needs, and no other entry moves. It does
    not use `cargo update -p`, which also re-picks among duplicate versions of
    unrelated crates.
-3. `scripts/nanocode-vendor.py flake-hash` rewrites `flake.nix`'s nanocode
-   `outputHashes` entry. The key is the first git package of the nanocode
-   repository in the lock (`djs-core-0.0.0` at `8ec3b215`),
-   and the hash is `nix hash path` over the rev's `git archive`, which is how
-   `fetchgit` stores it. For a rev with submodules, or a `.gitattributes`
-   attribute that can change archived bytes, it refuses instead and names the
-   recompute step: set the entry to `lib.fakeHash`, run `nix build .#kata`, and
-   paste the hash it reports as `got:`.
+3. `scripts/nanocode-vendor.py flake-hash` rewrites `flake.nix`'s `nanocodeHash`:
+   `nix hash path` over the rev's `git archive`, which is how `fetchgit` stores
+   it. For a rev with submodules, or a `.gitattributes` attribute that can change
+   archived bytes, it refuses instead and names the recompute step: set
+   `nanocodeHash` to `lib.fakeHash`, run `nix build .#kata`, and paste the hash it
+   reports as `got:`.
+
+   The Nix build vendors nanocode apart from every other dependency, and needs
+   nothing else from a bump. nanocode's crates read files outside their own
+   directories (djs-core `include_str!`s `../../../../builtins/gen/*.js`, and its
+   build script walks `../djs-libm/src`), so they build only inside nanocode's
+   tree, as they do in cargo's git checkout. `flake.nix` splits the lock: every
+   non-nanocode package goes through importCargoLock, and the nanocode packages
+   become a second cargo directory source, the whole tree at the locked rev with
+   each package an entry linked to its directory in it
+   (`nix/nanocode-vendor-dir.py`). Every derivation that builds with
+   `kataCargoVendor` copies that source into its build directory with the links
+   kept (`postUnpack = nanocodeVendorUnpack`). The split also means a nanocode
+   package can share a name and version with a crates.io one (nanocode's own
+   `unicode-normalization` 0.1.25) without colliding in importCargoLock's
+   one directory.
 4. `just nanocode-vendor-check`, then `just build-toolhost`, then `cargo nextest run
    -p kata-agent-nanocode`. The toolhost build comes first because the package's
    `toolhost_backpressure` cells exec `target/debug/kata-toolhost` and refuse a
@@ -713,7 +726,7 @@ steps in order and stops at the first failure:
 
 The recipe does not finish the bump. After it:
 
-- Run `nix build .#kata`, which checks the `outputHashes` entry step 3 wrote, and
+- Run `nix build .#kata`, which checks the `nanocodeHash` step 3 wrote, and
   `just deny`. Re-read every `deny.toml` entry whose reason names nanocode: an
   ignore forced by nanocode's old requirements comes out once the new rev lifts
   it.

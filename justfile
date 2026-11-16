@@ -651,7 +651,7 @@ nanocode-vendor-check:
 # which also re-derives `vendor/nanocode-code-mode-engine` at the new rev and
 # re-applies `vendor/nanocode-code-mode-engine.patch`, refusing loudly — tree left
 # as the pristine upstream copy — when the patch no longer applies), then the lock (re-resolved: nothing else moves),
-# then flake.nix's nanocode `outputHashes` entry (`flake-hash`, which refuses and
+# then flake.nix's `nanocodeHash` (`flake-hash`, which refuses and
 # names the `nix build` recompute step for a rev it cannot hash exactly), then the
 # vendor check and kata-agent-nanocode's tests: the seam pins (host tool sets, lock)
 # and the Code Mode limit cells. docs/development/nanocode.md.

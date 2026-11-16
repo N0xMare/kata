@@ -145,6 +145,7 @@
             version = (lib.importTOML ./Cargo.toml).workspace.package.version;
             src = ./.;
             cargoDeps = kataCargoVendor;
+            postUnpack = nanocodeVendorUnpack;
             strictDeps = true;
             nativeBuildInputs = [ muslCc ];
             CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER = "${muslCc}/bin/${muslCc.targetPrefix}cc";
@@ -202,22 +203,114 @@
       # >45 min before its package phase and still needed the whole-tree src
       # (include_str! of .star/.html/.toml defeats cleanCargoSource) plus a
       # hand-maintained dummy-source list.
-      kataCargoVendor = pkgs.rustPlatform.importCargoLock {
-        lockFile = ./Cargo.lock;
-        # importCargoLock lays out the vendored crates by name-version, so two
-        # packages of one name and version from two sources collide (its `ln`
-        # into the first's read-only directory fails). nanocode 8ec3b215 ships
-        # its own `unicode-normalization` 0.1.25, a rewrite gix cannot take, so
-        # the lock holds the crates.io one gix-utils needs (>= 0.1.19) at 0.1.24.
-        # One entry per git rev in Cargo.lock: outputHashes maps a
-        # name-version to that package's git REV, so one entry covers every
-        # crate fetched at the same rev (all commonware-*; every package of the
-        # nanocode repository: nanocode-*, djs-*, psh-*).
-        outputHashes = {
-          "commonware-codec-2026.9.0" = "sha256-VZK1X0Ba+HIC0MBlf+PRzyqiV9nxQFCXG+ZEMHertec=";
-          "djs-core-0.0.0" = "sha256-ACAFwr5NaWIDJ7nAp2l4zsoll2DouYjLJ7mf4bJJIAI=";
-        };
+      #
+      # Vendored dependencies. importCargoLock copies each git crate out of its
+      # repository into a directory of its own, and nanocode's crates do not
+      # survive that: djs-core `include_str!`s `../../../../builtins/gen/*.js`
+      # and its build script walks `../djs-libm/src`, paths that exist only in
+      # nanocode's tree (as in cargo's git checkout, which the dev build reads).
+      # So the lock's nanocode packages are vendored apart, as a second cargo
+      # directory source laid out IN that tree (`nanocodeVendor`,
+      # nix/nanocode-vendor-dir.py), and importCargoLock takes every other
+      # package. Splitting the lock also keeps a name-version importCargoLock
+      # would see twice out of its one directory (nanocode ships its own
+      # `unicode-normalization` 0.1.25 beside crates.io's).
+      #
+      # cargoSetupHook copies `cargoDeps` into the build directory dereferencing
+      # every symlink, which would cut the nanocode entries out of the tree
+      # again; so `kataCargoVendor`'s cargo config names the nanocode source
+      # `nanocode-vendor-dir` beside `cargo-vendor-dir`, and every derivation
+      # that takes `cargoDeps = kataCargoVendor` takes `postUnpack =
+      # nanocodeVendorUnpack`, which copies it there with its links kept.
+      # Without it cargo refuses the missing directory source.
+      lockText = builtins.readFile ./Cargo.lock;
+      nanocodeRepository = "https://github.com/nanocodexyz/nanocode";
+      nanocodePackages = lib.filter (package: lib.hasPrefix "git+${nanocodeRepository}?" (package.source or "")) (
+        builtins.fromTOML lockText
+      ).package;
+      nanocodeSource =
+        let
+          sources = lib.unique (map (package: package.source) nanocodePackages);
+        in
+        if lib.length sources == 1 then
+          lib.head sources
+        else
+          throw "Cargo.lock has ${toString (lib.length sources)} nanocode git revs, not one";
+      nanocodeRev = lib.last (lib.splitString "#" nanocodeSource);
+      # fetchgit's hash of nanocode's tree at the locked rev. `just
+      # nanocode-bump` rewrites it (`scripts/nanocode-vendor.py flake-hash`); a
+      # stale one fails the fetch and names the right one (`got:`).
+      nanocodeHash = "sha256-ACAFwr5NaWIDJ7nAp2l4zsoll2DouYjLJ7mf4bJJIAI=";
+      # Cargo.lock's text split at its [[package]] headers: a package's block
+      # holds its `source = "…"` line. The count assertion refuses a split that
+      # drifted from what the lock parses to.
+      lockBlocks = lib.splitString "\n[[package]]\n" lockText;
+      isNanocodeBlock = lib.hasInfix "\nsource = \"${nanocodeSource}\"\n";
+      lockFileWith =
+        keep:
+        lib.concatStringsSep "\n[[package]]\n" (
+          [ (lib.head lockBlocks) ] ++ lib.filter keep (lib.tail lockBlocks)
+        );
+      nanocodeLock =
+        assert lib.length (lib.filter isNanocodeBlock lockBlocks) == lib.length nanocodePackages;
+        lockFileWith isNanocodeBlock;
+      # Each nanocode package copied out by importCargoLock: its manifest with
+      # the workspace-inherited fields resolved, and its `.cargo-checksum.json`.
+      # nix/nanocode-vendor-dir.py puts those two files back into the tree.
+      nanocodeCrates = pkgs.rustPlatform.importCargoLock {
+        lockFileContents = nanocodeLock;
+        # importCargoLock keys a rev's hash by any one name-version from it.
+        outputHashes =
+          let
+            first = lib.head nanocodePackages;
+          in
+          {
+            "${first.name}-${first.version}" = nanocodeHash;
+          };
       };
+      nanocodeVendor =
+        pkgs.runCommand "nanocode-vendor-dir"
+          {
+            nativeBuildInputs = [ pkgs.python3 ];
+          }
+          ''
+            mkdir $out
+            python3 -I ${./nix/nanocode-vendor-dir.py} ${
+              pkgs.fetchgit {
+                url = nanocodeRepository;
+                rev = nanocodeRev;
+                hash = nanocodeHash;
+              }
+            } ${nanocodeCrates} $out
+          '';
+      nanocodeVendorUnpack = "cp -r ${nanocodeVendor} nanocode-vendor-dir";
+      kataCargoVendor =
+        pkgs.runCommand "cargo-vendor-dir" { }
+          ''
+            cp -r ${
+              pkgs.rustPlatform.importCargoLock {
+                lockFileContents = lockFileWith (block: !isNanocodeBlock block);
+                # One entry per git rev: importCargoLock keys a rev's hash by
+                # any one name-version from it (every commonware-* crate).
+                outputHashes = {
+                  "commonware-codec-2026.9.0" = "sha256-VZK1X0Ba+HIC0MBlf+PRzyqiV9nxQFCXG+ZEMHertec=";
+                };
+              }
+            } $out
+            chmod u+w $out $out/.cargo $out/.cargo/config.toml
+            # cargoSetupHook checks this lock against the source's.
+            ln -sf ${./Cargo.lock} $out/Cargo.lock
+            cat >> $out/.cargo/config.toml <<EOF
+
+            [source.nanocode]
+            git = "${nanocodeRepository}"
+            rev = "${nanocodeRev}"
+            replace-with = "nanocode-vendored-sources"
+
+            [source.nanocode-vendored-sources]
+            directory = "nanocode-vendor-dir"
+            EOF
+          '';
 
       kataPkg =
         (pkgs.makeRustPlatform {
@@ -230,6 +323,7 @@
             version = (lib.importTOML ./Cargo.toml).workspace.package.version;
             src = ./.;
             cargoDeps = kataCargoVendor;
+            postUnpack = nanocodeVendorUnpack;
             strictDeps = true;
             nativeBuildInputs = kataNativeBuildInputs;
             cargoBuildFlags = [

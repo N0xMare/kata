@@ -41,7 +41,7 @@ Subcommands:
     bump <rev>       move the three direct pins and NANOCODE_REV to <rev> (a commit
                      sha, branch or tag) and re-vendor; `just nanocode-bump` then
                      updates the lock and runs flake-hash
-    flake-hash       point flake.nix's nanocode outputHashes entry at the locked rev
+    flake-hash       point flake.nix's `nanocodeHash` at the locked rev
     --self-test      prove every refusal above against a synthetic upstream
 
 Upstream objects are fetched once into `$XDG_CACHE_HOME/kata/nanocode.git`
@@ -494,26 +494,25 @@ def bump(layout: Layout, name: str) -> str:
 
 
 def flake_hash(layout: Layout) -> None:
-    """Point flake.nix's nanocode `outputHashes` entry at the locked rev.
+    """Point flake.nix's `nanocodeHash` at the locked rev.
 
-    importCargoLock keys a git rev's hash by any one `name-version` of a package
-    from it; this names the alphabetically first nanocode git package in
-    `Cargo.lock`, and hashes the rev the way `fetchgit` stores it: `nix hash path`
-    over `git archive` of the commit. That equality holds only for a rev with no
-    `.gitmodules` (fetchgit fetches submodules) and no `.gitattributes` attribute
-    that changes archived bytes (`ARCHIVE_NEUTRAL_ATTRIBUTES` lists the ones that
-    cannot); for any other rev this refuses and names the recompute step instead
-    of writing a hash it cannot vouch for.
+    The flake fetches nanocode's whole tree at the rev `Cargo.lock` locks
+    (`fetchgit`) and vendors every nanocode package inside it; this hashes the
+    rev the way `fetchgit` stores it: `nix hash path` over `git archive` of the
+    commit. That equality holds only for a rev with no `.gitmodules` (fetchgit
+    fetches submodules) and no `.gitattributes` attribute that changes archived
+    bytes (`ARCHIVE_NEUTRAL_ATTRIBUTES` lists the ones that cannot); for any
+    other rev this refuses and names the recompute step instead of writing a
+    hash it cannot vouch for.
     """
     rev = pinned_rev(layout)
     locked = tomllib.loads((layout.root / "Cargo.lock").read_text()).get("package", [])
     source = f"git+{REPOSITORY}?rev={rev}#{rev}"
-    keys = sorted(f"{package['name']}-{package['version']}" for package in locked if package.get("source") == source)
     recompute = (
-        f"set the nanocode `outputHashes` entry in {FLAKE_REL} to lib.fakeHash, run "
+        f"set `nanocodeHash` in {FLAKE_REL} to lib.fakeHash, run "
         "`nix build .#kata`, and paste the hash it reports as `got:`"
     )
-    if not keys:
+    if not any(package.get("source") == source for package in locked):
         raise Refusal(f"Cargo.lock has no package from {source}; run cargo first")
     ensure_commit(layout, rev)
     paths = git("ls-tree", "-r", "--name-only", "-z", rev, cwd=layout.cache).stdout.decode().split("\0")
@@ -537,12 +536,12 @@ def flake_hash(layout: Layout) -> None:
     if hashed.returncode != 0:
         raise Refusal(f"`nix hash path` failed ({hashed.stderr.strip()}); {recompute}")
     flake = layout.root / FLAKE_REL
-    entry = f'"{keys[0]}" = "{hashed.stdout.strip()}";'
-    text, count = re.subn(r'"nanocode-[^"]+" = "sha256-[A-Za-z0-9+/=]+";', entry, flake.read_text())
+    entry = f'nanocodeHash = "{hashed.stdout.strip()}";'
+    text, count = re.subn(r'^(\s*)nanocodeHash = "sha256-[A-Za-z0-9+/=]+";$', rf"\g<1>{entry}", flake.read_text(), flags=re.M)
     if count != 1:
-        raise Refusal(f"{FLAKE_REL} has {count} nanocode `outputHashes` entries, not one; {recompute}")
+        raise Refusal(f"{FLAKE_REL} has {count} `nanocodeHash` definitions, not one; {recompute}")
     flake.write_text(text)
-    print(f"nanocode-bump: {FLAKE_REL} outputHashes {entry}")
+    print(f"nanocode-bump: {FLAKE_REL} {entry}")
 
 
 # ── self-test ────────────────────────────────────────────────────────────────
