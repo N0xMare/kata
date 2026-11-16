@@ -395,13 +395,15 @@ pub enum FailedTurnCharge {
     /// retried no attempt. Recorded as the authoritative `0`.
     Nothing,
     /// The usage the turn's completed model calls reported, summed — what kata
-    /// metered. The failed request adds nothing kata measured: a refusal billed
-    /// nothing, and a transient failure that cut a stream short may have billed
-    /// output kata never saw, the same residual a confirmed cancel's usage so far
-    /// carries.
+    /// metered, and no less than the provider billed: an adapter answers it only
+    /// when the failed request was refused with an error answer and no attempt
+    /// of the turn was re-sent, so no response stream billed output kata never
+    /// saw.
     Metered(TokenUsage),
-    /// No completed call reported usage, and the failure may have billed: an
-    /// UNKNOWN charge, recorded as `Unavailable`, never as zero.
+    /// The failure may have billed beyond what the completed calls reported (a
+    /// transient failure, a re-sent attempt, a stream cut short), or no
+    /// completed call reported usage: an UNKNOWN charge, recorded as
+    /// `Unavailable`, never as zero nor as the part kata metered.
     Unknown,
 }
 

@@ -58,6 +58,10 @@
 //!   the mock begins the turn's second response and fails it with a
 //!   `response.failed` event after the turn's command ran in the container; the
 //!   attempt settles PROVEN AMBIGUOUS, is never re-run, and publishes nothing.
+//! * **I′ — a provider cutting its response** (`a_provider_cutting_its_response_mid_turn_is_re_run_then_falls_back_live`):
+//!   the mock drops the turn's second response mid-body, on every re-send; each
+//!   attempt settles PROVEN NOT PERFORMED, `transient`, charged `unavailable`, is
+//!   re-run twice on the same agent, and the fallback member completes the stage.
 //! * **J — a split key** (`a_lifted_key_split_across_text_deltas_never_reaches_an_sse_subscriber_live`):
 //!   the model streams the stage's own fake key split across two text deltas under
 //!   `progress_visibility = "full"`; a bare reader of `GET /api/v1/events` takes
@@ -1618,6 +1622,177 @@ fn a_provider_failing_its_response_mid_turn_settles_proven_ambiguous_live() {
             .lines()
             .all(|line| !line.contains(WRITTEN_BEFORE_THE_FAILURE)),
         "{TEST}: the turn's write before the failed response reached no commit"
+    );
+}
+
+/// The line the cut turn's command writes into `/work` before the model call
+/// whose response the provider cuts.
+const WRITTEN_BEFORE_THE_CUT: &str = "written-before-the-cut";
+
+/// The requests one attempt of the cut cell's first member sends: the call
+/// that runs the command, then the call whose response the mock cuts, sent
+/// once and re-sent by nanocode five times (`STREAM_MAX_RETRIES`) past the one
+/// attempt kata configures.
+const CUT_ATTEMPT_REQUESTS: usize = 1 + 6;
+
+/// **Cell I′ — a model provider that cuts its response mid-body, mid-turn,
+/// fails the attempt TRANSIENTLY: PROVEN NOT PERFORMED, re-run on the same
+/// agent, then on the fallback panel's next member, which completes.** The
+/// twin of cell I for the trigger nanocode no longer reports as an unknown
+/// answer: the first member's first response asks for one `exec_command`, which
+/// writes `src/app.txt` in the real container; the mock then begins the second
+/// response — its head declaring the whole body — and drops the connection
+/// before the terminal event, on the call and on each of nanocode's re-sends.
+/// Since nanocode 8ec3b215 that cut is a retryable transport failure, so the
+/// turn ends `ProviderFailed` classed `Transient`
+/// (`nanocode_qualification`'s
+/// `a_model_connection_dropped_mid_response_is_a_transient_failure`), the
+/// worker settles it PROVEN NOT PERFORMED with `provider_failure` `transient`
+/// (the capsule is offline), and the runner re-runs the stage on the same agent
+/// twice (`TRANSIENT_PROVIDER_RERUNS`, after 30 s and 120 s), then walks to the
+/// panel's second member, whose turn completes. Asserted from OUTSIDE kata: the
+/// mock's own log (three attempts' [`CUT_ATTEMPT_REQUESTS`] on the first
+/// member's model, then requests naming only [`SECOND_OPENAI_MODEL`]), the raw
+/// `operational.db` through a second read-only handle (four attempts on the
+/// stage, the first three `failed` with `verdict` `proven_not_performed` and
+/// `provider_failure` `transient`, each charged `unavailable`, the fourth
+/// accepted), and `git` (the cut attempts' write on no commit).
+///
+/// **Would red if:** the cut were settled PROVEN AMBIGUOUS (as at nanocode
+/// 2ac77424: one attempt, the run failed), the runner did not re-run a
+/// transient failure or did not walk to the fallback (fewer attempts). The
+/// `unavailable` cost holds on the charge before as well (the rig's first
+/// call reports no usage); `nanocode_qualification`'s
+/// `a_failed_turn_with_a_resent_attempt_is_charged_unknown` pins the charge.
+#[test]
+#[ignore = "live end-to-end smoke; KATA_SANDBOX_REQUIRE_LIVE=1 just oci-live-smoke"]
+fn a_provider_cutting_its_response_mid_turn_is_re_run_then_falls_back_live() {
+    let model = MockModel::answering(|request| {
+        if model_of(request) == SECOND_OPENAI_MODEL {
+            Turn::running("printf 'implemented-change\\n' > src/app.txt", "done").reply(request)
+        } else if mock_model::ran_a_tool(request) {
+            let mock_provider::Reply::Events(answer) =
+                mock_provider::message_reply("cut", "done", mock_provider::usage(10, 0, 1))
+            else {
+                unreachable!("a message reply is a stream of events")
+            };
+            mock_provider::Reply::DropMidResponse(answer)
+        } else {
+            Turn::running(
+                &format!("printf '{WRITTEN_BEFORE_THE_CUT}\\n' > src/app.txt"),
+                "done",
+            )
+            .reply(request)
+        }
+    });
+    let root = node_root();
+    let fixture = fixture_repo(root.path());
+    let node = mock_node_on(
+        root,
+        fixture,
+        &model,
+        &[
+            MockAgent::openai("change-agent"),
+            MockAgent {
+                model: SECOND_OPENAI_MODEL,
+                ..MockAgent::openai("fallback-agent")
+            },
+        ],
+        "agent-change-e2e",
+        &[],
+    );
+    let pack = node.root_path.join("provider-cut-response.star");
+    std::fs::write(&pack, FAILED_RESPONSE_PACK_LIVE).unwrap();
+    let execution = node.main.submit(&pack);
+    let doc = node.main.wait_terminal(&execution);
+    assert_eq!(
+        doc["status"].as_str(),
+        Some("completed"),
+        "{TEST}: the fallback member's re-run completes the stage: {doc}"
+    );
+
+    // THE MOCK'S OWN LOG: three attempts on the first member's model, each the
+    // command's call and the cut call with nanocode's re-sends of it, then the
+    // second member's turn.
+    let requests = model.requests();
+    let models: Vec<&str> = requests.iter().map(model_of).collect();
+    let first = 3 * CUT_ATTEMPT_REQUESTS;
+    assert!(
+        models.len() > first
+            && models[..first]
+                .iter()
+                .all(|model| *model == agent_change_rig::nanocode::OPENAI_MODEL)
+            && models[first..]
+                .iter()
+                .all(|model| *model == SECOND_OPENAI_MODEL),
+        "{TEST}: three attempts of {CUT_ATTEMPT_REQUESTS} requests on the first member, \
+         then the second member's: {models:?}"
+    );
+
+    // RAW SQLITE, through a second read-only handle.
+    let conn = raw_db(&node.root_path.join("data"));
+    let exec_bytes = ulid::Ulid::from_string(&execution).unwrap().to_bytes();
+    let attempts: Vec<(Vec<u8>, String)> = conn
+        .prepare(
+            "SELECT a.attempt_id, p.state FROM attempts a JOIN attempt_projection p \
+             ON p.execution_id = a.execution_id AND p.stage_id = a.stage_id \
+             AND p.attempt_ordinal = a.attempt_ordinal \
+             WHERE a.execution_id = ?1 AND a.stage_id = 'implement' \
+             ORDER BY a.attempt_ordinal",
+        )
+        .unwrap()
+        .query_map([exec_bytes.as_slice()], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(
+        attempts
+            .iter()
+            .map(|(_, state)| state.as_str())
+            .collect::<Vec<_>>(),
+        ["failed", "failed", "failed", "completed"],
+        "{TEST}: the cut attempt and its two transient re-runs failed, the fallback completed"
+    );
+    for (attempt, _) in &attempts[..3] {
+        let terminal: String = conn
+            .query_row(
+                "SELECT CAST(payload_json AS TEXT) FROM transitions \
+                 WHERE attempt_id = ?1 AND scope = 'attempt' AND resulting_state = 'failed' \
+                 ORDER BY seq DESC LIMIT 1",
+                [attempt.as_slice()],
+                |row| row.get(0),
+            )
+            .expect("the failed attempt's terminal transition is readable");
+        let terminal: serde_json::Value = serde_json::from_str(&terminal).unwrap();
+        assert_eq!(
+            terminal["verdict"], "proven_not_performed",
+            "{TEST}: the cut is the provider's known failure: {terminal}"
+        );
+        assert_eq!(
+            terminal["provider_failure"], "transient",
+            "{TEST}: classed transient: {terminal}"
+        );
+        assert!(
+            terminal["reason"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("connection closed before message completed"),
+            "{TEST}: the reason is nanocode's account of the cut: {terminal}"
+        );
+        assert_eq!(
+            terminal["terminal_charge"]["token_usage"]["cost"]["quality"], "unavailable",
+            "{TEST}: a re-sent stream may have billed what no event reports: {terminal}"
+        );
+    }
+
+    // GIT: the cut attempts' write reached no commit.
+    assert!(
+        git_out(&node.fixture.repo, &["log", "--all", "-p", "--format=%H"])
+            .lines()
+            .all(|line| !line.contains(WRITTEN_BEFORE_THE_CUT)),
+        "{TEST}: the cut attempts' write reached no commit"
     );
 }
 

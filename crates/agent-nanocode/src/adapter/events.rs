@@ -48,19 +48,25 @@ impl Observed {
         self.usage
     }
 
-    /// What a turn its provider failed with `class` is charged: the usage the
-    /// completed calls reported; nothing at all for a refusal of the turn's one
-    /// request, sent once (no call completed and no attempt was retried, so no
-    /// response stream can have billed output kata never saw); else unknown.
+    /// What a turn its provider failed with `class` is charged, never less than
+    /// the provider billed. A known charge only when no response stream of
+    /// the turn can have billed output kata never saw: the provider REFUSED
+    /// the failing request (an error answer, no output) and nanocode re-sent
+    /// no attempt of any call (a re-sent attempt may be one whose stream was
+    /// cut after it billed, and no event reports an unfinished attempt's
+    /// usage). Then the charge is the usage the completed calls reported, or
+    /// nothing at all when none completed. Every other failure — a transient
+    /// one, or any turn with a re-sent attempt — is UNKNOWN, whatever the
+    /// completed calls reported: since nanocode 8ec3b215 a stream cut
+    /// mid-response is transient and re-sent, each re-send possibly billed.
     pub(crate) const fn failed_turn_charge(&self, class: ProviderFailureClass) -> FailedTurnCharge {
-        match (self.usage, class) {
-            (Some(usage), _) => FailedTurnCharge::Metered(usage),
-            (None, ProviderFailureClass::Refused)
-                if self.calls_completed == 0 && self.attempts_retried == 0 =>
-            {
-                FailedTurnCharge::Nothing
-            }
-            (None, _) => FailedTurnCharge::Unknown,
+        if !matches!(class, ProviderFailureClass::Refused) || self.attempts_retried > 0 {
+            return FailedTurnCharge::Unknown;
+        }
+        match self.usage {
+            Some(usage) => FailedTurnCharge::Metered(usage),
+            None if self.calls_completed == 0 => FailedTurnCharge::Nothing,
+            None => FailedTurnCharge::Unknown,
         }
     }
 

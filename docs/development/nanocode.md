@@ -662,8 +662,13 @@ mid-body is no longer among them: at `8ec3b215` nanocode reports it as a retryab
 transport failure and re-sends the call (above), so a cut its re-sends do not outlast
 is **transient** (MEASURED, 1 + 5 + 1 requests; at `2ac77424` it was an undecodable
 body with no retry advice, `Ambiguous`). A re-sent stream may have been billed for
-output no event reports, and the turn's charge counts only the completed calls'
-usage, so it can under-count such a turn. The outcome
+output no event reports, so the turn's charge is a known one only when no stream can
+have billed unseen: the provider refused the failing request with an error answer and
+nanocode re-sent no attempt of the turn. Then it is the completed calls' usage, or
+nothing at all when none completed; every other provider failure — a transient one, or
+any turn with a re-sent attempt — is charged UNKNOWN (`Observed::failed_turn_charge`;
+`nanocode_qualification`'s `a_failed_turn_with_a_resent_attempt_is_charged_unknown`).
+The outcome
 is `TurnOutcome::ProviderFailed`, which also states whether a tool call left the
 harness during the turn and what the turn is charged; the worker settles it
 (`kata_worker::agent_turn`, and the protected-properties `agent-turn` construct).
@@ -680,9 +685,12 @@ kinds against the mock provider; `agent_change_live`'s
 `a_provider_failing_its_response_mid_turn_settles_proven_ambiguous_live` pins an
 Ambiguous turn's settlement on a real node: a `response.failed` event naming the
 terminal `insufficient_quota`, after the turn's command ran, settles PROVEN AMBIGUOUS
-and is never re-run. No cell pins the mid-body cut's new settlement live (a transient
-failure the runner re-runs, MEASURED once: three attempts on the panel's first
-member, then the second, 172 s).
+and is never re-run; its twin
+`a_provider_cutting_its_response_mid_turn_is_re_run_then_falls_back_live` pins the
+mid-body cut's settlement on a real node: PROVEN NOT PERFORMED, `transient`, charged
+`unavailable`, re-run twice on the same agent and then on the fallback panel's next
+member, which completes (MEASURED at `8ec3b215`: 172 s, the runner's 30 s and 120 s
+re-run backoffs among it).
 
 ## Bumping nanocode
 

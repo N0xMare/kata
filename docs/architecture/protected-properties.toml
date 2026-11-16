@@ -996,6 +996,14 @@ layer = "L1"
 pins = "on the Responses HTTPS transport, a second response the mock cuts mid-body after a tool frame went out is a retryable transport failure nanocode re-sends five times (at nanocode 2ac77424 it was an undecodable body with no retry advice, `Ambiguous`), so the turn ends `ProviderFailed` classed `Transient` saying a tool ran, and the mock's own log holds seven requests: the first call, the cut one and its five re-sends (MEASURED at 8ec3b215)"
 
 [[property.cell]]
+package = "kata-agent-nanocode"
+binary = "nanocode_qualification"
+test = "a_failed_turn_with_a_resent_attempt_is_charged_unknown"
+kind = "host-free"
+layer = "L1"
+pins = "a failed turn any of whose attempts nanocode re-sent is charged UNKNOWN, never only what the completed calls reported: a Responses turn whose first call completed with its usage and whose second call the mock cuts mid-body on every send (seven requests in the mock's own log) ends `Transient` charged `Unknown`; on both kinds a call answered 500 and then, re-sent, refused 400 for credit (two requests) ends `Refused` charged `Unknown` (red on the charge before: `Metered` with the first call's usage, and `Nothing`)"
+
+[[property.cell]]
 package = "kata"
 binary = "agent_change_live"
 test = "a_provider_failing_its_response_mid_turn_settles_proven_ambiguous_live"
@@ -7473,6 +7481,14 @@ test = "a_pre_container_refusal_carries_its_reason_on_every_face_live"
 kind = "live"
 layer = "L1"
 pins = "the `change` pack's first agent turn on a worker respawned over a provider entry without `toolhost/kata-toolhost` is refused `toolhost_unavailable` before its container, and the text naming what the entry cannot supply reaches every face: `terminal_reason_json` and the `event_inbox` worker failure through a second read-only handle, `kata run show`, `kata watch`'s terminal snapshot `error`, and `GET /api/v1/executions/<id>` over a bare TCP socket"
+
+[[construct.cell]]
+package = "kata"
+binary = "agent_change_live"
+test = "a_provider_cutting_its_response_mid_turn_is_re_run_then_falls_back_live"
+kind = "live"
+layer = "L1"
+pins = "on real youki under the real worker, a `nanocode_openai` turn whose command ran in the container and whose next response the mock model cuts mid-body, on the call and on each of nanocode's five re-sends, is the provider's TRANSIENT failure: through a second read-only handle, four attempts on the stage, the first three `failed` with `verdict` `proven_not_performed`, `provider_failure` `transient`, a reason naming the cut, and a cost `unavailable`, the fourth `completed`; the mock's own log holds three attempts of seven requests on the first panel member's model, then only the second member's model; the run completes and the cut attempts' write is on no commit (MEASURED at 8ec3b215: 172 s, the runner's 30 s and 120 s re-run backoffs among it; the `unavailable` cost is not discriminating here, since the rig's first call reports no usage, and was green on the charge before too: `a_failed_turn_with_a_resent_attempt_is_charged_unknown` pins the charge)"
 
 [[construct.cell]]
 package = "kata"

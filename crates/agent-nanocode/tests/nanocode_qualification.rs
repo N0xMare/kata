@@ -1697,6 +1697,69 @@ async fn a_model_connection_dropped_mid_response_is_a_transient_failure() {
     );
 }
 
+/// **A failed turn any of whose attempts nanocode re-sent is charged UNKNOWN,
+/// never the part kata metered.** A re-sent attempt may be one whose stream
+/// was cut after the provider billed it, and no event reports an unfinished
+/// attempt's usage, so the completed calls' usage would under-count what was
+/// billed. Two shapes, each read off the mock's own log:
+///
+/// * the Responses kind's first call completes, reporting its usage, after a
+///   tool ran; the mock then cuts the second call's response mid-body (its text
+///   streamed, its terminal `response.completed`, which would report usage,
+///   never sent) on the call and on each of nanocode's [`RECONNECTS`] re-sends:
+///   `Transient`, charged `Unknown`, not the first call's usage;
+/// * on either kind the turn's one call is answered 500, re-sent, and refused
+///   400 for credit: `Refused`, charged `Unknown`, not the authoritative `0` a
+///   refusal of a request sent once is.
+///
+/// **Would red if:** the charge counted only the completed calls (watched, the
+/// charge before: `Metered` with the first call's usage for the cut, `Nothing`
+/// for the re-sent refusal).
+#[tokio::test]
+async fn a_failed_turn_with_a_resent_attempt_is_charged_unknown() {
+    let Reply::Events(answer) = message_reply("r2", "DONE", usage(1, 0, 1)) else {
+        unreachable!("a message reply is a stream of events")
+    };
+    let mut script = vec![Kind::OpenAi.run("r1", "true")];
+    script.extend(std::iter::repeat_n(
+        Reply::DropMidResponse(answer),
+        1 + RECONNECTS,
+    ));
+    let mock = MockProvider::start(script).await;
+    let (mut session, _witness) = open(&openai(&mock.url, None), DoubleConfig::default());
+    let outcome = turn(session.as_mut(), &openai_prompt("go")).await;
+    let TurnOutcome::ProviderFailed { class, charge, .. } = &outcome else {
+        panic!("a cut response is the provider's transient failure: {outcome:?}");
+    };
+    assert_eq!(*class, ProviderFailureClass::Transient);
+    assert_eq!(
+        *charge,
+        FailedTurnCharge::Unknown,
+        "the cut stream's billing is unseen"
+    );
+    assert_eq!(mock.requests().len(), 2 + RECONNECTS);
+
+    for kind in KINDS {
+        let mock = MockProvider::start(vec![kind.server_error(), kind.credit_refusal()]).await;
+        let (mut session, _witness) = open(&kind.adapter(&mock), DoubleConfig::default());
+        let outcome = turn(session.as_mut(), &kind.prompt("go")).await;
+        let TurnOutcome::ProviderFailed { class, charge, .. } = &outcome else {
+            panic!("{kind:?}: expected ProviderFailed, got {outcome:?}");
+        };
+        assert_eq!(*class, ProviderFailureClass::Refused, "{kind:?}");
+        assert_eq!(
+            *charge,
+            FailedTurnCharge::Unknown,
+            "{kind:?}: an attempt was re-sent"
+        );
+        assert_eq!(
+            mock.requests().len(),
+            2,
+            "{kind:?}: the 500, then its re-send"
+        );
+    }
+}
+
 /// An operator cancel nanocode confirms on the Anthropic kind, with a `Bash`
 /// in flight in the capsule, is `Cancelled`, carrying the usage the model
 /// call before it reported, and `close` reports nanocode acknowledged it. No
