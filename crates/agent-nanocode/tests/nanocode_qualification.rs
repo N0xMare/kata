@@ -4309,7 +4309,9 @@ async fn a_provider_failure_after_a_tool_call_says_a_tool_ran() {
 /// when the WebSocket's error event went unread: every row
 /// `Ambiguous{ModelTokens}`), or read every `error` event as one (watched, with
 /// `websocket_error_status` reading a missing `status` as 400: the status-less
-/// row `Refused`).
+/// row `Refused`), or read a `response.failed` event's error as a 4xx answer
+/// (watched at 8ec3b215, `provider_failure` giving it status 400: that row
+/// `Refused`).
 #[tokio::test]
 async fn a_websocket_error_event_with_a_4xx_status_is_the_providers_refusal() {
     let credit = json!({"type": "invalid_request_error", "code": null, "message": CREDIT_REFUSAL, "param": null});

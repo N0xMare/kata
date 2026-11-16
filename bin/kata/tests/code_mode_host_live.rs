@@ -328,7 +328,8 @@ fn assert_contained(model: &Model, data: &Path, execution: &str, host: &str, pid
 /// **Would red if:** the cells ran in the hosting process (no interpreter child
 /// to kill: the waiting cell runs 60 s and the model is told no end), the
 /// supervisor read the interpreter's end without reaping it (a zombie child of
-/// the daemon), or the turn left the next cell's interpreter running (a live
+/// the daemon; watched at 8ec3b215, `end_interpreter` waiting with `NOWAIT`:
+/// the turn completed and the killed interpreter was left unreaped), or the turn left the next cell's interpreter running (a live
 /// interpreter child of the daemon).
 #[test]
 #[ignore = "live end-to-end smoke; KATA_SANDBOX_REQUIRE_LIVE=1 just oci-live-smoke"]
