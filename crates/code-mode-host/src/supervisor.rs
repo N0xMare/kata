@@ -308,11 +308,27 @@ impl Supervisor {
                 });
             }
             HostCommand::Hold { execution_id } => {
-                if let Phase::Running(cell) = &mut self.phase
-                    && cell.id == execution_id
-                {
-                    cell.holds += 1;
-                }
+                // Unreachable while kata installs no cell journal: the engine
+                // asks a `Hold` only of a cell it journals (nanocode's
+                // `hold_cell` sends none without the cell's journal record),
+                // and `start_cell` refuses every journaled cell. Were one to
+                // come for a cell that is not the running one — before the
+                // interpreter's `Ready`, while that cell's `Start` waits in
+                // `AwaitingReady` — the interpreter would get it before the
+                // cell and hold nothing, and the cell's `Held` would never
+                // come: asserted, not dropped silently.
+                let running = match &mut self.phase {
+                    Phase::Running(cell) if cell.id == execution_id => {
+                        cell.holds += 1;
+                        true
+                    }
+                    _ => false,
+                };
+                debug_assert!(
+                    running,
+                    "a Hold for cell {execution_id}, which is not the running cell: kata \
+                     journals no cell, so the engine asks none"
+                );
                 self.forward(&ToInterpreter::Hold { execution_id });
             }
             HostCommand::Release { execution_id } => {
