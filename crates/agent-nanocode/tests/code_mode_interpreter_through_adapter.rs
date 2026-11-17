@@ -53,8 +53,16 @@ use toolhost_double::DoubleConfig;
 kata_code_mode_host::interpreter_entry!();
 
 /// A model-written flood of bound functions: it allocates until the heap
-/// limit stops it, inside `Function.prototype.bind` sooner or later.
-const BIND_FLOOD: &str = "const fns = [];\nfor (;;) fns.push(Math.max.bind(null, fns.length));";
+/// limit stops it, inside `Function.prototype.bind` sooner or later. Its
+/// `exec` yields only after 120 s, past the turn's bound
+/// ([`openai_turn::TURN_BOUND`]): the flood takes about 8 s on a quiet host
+/// and about 11 s under full-suite load, 19 s with every core busy twice
+/// over (MEASURED at 8ec3b215), and at
+/// nanocode's default yield, 10 s (`DEFAULT_YIELD`), a slow flood was
+/// returned to the model as `Script running with cell ID 2` instead of its
+/// heap hit, so the cell's verdict hung on the host's speed.
+const BIND_FLOOD: &str = "// @exec: {\"yield_time_ms\": 120000}\nconst fns = [];\n\
+     for (;;) fns.push(Math.max.bind(null, fns.length));";
 
 /// A cell that states it ran.
 const TEXT: &str = "text(\"a cell ran\");";
@@ -95,7 +103,7 @@ fn ends_recorded(session: &mut dyn AgentSession) -> Vec<SessionEvidenceEvent> {
 /// Responses kind the result is its header and that error, and the report an
 /// output of its own for the call. The text cell after it runs, the turn
 /// completes, and the evidence holds one `CodeModeLimit{memory}` per kind and
-/// no `CodeModeInterpreterEnded`. MEASURED: about 8 s per flood. The flood
+/// no `CodeModeInterpreterEnded`. MEASURED: about 8 s per flood ([`BIND_FLOOD`]). The flood
 /// fills its heap in an interpreter process: this process's peak resident set
 /// stays under half the heap limit.
 ///
