@@ -291,7 +291,12 @@ runs a cell in the hosting process; there is no fallback.
   tool result past it fails that tool call in the cell, naming the frame; a cell
   whose stored writes, error or tool-call input exceed it fails naming the frame
   (the interpreter sends that `Error` in the event's place, keeping none of the
-  cell's writes), and the next cell runs.
+  cell's writes), and the next cell runs. A tool call's input crosses as its
+  JSON text and is parsed into a value alone, under serde_json's 128-level
+  recursion limit, the one the engine parsed it under (arrays nested 127 deep
+  pass, 128 fail the call in the cell with the engine's `invalid tool input`):
+  nested in the frame it sat three levels down, and inputs the engine admitted
+  got the interpreter killed as a malformed frame.
 - It confines itself before it answers anything: it closes every descriptor
   above 2, arms a parent-death SIGKILL and checks its parent is the one that
   started it, sets `oom_score_adj` 1000, `RLIMIT_AS` (`memory_bytes` + the

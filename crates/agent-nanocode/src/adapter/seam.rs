@@ -1499,8 +1499,11 @@ mod tests {
     /// asking to yield after 1 ms waits nanocode's 250 ms floor; one asking for
     /// 300 ms with `min_wait_ms` 900 waits 900 ms; an empty `write_stdin` poll
     /// asking for 1 ms waits toward nanocode's 5 s `MIN_POLL_YIELD_MS` and is cut
-    /// by the turn's end, 3 s out. Every result's `time_left_seconds` is the
-    /// turn's, at most the 3 s it started with.
+    /// by the turn's end, 3 s out: it returns no earlier than that end, read off
+    /// a clock started before the turn's, and less than 5 s after it began, so
+    /// the bound holds however long the two calls before it took. Every
+    /// result's `time_left_seconds` is the turn's, at most the 3 s it started
+    /// with.
     ///
     /// **Would red if:** `Seam::clamp` dropped its floor (the 1 ms exec and the
     /// poll return at once) or the call's `min_wait_ms`, the turn's deadline
@@ -1508,7 +1511,11 @@ mod tests {
     /// left `time_left_seconds` unset.
     #[tokio::test]
     async fn a_wait_honours_nanocodes_floors_and_ends_with_the_turn() {
-        let (seam, toolhost) = holding_seam(Duration::from_secs(3));
+        let turn = Duration::from_secs(3);
+        // Before the seam's own deadline (its `Instant::now() + turn`), so the
+        // turn ends no earlier than this plus `turn`.
+        let turn_started = Instant::now();
+        let (seam, toolhost) = holding_seam(turn);
         let workspace = PathBuf::from(WORKSPACE);
 
         let started = Instant::now();
@@ -1549,9 +1556,11 @@ mod tests {
         )
         .await;
         let waited = started.elapsed();
+        let into_the_turn = turn_started.elapsed();
         assert!(
-            waited >= Duration::from_millis(500) && waited < Duration::from_secs(4),
-            "an empty 1 ms poll waited {waited:?}, its floor cut by the turn's end"
+            into_the_turn >= turn && waited < Duration::from_secs(5),
+            "an empty 1 ms poll waited {waited:?} and returned {into_the_turn:?} into the \
+             {turn:?} turn: its 5 s floor must be cut by the turn's end, not before it"
         );
         assert_eq!(polled.time_left_seconds, Some(0), "the turn has ended");
         seam.end();

@@ -14951,6 +14951,14 @@ pins = "behind kata's interpreter process, an uncaught recursion past djs's stac
 [[construct.cell]]
 package = "kata-code-mode-host"
 binary = "interpreter_process"
+test = "a_tool_call_input_as_deep_as_the_engine_admits_reaches_the_host"
+kind = "host-free"
+layer = "L1"
+pins = "in one interpreter, cells calling a tool with arrays nested 120 to 127 deep each deliver a `ToolCall` whose input the test measures exactly that deep and complete once answered, and one nested 128 deep fails the call in the cell with the engine's `TypeError: invalid tool input: recursion limit exceeded at line 1 column 128` and completes; no interpreter is killed (red with the input nested in the frame: 125 deep killed, `it sent a frame that is not one: recursion limit exceeded`)"
+
+[[construct.cell]]
+package = "kata-code-mode-host"
+binary = "interpreter_process"
 test = "a_native_recursion_past_the_thread_stack_ends_only_its_interpreter_and_is_reported"
 kind = "host-free"
 layer = "L1"

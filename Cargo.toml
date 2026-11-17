@@ -186,9 +186,9 @@ commonware-conformance  = { git = "https://github.com/commonwarexyz/monorepo", r
 # backend registers over it move between commits. A bump is a deliberate change:
 # `crates/agent-nanocode/tests/nanocode_seam.rs` goes red when it moves the host
 # tool names or leaves `NANOCODE_REV` behind the lockfile, and flake.nix's
-# outputHash for the nanocode repository's rev (keyed by the first of its git
-# packages in the lock, `djs-core` at 8ec3b215) must be re-hashed (a `nix build
-# .#kata` with the stale one fails and names the new one).
+# `nanocodeHash` (fetchgit's hash of the nanocode repository's tree at the
+# locked rev) must be re-hashed (`scripts/nanocode-vendor.py flake-hash`; a
+# `nix build .#kata` with the stale one fails the fetch and names the new one).
 # Requires rustc 1.97 (nanocode's `rust-version`); nanocode's own crates (its
 # JavaScript engine djs, its zstd) build from Rust alone. nanocode pins
 # `async-trait = "=0.1.89"` exactly, which holds every workspace crate's

@@ -1010,3 +1010,98 @@ async fn a_native_allocation_past_the_address_space_ends_only_its_interpreter() 
     assert_ne!(children(), before, "the next cell ran in a new interpreter");
     host.terminate().await;
 }
+
+/// The nesting depth of `value`: 0 for a scalar, one more than its deepest
+/// member for an array or object.
+fn depth(value: &serde_json::Value) -> usize {
+    match value {
+        serde_json::Value::Array(items) => 1 + items.iter().map(depth).max().unwrap_or(0),
+        serde_json::Value::Object(fields) => 1 + fields.values().map(depth).max().unwrap_or(0),
+        _ => 0,
+    }
+}
+
+/// **A tool-call input the engine admits reaches the host, however deep, and
+/// one it refuses fails the call in the cell, not the interpreter.** The
+/// engine parses a call's input with serde_json's default 128-level recursion
+/// limit, which admits arrays nested 127 deep and refuses 128; the supervisor
+/// reads the frame that carries it, where the input sat three levels down when
+/// it crossed as a JSON value, so inputs nested 125 to 127 deep, which the
+/// engine admitted, got the interpreter killed as a malformed frame
+/// (MEASURED). The input crosses as its JSON text, parsed alone on each side
+/// under the same limit: arrays nested 120 to 127 deep each reach the host as
+/// a `ToolCall` whose input is exactly that deep, and the cell completes once
+/// the call is answered; one nested 128 deep fails the call in the cell with
+/// the engine's `invalid tool input`, and the cell completes. Every cell runs
+/// in the one interpreter.
+///
+/// **Would red if:** the input crossed nested in the frame again (watched:
+/// `kata killed it: it sent a frame that is not one: recursion limit
+/// exceeded`).
+#[tokio::test]
+async fn a_tool_call_input_as_deep_as_the_engine_admits_reaches_the_host() {
+    installed();
+    let mut host = EmbeddedHost::spawn().expect("a host");
+    let noop = [serde_json::json!({ "name": "noop", "tool_name": "noop", "kind": "function" })];
+    let mut interpreter = None;
+    for (id, nested) in (120..=128).enumerate() {
+        let id = u64::try_from(id).expect("an id") + 1;
+        let source = format!(
+            "let a = 0; for (let i = 0; i < {nested}; i++) a = [a];\n\
+             try {{ await tools.noop(a); notify('answered'); }}\n\
+             catch (error) {{ notify(String(error).slice(0, 80)); }}"
+        );
+        host.start_cell(
+            id,
+            &source,
+            std::collections::HashMap::new(),
+            cell_tools(&noop),
+            None,
+            None,
+            Interrupt::new(),
+        )
+        .expect("the cell starts");
+        let mut seen = Vec::new();
+        let error = loop {
+            match tokio::time::timeout(Duration::from_secs(60), host.read_event())
+                .await
+                .expect("an event within 60 s")
+                .expect("an event")
+            {
+                RuntimeEvent::ToolCall {
+                    id: call, input, ..
+                } => {
+                    seen.push(format!("tool_call depth {}", depth(&input)));
+                    host.send_tool_result(id, call, "1".to_owned(), true)
+                        .expect("the host takes the result");
+                }
+                RuntimeEvent::Notify { text, .. } => seen.push(text),
+                RuntimeEvent::Done { .. } => break None,
+                RuntimeEvent::Error { message, .. } => break Some(message),
+                _ => {}
+            }
+        };
+        assert_eq!(error, None, "{nested} nested arrays: {seen:?}");
+        if nested <= 127 {
+            assert_eq!(
+                seen,
+                [format!("tool_call depth {nested}"), "answered".to_owned()],
+                "{nested} nested arrays"
+            );
+        } else {
+            assert_eq!(
+                seen,
+                ["TypeError: invalid tool input: recursion limit exceeded at line 1 column 128"],
+                "{nested} nested arrays"
+            );
+        }
+        let listed = children();
+        assert_eq!(listed.len(), 1, "{listed:?}");
+        assert_eq!(
+            *interpreter.get_or_insert(listed[0]),
+            listed[0],
+            "one interpreter"
+        );
+    }
+    host.terminate().await;
+}

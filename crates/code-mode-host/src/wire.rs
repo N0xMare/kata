@@ -237,7 +237,11 @@ pub enum Event {
         cell_id: u64,
         id: u64,
         name: String,
-        input: Value,
+        /// The input's JSON text, parsed into a `Value` only on its own
+        /// ([`Event::decode`]): nested in the frame it would sit three levels
+        /// down, and serde_json's 128-level recursion limit, which the engine
+        /// parsed it under, would refuse an input the engine admitted.
+        input: Box<RawValue>,
         host: bool,
     },
     Notify {
@@ -350,7 +354,7 @@ impl Event {
                 cell_id,
                 id,
                 name,
-                input,
+                input: serde_json::value::to_raw_value(&input)?,
                 host,
             },
             RuntimeEvent::Notify { cell_id, text } => Self::Notify { cell_id, text },
@@ -376,7 +380,10 @@ impl Event {
         })
     }
 
-    /// The engine's event; `Err` for a content item that is not one.
+    /// The engine's event; `Err` for a content item that is not one, or a
+    /// tool-call input that is not JSON serde_json parses (nested past its
+    /// 128-level limit: the engine parsed it under the same limit, so an
+    /// honest interpreter sends none).
     pub fn decode(self) -> Result<RuntimeEvent, serde_json::Error> {
         Ok(match self {
             Self::ToolCall {
@@ -389,7 +396,7 @@ impl Event {
                 cell_id,
                 id,
                 name,
-                input,
+                input: serde_json::from_str(input.get())?,
                 host,
             },
             Self::Notify { cell_id, text } => RuntimeEvent::Notify { cell_id, text },
