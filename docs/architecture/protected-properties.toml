@@ -965,6 +965,14 @@ pins = "ADR 0003 F3 at kata's wire: on both kinds every request answered 500 wit
 
 [[property.cell]]
 package = "kata-agent-nanocode"
+binary = "lib"
+test = "adapter::session::tests::a_gzip_re_send_the_provider_marked_not_to_retry_is_refused_unsent"
+kind = "host-free"
+layer = "L1"
+pins = "ADR 0003 F3 on the Messages kind against Anthropic's own host: a real nanocode agent on `claude-sonnet-5-5` aimed at `https://api.anthropic.com/v1/messages` (nothing leaves the process), its client one that re-sends regardless of the header, gets its first request answered 503 `x-should-retry: false` and its re-send refused unsent with the wire's do-not-retry refusal: the transport is handed ONE request, though nanocode gzips each attempt with fresh random padding, because the wire knows an attempt by the JSON nanocode prepared (decoded, less trailing whitespace) (red at 91bd65320, whose wire hashed the bytes on the wire: five requests handed the transport, then the attempt budget's refusal)"
+
+[[property.cell]]
+package = "kata-agent-nanocode"
 binary = "nanocode_qualification"
 test = "a_completed_turn_with_a_cut_attempt_is_charged_unknown"
 kind = "host-free"

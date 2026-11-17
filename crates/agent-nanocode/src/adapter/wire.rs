@@ -165,8 +165,9 @@ pub(crate) fn ended_by_the_wire(error: &NanocodeError) -> bool {
 }
 
 /// A request's identity on the wire: its kind and model call on the Responses
-/// kind (a re-send after a cut carries more input but is the same call), its
-/// exact body on the Messages kind (nanocode re-sends the request it prepared).
+/// kind (a re-send after a cut carries more input but is the same call), the
+/// hash of the JSON nanocode prepared on the Messages kind (it re-sends that
+/// JSON unchanged; the gzip and padding around it differ per attempt).
 type Key = String;
 
 /// The provider's last real failure of an attempt, as kata classifies it.
@@ -575,7 +576,20 @@ pub(crate) fn send_messages<'a>(
     request: layer::Request,
     next: layer::Next<'a>,
 ) -> layer::BoxFuture<'a, Result<layer::Response, layer::Error>> {
-    let key = blake3::hash(&request.body).to_hex().to_string();
+    // The attempt is known by the JSON nanocode prepared for the call, which
+    // it re-sends unchanged: its body decoded, less trailing whitespace. Not
+    // the bytes on the wire, which differ on every attempt to Anthropic's own
+    // host (nanocode gzips that body with fresh random whitespace padding each
+    // time), so a re-send the provider marked not to retry would never match.
+    // The edited body would know the same attempts (the edit is a function of
+    // this body), but this is the form nanocode itself re-sends, read before
+    // kata changes it. Trailing whitespace is not JSON's content.
+    let key = match super::session::decoded_body(&request) {
+        Ok((_, prepared)) => blake3::hash(prepared.trim_ascii_end()).to_hex().to_string(),
+        Err(refusal) => {
+            return Box::pin(async move { Err(layer::Error::new(refusal).unsent(true)) });
+        }
+    };
     if let Err(refusal) = wire.admit(&key) {
         return Box::pin(async move { Err(layer::Error::new(refusal.message()).unsent(true)) });
     }

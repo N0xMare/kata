@@ -258,24 +258,7 @@ pub(crate) const PLATFORM: &str = "linux";
 pub(super) fn without_claude_code_blocks(
     mut request: layer::Request,
 ) -> Result<layer::Request, String> {
-    let gzip = match request.headers.get(nanocode_http::header::CONTENT_ENCODING) {
-        None => false,
-        Some(coding) if coding.as_bytes() == b"gzip" => true,
-        Some(coding) => {
-            return Err(format!(
-                "{UNREADABLE_MESSAGES_BODY}: its content-encoding is `{}`",
-                String::from_utf8_lossy(coding.as_bytes())
-            ));
-        }
-    };
-    let decoded = if gzip {
-        Cow::Owned(
-            nanocode_http::decode_body(nanocode_http::FlateCoding::Gzip, &request.body)
-                .map_err(|error| format!("{UNREADABLE_MESSAGES_BODY}: its gzip: {error}"))?,
-        )
-    } else {
-        Cow::Borrowed(request.body.as_slice())
-    };
+    let (gzip, decoded) = decoded_body(&request)?;
     let mut body = serde_json::from_slice::<serde_json::Value>(&decoded)
         .map_err(|error| format!("{UNREADABLE_MESSAGES_BODY}: its JSON: {error}"))?;
     let Some(system) = body
@@ -312,6 +295,27 @@ pub(super) fn without_claude_code_blocks(
         edited
     };
     Ok(request)
+}
+
+/// A Messages request's body as nanocode serialized it, and whether it came
+/// gzipped: a gzip body (`content-encoding: gzip`, what nanocode sends
+/// `api.anthropic.com`) decoded with nanocode's codec, any other body as it
+/// is. The decoded bytes keep nanocode's trailing whitespace padding. A
+/// `content-encoding` other than gzip, or gzip that does not decode, is `Err`
+/// naming why.
+pub(super) fn decoded_body(request: &layer::Request) -> Result<(bool, Cow<'_, [u8]>), String> {
+    match request.headers.get(nanocode_http::header::CONTENT_ENCODING) {
+        None => Ok((false, Cow::Borrowed(request.body.as_slice()))),
+        Some(coding) if coding.as_bytes() == b"gzip" => {
+            nanocode_http::decode_body(nanocode_http::FlateCoding::Gzip, &request.body)
+                .map(|decoded| (true, Cow::Owned(decoded)))
+                .map_err(|error| format!("{UNREADABLE_MESSAGES_BODY}: its gzip: {error}"))
+        }
+        Some(coding) => Err(format!(
+            "{UNREADABLE_MESSAGES_BODY}: its content-encoding is `{}`",
+            String::from_utf8_lossy(coding.as_bytes())
+        )),
+    }
 }
 
 /// How a Messages request [`without_claude_code_blocks`] cannot read is
@@ -2138,6 +2142,144 @@ mod tests {
                 "{model}: a Claude Code block left: {system:#?}"
             );
         }
+    }
+
+    /// A transport that answers every request `503` with `x-should-retry:
+    /// false` and counts what it is handed.
+    #[derive(Clone, Default)]
+    struct MarkedNotToRetry(Arc<std::sync::atomic::AtomicUsize>);
+
+    impl layer::Sender for MarkedNotToRetry {
+        fn send(
+            &self,
+            _request: layer::Request,
+        ) -> layer::BoxFuture<'_, Result<layer::Response, layer::Error>> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async {
+                let mut headers = nanocode_http::types::HeaderMap::new();
+                headers.insert(
+                    "x-should-retry",
+                    nanocode_http::types::HeaderValue::from_static("false"),
+                );
+                let body: layer::Body = Box::pin(nanocode_sync::stream::iter([Ok(
+                    br#"{"type":"error","error":{"type":"api_error","message":"unit"}}"#.to_vec(),
+                )]));
+                Ok(layer::Response::new(
+                    nanocode_http::StatusCode::SERVICE_UNAVAILABLE,
+                    headers,
+                    body,
+                ))
+            })
+        }
+    }
+
+    /// [`MessagesMark`] in front of [`MarkedNotToRetry`], for a client that
+    /// does not heed `x-should-retry: false`: the header is taken off the
+    /// answer nanocode sees, so nanocode re-sends the request as it re-sends
+    /// any `503` (it prepares the body once and gzips it, freshly padded, on
+    /// every attempt). What the mark returns for each attempt is kept.
+    struct Unheeding {
+        mark: MessagesMark,
+        transport: MarkedNotToRetry,
+        returned: Arc<std::sync::Mutex<Vec<String>>>,
+    }
+
+    impl nanocode_backend_claude::transport::Layer for Unheeding {
+        fn send<'a>(
+            &'a self,
+            request: layer::Request,
+            _next: layer::Next<'a>,
+        ) -> layer::BoxFuture<'a, Result<layer::Response, layer::Error>> {
+            let sent = self.mark.send(request, layer::Next::new(&self.transport));
+            let returned = Arc::clone(&self.returned);
+            Box::pin(async move {
+                let result = sent.await;
+                let mut returned = returned.lock().expect("returned");
+                match result {
+                    Ok(mut response) => {
+                        returned.push(format!("answered {}", response.status));
+                        response.headers.remove("x-should-retry");
+                        Ok(response)
+                    }
+                    Err(error) => {
+                        returned.push(format!("refused {error:?}"));
+                        Err(error)
+                    }
+                }
+            })
+        }
+    }
+
+    /// **A gzip request to Anthropic's own host the provider answered
+    /// `x-should-retry: false` is not sent again.** The wire knows a Messages
+    /// attempt by its request, so that a re-send of one the provider marked not
+    /// to retry is refused before it leaves (`Wire::admit`,
+    /// `Refusal::DoNotRetry`). nanocode re-sends the JSON it prepared once, but
+    /// gzips it for `api.anthropic.com` with fresh random padding on every
+    /// attempt, so the bytes on the wire differ each time. A real nanocode
+    /// code-only agent on `claude-sonnet-5-5` aimed at the real Anthropic URL,
+    /// its client one that re-sends regardless ([`Unheeding`]; nothing leaves
+    /// the process): the first attempt is answered `503` marked not to retry,
+    /// and the re-send is refused unsent with the wire's own refusal; the
+    /// transport is handed ONE request.
+    ///
+    /// **Would red if:** the attempt were known by the bytes on the wire
+    /// (watched at 91bd65320: every re-send admitted, five requests handed the
+    /// transport until the attempt budget refused the sixth).
+    #[tokio::test]
+    async fn a_gzip_re_send_the_provider_marked_not_to_retry_is_refused_unsent() {
+        let transport = MarkedNotToRetry::default();
+        let returned = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let client = nanocode_backend_claude::ClaudeClient::with_api_key(
+            "https://api.anthropic.com/v1/messages".to_owned(),
+            "sk-ant-unit-not-a-key".to_owned(),
+        )
+        .with_http_layer(Unheeding {
+            mark: MessagesMark {
+                gate: Arc::new(TurnGate::new()),
+                wire: Arc::default(),
+            },
+            transport: transport.clone(),
+            returned: Arc::clone(&returned),
+        });
+        super::super::platform::install().expect("kata's platform host installs");
+        let environment = nanocode_backend_claude::ClaudeEnvironment::new()
+            .working_directory(super::WORKSPACE)
+            .git_repository(true)
+            .platform(super::PLATFORM)
+            .shell(super::CAPSULE_SHELL)
+            .date("2026-11-17".to_owned());
+        let (agent, _events) =
+            nanocode_backend_claude::Claude::builder(client, "claude-sonnet-5-5")
+                .tools_factory(|_| Ok(nanocode_backend_claude::ClaudeTools::new()))
+                .code_only(true)
+                .workspace(super::WORKSPACE)
+                .environment(environment)
+                .build()
+                .expect("a Claude agent with no tool builds");
+        let turn = agent.prompt("go").await.expect("the turn is admitted");
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(60), turn.result())
+            .await
+            .expect("the turn ends");
+        drop(agent.shutdown().await);
+        let returned = returned.lock().expect("returned").clone();
+        assert_eq!(
+            transport.0.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "one request handed the transport: {returned:#?}"
+        );
+        assert_eq!(
+            returned.len(),
+            2,
+            "the attempt and one re-send: {returned:#?}"
+        );
+        assert_eq!(returned[0], "answered 503 Service Unavailable");
+        assert!(
+            returned[1]
+                .contains("answered it `x-should-retry: false`, and kata does not send it again")
+                && returned[1].contains("unsent: true"),
+            "the re-send is the wire's refusal, unsent: {returned:#?}"
+        );
     }
 
     /// **The wire edit refuses exactly the bodies it cannot read, and passes a

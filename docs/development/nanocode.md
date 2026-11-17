@@ -731,7 +731,14 @@ them. Under the wire:
   retryable, which ends the call on either client. So is a re-send of a request the
   provider answered `x-should-retry: false` (ADR 0003's finding F3) and of one whose
   answer kata classes the provider's refusal (a WebSocket `error` event stating a 4xx,
-  a plan's `usage_limit_reached` 429): nanocode would re-send each. The count is the
+  a plan's `usage_limit_reached` 429): nanocode would re-send each. A Messages attempt
+  is known by the JSON nanocode prepared for the call, decoded and less trailing
+  whitespace, never by the bytes on the wire: nanocode re-sends that JSON unchanged but
+  gzips it for `api.anthropic.com` with fresh random padding on every attempt, so until
+  2026-11-17, when the wire hashed the wire bytes, no re-send to Anthropic's own host
+  matched the refusal
+  (`a_gzip_re_send_the_provider_marked_not_to_retry_is_refused_unsent`, a real agent
+  aimed at that host through a client that re-sends regardless). The count is the
   turn's failed attempts since one last completed, so a new call after a failure
   nanocode does not re-send counts on: tighter than per call, never looser.
 - The call ends on the provider's **last real failure**: on the Responses kind the
