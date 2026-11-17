@@ -273,6 +273,48 @@ async fn a_failed_tool_result_past_the_heap_fails_the_cell_with_the_memory_repor
     assert_next_cell_runs_in(&mut host, 3, pid).await;
 }
 
+/// **A successful tool result whose JSON the heap cannot hold fails the cell
+/// with the engine's error and the memory report, and the next cell runs.**
+/// Under the 16 MiB heap a cell holds 12 MiB and calls a tool; the result is a
+/// JSON array of a million zeros, which the engine parses straight into the
+/// cell's heap (`Machine::deliver_result`'s `resolve_json`) and djs cannot
+/// allocate: the cell fails with `Script stopped: the cell ran out of memory.`
+/// and the memory report before it, and the next cell runs in the same
+/// interpreter.
+///
+/// **Would red if:** the engine did not report a heap hit in `resolve_json`
+/// (its `report_out_of_memory` call in `Machine::deliver_result` removed from
+/// `vendor/nanocode-code-mode-engine.patch`: no report).
+#[tokio::test]
+async fn a_tool_result_past_the_heap_fails_the_cell_with_the_memory_report() {
+    let mut host = installed();
+    let first = run(&mut host, 1, TRIVIAL).await;
+    assert_eq!(first.error, None);
+    let pid = the_interpreter();
+    let zeros = format!("[{}0]", "0,".repeat(1 << 20));
+
+    let cell = run_answering(
+        &mut host,
+        2,
+        "const keep = new Uint8Array(12 << 20).fill(1);\n\
+         const result = await tools.noop({});\n\
+         notify(`got ${result.length}`);",
+        zeros,
+        true,
+    )
+    .await;
+
+    assert_eq!(
+        (cell.error.as_deref(), cell.reported, cell.notified),
+        (
+            Some(OUT_OF_MEMORY),
+            Some(memory_report()),
+            Vec::<String>::new()
+        )
+    );
+    assert_next_cell_runs_in(&mut host, 3, pid).await;
+}
+
 /// **A spinning cell ends at its wall, by the interpreter process, which then
 /// runs the next cell.** Two spinners: a plain loop, and a microtask that
 /// queues its successor before it spins. While each spins the kernel charges

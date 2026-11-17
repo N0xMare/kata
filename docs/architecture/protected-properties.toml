@@ -14967,6 +14967,14 @@ pins = "under a 256 MiB heap, NFC-normalizing 80 million characters drives the i
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_limits"
+test = "a_tool_result_past_the_heap_fails_the_cell_with_the_memory_report"
+kind = "host-free"
+layer = "L1"
+pins = "under a 16 MiB heap, a cell holding 12 MiB whose tool call is answered with a JSON array of a million zeros fails with the engine's `Script stopped: the cell ran out of memory.` and the memory report before it (the patch's second report site, `Machine::deliver_result`'s `resolve_json` arm), notifying nothing, and the next cell runs in the same interpreter (red with that `report_out_of_memory` call removed: no report)"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
+binary = "code_mode_limits"
 test = "a_failed_tool_result_past_the_heap_fails_the_cell_with_the_memory_report"
 kind = "host-free"
 layer = "L1"
