@@ -2434,22 +2434,23 @@ async fn ticks_over_a_second() -> TicksOverASecond {
 /// threads, a whole second's worth.
 const SPIN_IN_THIS_PROCESS_TICKS: u64 = 50;
 
-/// The times nanocode re-sends a Responses call whose connection dropped,
-/// whatever the endpoint's `max_attempts`: MEASURED at 8ec3b215, five (its
-/// `STREAM_MAX_RETRIES`), 200 ms × 2ⁿ apart, 6.2 s in all.
-const RESPONSES_RECONNECTS: usize = 5;
+/// The attempts kata's wire lets one model call fail before it refuses the
+/// next (`kata_agent_nanocode`'s `adapter::wire::ATTEMPTS`), written out: a
+/// call that fails transiently on either kind is sent exactly this many times.
+const WIRE_ATTEMPTS: usize = 5;
 
 /// The mock's answers to a Responses call that fails transiently while a cell
-/// runs: its connection dropped 500 ms after it arrives, and each of
-/// nanocode's [`RESPONSES_RECONNECTS`] re-sends of it dropped at once. The turn
-/// ends about 7 s after the call, its transient failure past them.
+/// runs: its connection dropped 500 ms after it arrives, and each of its
+/// re-sends, to kata's attempt budget ([`WIRE_ATTEMPTS`]), dropped at once.
+/// The turn ends about 16 s after the call (nanocode's 1, 2, 4 and 8 s of
+/// backoff), its transient failure past them.
 fn a_call_its_connection_drops() -> impl Iterator<Item = mock_provider::Reply> {
     std::iter::once(mock_provider::Reply::DropAfter(
         std::time::Duration::from_millis(500),
     ))
     .chain(std::iter::repeat_n(
         mock_provider::Reply::Drop,
-        RESPONSES_RECONNECTS,
+        WIRE_ATTEMPTS - 1,
     ))
 }
 
@@ -3002,19 +3003,6 @@ impl NanocodeKind {
         }
     }
 
-    /// The requests the kind's client sends for one call every attempt of
-    /// which is answered [`Self::server_error`], MEASURED at 8ec3b215: the
-    /// Responses client makes the one attempt kata configures, then re-sends
-    /// the call [`RESPONSES_RECONNECTS`] times;
-    /// the Messages client makes one, the error's `retry-after` past the
-    /// minute it waits.
-    fn transient_attempts(self) -> usize {
-        match self {
-            Self::OpenAi | Self::OpenAiWebSocket => 1 + RESPONSES_RECONNECTS,
-            Self::Anthropic => 1,
-        }
-    }
-
     /// A 400 refusing the request for credit, in the kind's error shape: over
     /// the WebSocket, the `error` event stating the status.
     fn credit_refusal(self) -> mock_provider::Reply {
@@ -3038,11 +3026,7 @@ impl NanocodeKind {
     }
 
     /// A 500 server error, in the kind's error shape: transient to both
-    /// clients, and not a status either waits out. On the Messages kind it
-    /// asks to be retried in 61 s, past the minute nanocode's Messages client
-    /// waits before a re-send (MEASURED at 8ec3b215: it otherwise re-sends it
-    /// eleven times in all, about 180 s of backoff), so the client fails the
-    /// call at once.
+    /// clients, and not a status either waits out.
     fn server_error(self) -> mock_provider::Reply {
         match self {
             Self::OpenAi | Self::OpenAiWebSocket => mock_provider::Reply::Status(
@@ -3052,9 +3036,8 @@ impl NanocodeKind {
                     "code": null,
                 }}),
             ),
-            Self::Anthropic => mock_provider::Reply::StatusWith(
+            Self::Anthropic => mock_provider::Reply::Status(
                 500,
-                vec![("retry-after", "61".to_owned())],
                 serde_json::json!({"type": "error", "error": {
                     "type": "api_error", "message": "mock server error",
                 }}),
@@ -3193,32 +3176,30 @@ fn durable_payload(
 const QUOTA_REFUSAL: &str =
     "You exceeded your current quota, please check your plan and billing details.";
 
-/// **A nanocode turn its provider REFUSED is PROVEN NOT PERFORMED and names the
-/// provider's reason, on either kind and on both Responses transports; it is
-/// charged NOTHING when the refused request was sent once, and an UNKNOWN
-/// charge, never zero, when nanocode re-sent it.** The mock answers the turn's
-/// request refusing it: a 400 for credit over HTTP on either kind; over the
-/// WebSocket, an `error` event stating a 400 for credit, which nanocode re-sends
-/// on a new socket [`RESPONSES_RECONNECTS`] times (MEASURED at 8ec3b215: its
-/// `reconnectable` reads every `error` event without a terminal code so, and
-/// the mock answers each re-send the same), and one stating a 429
-/// `insufficient_quota`, which it does not. Through the real accept path and a
+/// **A nanocode turn its provider REFUSED is PROVEN NOT PERFORMED, names the
+/// provider's reason, and is charged NOTHING, on either kind and on both
+/// Responses transports.** The mock answers the turn's request refusing it: a
+/// 400 for credit over HTTP on either kind; over the WebSocket, an `error`
+/// event stating a 400 for credit, which nanocode would re-send on a new
+/// socket (MEASURED at 8ec3b215: five times, its `reconnectable` reading every
+/// `error` event without a terminal code so) and kata's wire does not, and one
+/// stating a 429 `insufficient_quota`. Through the real accept path and a
 /// second raw handle, the attempt's durable record holds the verdict
-/// `proven_not_performed`, the class `refused`, the charge (the authoritative
-/// `0`, or `unavailable` after a re-send: a re-sent request is no proof that
-/// nothing billed), and the provider's status, error type and message in the
-/// worker's reason; the mock's own log holds the request and its re-sends.
+/// `proven_not_performed`, the class `refused`, the authoritative `0` charge
+/// (a 4xx answer promises no processing), and the provider's status, error
+/// type and message in the worker's reason; the mock's own log holds the one
+/// request.
 ///
 /// **Would red if:** the turn were classified by the bytes that left (watched,
 /// with the adapter's provider-failure arm removed — the earlier
 /// classification: `proven_ambiguous`, no class, an `Unavailable` charge), or a
 /// refusal of the one request were charged as unknown (watched, with
-/// `Observed::failed_turn_charge`'s `Nothing` arm removed: an `Unavailable`
-/// charge), or a re-sent one charged zero, or the WebSocket's error event went
-/// unread (the WebSocket rows `proven_ambiguous`).
+/// `Wire::failed_turn_charge`'s `Nothing` arm removed: an `Unavailable`
+/// charge), or the WebSocket's error event went unread (the WebSocket rows
+/// `proven_ambiguous`), or kata's wire re-sent the WebSocket's refusal
+/// (watched before the wire: six requests, an `unavailable` charge).
 #[tokio::test]
-async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_nothing_unless_resent()
- {
+async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_nothing() {
     let quota = serde_json::json!({"type": "error", "status": 429, "error": {
         "type": "insufficient_quota", "code": "insufficient_quota", "param": null,
         "message": QUOTA_REFUSAL,
@@ -3232,11 +3213,9 @@ async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_no
         ),
         (
             NanocodeKind::OpenAiWebSocket,
-            vec![NanocodeKind::OpenAiWebSocket.credit_refusal(); 1 + RESPONSES_RECONNECTS],
+            vec![NanocodeKind::OpenAiWebSocket.credit_refusal(); WIRE_ATTEMPTS],
             format!("HTTP 400 invalid_request_error: {CREDIT_REFUSAL}"),
-            serde_json::json!({
-                "backend": "nanocode_openai", "model": "gpt-6-luna", "quality": "unavailable",
-            }),
+            serde_json::json!({"quality": "authoritative", "micro_usd": 0}),
         ),
         (
             NanocodeKind::OpenAiWebSocket,
@@ -3251,7 +3230,6 @@ async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_no
             serde_json::json!({"quality": "authoritative", "micro_usd": 0}),
         ),
     ] {
-        let sent = replies.len();
         let mock = mock_provider::MockProvider::start(replies).await;
         let (result, _witness) = a_provider_turn(kind, &mock, CapsuleNetwork::Offline, "a").await;
         let refusal = result.expect_err("a refused turn is a refusal");
@@ -3275,11 +3253,7 @@ async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_no
             stored.contains(&reason),
             "{kind:?}: the provider's own status, type and message: {stored}"
         );
-        assert_eq!(
-            mock.requests().len(),
-            sent,
-            "{kind:?}: the request and nanocode's re-sends of it"
-        );
+        assert_eq!(mock.requests().len(), 1, "{kind:?}: the one request");
     }
 }
 
@@ -3288,7 +3262,7 @@ async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_no
 /// next answer, on either kind.** The first call is answered 500, a status
 /// nanocode does not wait out (MEASURED at 8ec3b215: a 429, 502, 503, 504 or
 /// 529 each client retries for up to 600 s, `nanocode_http`'s `PATIENCE`), every
-/// time the kind's client sends it ([`NanocodeKind::transient_attempts`]). The
+/// time it is sent, to kata's attempt budget ([`WIRE_ATTEMPTS`]). The
 /// first attempt's durable record holds `proven_not_performed`, the class
 /// `transient` and an `Unavailable` charge (no call completed, and a transient
 /// failure is no proof that nothing billed). A second attempt — a fresh
@@ -3303,7 +3277,7 @@ async fn a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_no
 #[tokio::test]
 async fn a_transient_nanocode_failure_is_not_performed_and_a_fresh_attempt_completes() {
     for kind in NANOCODE_KINDS {
-        let attempts = kind.transient_attempts();
+        let attempts = WIRE_ATTEMPTS;
         let mut script = vec![kind.server_error(); attempts];
         script.push(kind.answers());
         let mock = mock_provider::MockProvider::start(script).await;
@@ -3311,7 +3285,7 @@ async fn a_transient_nanocode_failure_is_not_performed_and_a_fresh_attempt_compl
         assert_eq!(
             mock.requests().len(),
             attempts,
-            "{kind:?}: the harness's retries"
+            "{kind:?}: the call's attempts, to kata's budget"
         );
         let refusal = first.expect_err("a transient failure is a refusal");
         let payload = durable_payload(&refusal);

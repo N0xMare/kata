@@ -27,6 +27,9 @@ kata-toolhost-protocol.workspace = true
 nanocode-backend-codex.workspace = true
 nanocode-backend-claude.workspace = true
 nanocode-process-contracts.workspace = true
+# The stream trait of a Messages HTTP layer's response body: kata's wire hands
+# nanocode bodies of its own (`adapter::wire`).
+nanocode-sync.workspace = true
 # The vendored Code Mode engine (`vendor/nanocode-code-mode-engine`): its
 # re-export of nanocode's platform (`platform`), on which the adapter installs
 # kata's tokio runtime as nanocode's host (`adapter::platform`).
@@ -38,6 +41,9 @@ kata-code-mode-host.workspace = true
 async-trait.workspace = true
 # The execution environment states the turn's UTC date.
 chrono.workspace = true
+# The wire's identity of a Messages request: the hash of the body nanocode
+# re-sends unchanged (`adapter::wire`).
+blake3.workspace = true
 serde_json.workspace = true
 # The login store's refusals print their fix with the path shell-quoted.
 shlex.workspace = true

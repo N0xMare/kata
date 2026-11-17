@@ -31,10 +31,10 @@
 //!    `ProviderFailed` (a turn the model provider failed, classed `refused`
 //!    or `transient` from the harness's typed error) is PROVEN NOT PERFORMED
 //!    with that class and the provider's reason — nothing the turn did left an
-//!    offline capsule, and nothing is published — charged the authoritative
-//!    `0` (a refusal of the one request), the metered usage (a refusal no
-//!    re-sent attempt preceded, after completed calls), or `Unavailable` (any
-//!    other failure, which may have billed what no event reports); after a tool call in a capsule that can reach the
+//!    offline capsule, and nothing is published — charged as the adapter
+//!    states (`FailedTurnCharge`): the authoritative `0` (no attempt billed),
+//!    the metered usage (only completed attempts billed), or `Unavailable`
+//!    (an attempt may have billed what no response stated); after a tool call in a capsule that can reach the
 //!    network, or a teardown that could not confirm, it is PROVEN AMBIGUOUS;
 //!    `Ambiguous` is PROVEN AMBIGUOUS with the unmetered usage
 //!    shape — never a zero, because an ambiguous turn may have billed what

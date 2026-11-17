@@ -847,8 +847,13 @@ whether bytes left: a 4xx error answer nanocode does not retry — an HTTP error
 or on the Responses WebSocket an `error` event stating a 4xx status — is a refusal
 (`refused`), and a failure nanocode classes transient (an overload, a rate limit, a
 5xx, a timeout, a dropped stream, a refused connect, or an error event of one of those
-kinds inside a response stream), reached once its own retries are spent, is
-`transient`. Two codes the provider's answer names are classified by name before
+kinds inside a response stream), reached once kata's attempt budget is spent, is
+`transient`. kata, not the harness, bounds the retrying, on the wire below nanocode's
+own retry logic for every model request of both kinds (`adapter::wire`): a call fails
+at most five attempts in a row, each wait is capped at kata's own backoff (1.1 s ×
+2ⁿ), a re-send of a request the provider answered `x-should-retry: false` or that
+kata classes the provider's refusal is never sent, and the call ends on the
+provider's last real failure, classified as above, never on kata's refusal. Two codes the provider's answer names are classified by name before
 nanocode's retry advice is read: a ChatGPT plan's usage quota (`usage_limit_reached`)
 is `refused` on either Responses transport, an HTTPS 429, a WebSocket `error` event
 with or without a status, or a `response.failed` event carrying it, its reason naming
@@ -856,9 +861,13 @@ the quota; and `previous_response_not_found`
 is `transient`, since a fresh attempt chains to no stored response. The worker settles either PROVEN NOT PERFORMED with the class and the
 provider's own error type and message as the reason, unless a tool call ran in a
 capsule that can reach the network (`net = "host"`), or the teardown could not confirm
-the container's subtree empty, which stays PROVEN AMBIGUOUS. A refusal of the turn's
-one request, sent once, is charged the authoritative `0`; otherwise the charge is the
-usage the completed calls reported, or `Unavailable` when none did. Every other failure
+the container's subtree empty, which stays PROVEN AMBIGUOUS. The charge is metered
+attempt by attempt on the wire: a completed attempt at the usage its response states,
+an attempt refused with a 4xx answer (or never sent) at nothing, and any other attempt
+(a 5xx, a cut or early-ended stream, a transport failure after the request left, a
+response stating no usage) makes the charge `Unavailable`; with none such, it is the
+authoritative `0` or the metered sum. A COMPLETED turn is charged the same way: its
+usage is unknown when any attempt's is. Every other failure
 after a request left (an error event stating no HTTP status that nanocode does not
 retry and that names neither code, a `response.failed` among them; a 5xx nanocode does
 not retry; a malformed

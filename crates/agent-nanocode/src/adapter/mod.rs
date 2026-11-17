@@ -58,6 +58,7 @@ mod platform;
 mod seam;
 mod session;
 mod toolhost_client;
+mod wire;
 
 pub use session::NanocodeSession;
 

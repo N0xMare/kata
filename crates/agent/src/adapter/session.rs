@@ -390,19 +390,18 @@ impl TurnOutcome {
 /// be read as a zero, nor a zero as unknown.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FailedTurnCharge {
-    /// The provider billed nothing: it refused the turn's one model request with
-    /// an error response, no model call completed before it, and the harness
-    /// retried no attempt. Recorded as the authoritative `0`.
+    /// The provider billed nothing: every attempt of the turn was refused with
+    /// an error answer that promises no processing (a 4xx), or never left.
+    /// Recorded as the authoritative `0`.
     Nothing,
-    /// The usage the turn's completed model calls reported, summed — what kata
+    /// The usage the turn's completed attempts stated, summed — what kata
     /// metered, and no less than the provider billed: an adapter answers it only
-    /// when the failed request was refused with an error answer and no attempt
-    /// of the turn was re-sent, so no response stream billed output kata never
-    /// saw.
+    /// when every other attempt was refused with such an answer or never left,
+    /// so no attempt billed what kata never saw.
     Metered(TokenUsage),
-    /// The failure may have billed beyond what the completed calls reported (a
-    /// transient failure, a re-sent attempt, a stream cut short), or no
-    /// completed call reported usage: an UNKNOWN charge, recorded as
+    /// An attempt may have billed what no response stated (a 5xx, a stream cut
+    /// short or ended early, a transport failure after the request left), or a
+    /// completed attempt stated no usage: an UNKNOWN charge, recorded as
     /// `Unavailable`, never as zero nor as the part kata metered.
     Unknown,
 }

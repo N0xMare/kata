@@ -225,11 +225,12 @@ const NANOCODE_REPOSITORY: &str = "https://github.com/nanocodexyz/nanocode";
 
 /// The crates kata depends on directly; everything else nanocode brings in is
 /// theirs. `nanocode-code-mode-engine` is the vendored one, a path dependency.
-const DIRECT_CRATES: [&str; 4] = [
+const DIRECT_CRATES: [&str; 5] = [
     "nanocode-backend-claude",
     "nanocode-backend-codex",
     "nanocode-code-mode-engine",
     "nanocode-process-contracts",
+    "nanocode-sync",
 ];
 
 /// The nanocode crates the workspace `[patch]` routes to an in-tree copy under

@@ -6,9 +6,10 @@ one upstream commit and tracks nanocode's `master` by moving that pin deliberate
 
 ## What kata takes from nanocode
 
-- **Three direct git dependencies** in the workspace `Cargo.toml`:
-  `nanocode-backend-codex`, `nanocode-backend-claude` and
-  `nanocode-process-contracts`, all at one `rev`. `NANOCODE_REV` in
+- **Four direct git dependencies** in the workspace `Cargo.toml`:
+  `nanocode-backend-codex`, `nanocode-backend-claude`,
+  `nanocode-process-contracts` and `nanocode-sync` (the stream trait of an HTTP
+  layer's response body, which kata's wire implements), all at one `rev`. `NANOCODE_REV` in
   `crates/agent-nanocode/src/lib.rs` names the same commit.
   `crates/agent-nanocode/tests/nanocode_seam.rs` refuses a `Cargo.lock` that
   resolves any nanocode package to another commit, and a host tool set that moved.
@@ -681,27 +682,72 @@ request body left (`kata_agent_nanocode::adapter::session::provider_failed`, nan
   a refused connect among them) and the Responses client's
   `ResponsesError::retry_advice` (the same statuses unless the body names a terminal
   code, a premature close, a transport or timeout failure, an overload, rate-limit or
-  server error event). nanocode has already retried it. kata is the retry authority
-  (the runner re-runs a transient stage, and walks a fallback panel), so it holds the
-  harness's own retrying as near as nanocode's public knobs allow to what it was at
-  `2ac77424` (five attempts on either client, about 8 s of backoff on the Messages
-  client and 15 s on the Responses client): the Responses client makes the one
-  attempt kata configures (`kata_agent_nanocode::adapter::session::RESPONSES_MAX_ATTEMPTS`;
-  nanocode's default is five), then re-sends a call whose stream failed (a dropped
-  connection, a cut mid-body, a non-terminal error event) five more times
-  (`STREAM_MAX_RETRIES`, 200 ms doubling), on the WebSocket after falling back to
-  HTTPS: six sends in 6.2 s over HTTPS, seven over the WebSocket (MEASURED,
-  `nanocode_qualification`'s
-  `the_responses_client_sends_a_failing_call_six_times_within_seconds`; nanocode's
-  default would send thirty). No knob reaches the rest, which kata does not patch:
-  the re-send count; the Messages client's eleven attempts whatever kata asks
-  (MEASURED: about 180 s for a dropped connection or a 500); and both clients'
-  patience, which waits out a 429, 502, 503, 504 or 529 (on the Responses client also
-  an overload or rate-limit error event) for up to 600 s from the call's first
-  attempt (`nanocode_http`'s `PATIENCE`), or the `retry-after` it names when that is
-  longer than the backoff and still within it. MEASURED worst case at `8ec3b215`, every attempt of a call
-  answered 503 by a mock: the Messages client sent 22 requests over 578 s, the
-  Responses client (HTTPS) 49 over 605 s, before the turn ended `Transient`.
+  server error event). It has been retried, within kata's attempt budget below.
+- **the call's last real failure** when kata's wire ended the call
+  (`kata_agent_nanocode::adapter::wire`): the provider's own failure of the call's
+  last attempt, classified by these same rules, never kata's refusal.
+
+### kata's wire: the attempt budget, the waits, the meter
+
+kata, not the harness, is the retry authority (the runner re-runs a transient stage
+and walks a fallback panel), and it bounds nanocode's retrying where it can measure
+it: on the wire, below nanocode's own retry logic, on every model request of both
+kinds, without any of nanocode's retry knobs (`adapter/wire.rs`). On the Responses
+kind kata rebuilds nanocode's standard service (`Retry::into_inner`) as nanocode's own
+retry policy over kata's `ResponsesWire`, so every attempt, its retries, its 429-to-529
+patience and its stream re-sends after a cut included, reaches kata with its typed
+result on either transport; on the Messages kind the client's HTTP layer
+(`MessagesMark`) sees every request and response. Upstream at `8ec3b215`, unbounded,
+the Messages client makes eleven attempts (about 180 s for a dropped connection or a
+500), both clients wait out a 429, 502, 503, 504 or 529 for up to 600 s (MEASURED,
+every attempt answered 503: the Messages client 22 requests in 578 s, the Responses
+client 49 in 605 s), and the Responses client re-sends a failed stream five more
+times beyond its attempts, a 5xx the provider marked `x-should-retry: false` among
+them. Under the wire:
+
+- A call may fail **five attempts in a row** (`ATTEMPTS`, kata's and nanocode's own at
+  `2ac77424`); the next request is refused before it leaves, unsent and not
+  retryable, which ends the call on either client. So is a re-send of a request the
+  provider answered `x-should-retry: false` (ADR 0003's finding F3) and of one whose
+  answer kata classes the provider's refusal (a WebSocket `error` event stating a 4xx,
+  a plan's `usage_limit_reached` 429): nanocode would re-send each. The count is the
+  turn's failed attempts since one last completed, so a new call after a failure
+  nanocode does not re-send counts on: tighter than per call, never looser.
+- The call ends on the provider's **last real failure**: on the Responses kind the
+  retry policy makes no further attempt and nanocode's retry layer hands that
+  attempt's own typed error back at once; on the Messages kind the wire refuses the
+  next request, and the session classifies the turn by the failure the wire recorded,
+  rebuilt as nanocode's own `ClaudeError` from the status, headers and body (or the
+  transport failure, the error event, the stream that ended before `message_stop`)
+  the wire saw, through `provider_failure` — the class that failure has without kata.
+- Every wait is capped at kata's `2ac77424` backoff, 1.1 s × 2ⁿ (`wait_cap`): on the
+  Responses kind the retry policy's wait is cut there; on the Messages kind a
+  `retry-after` past it, or one kata cannot read, is removed from the error answer
+  before nanocode reads it, so nanocode waits its own backoff. MEASURED at
+  `8ec3b215`, every attempt answered 503, a 429 asking 120 s, or cut mid-body: five
+  requests, the Responses turn over in 16.3 s to 16.5 s, the Messages turn in 17.4 s
+  (`nanocode_qualification`'s `a_call_answered_503_every_time_ends_on_the_attempt_budget`,
+  `a_429_asking_two_minutes_is_waited_at_most_the_wires_cap`,
+  `a_call_cut_mid_response_every_time_ends_on_the_attempt_budget`; a 500 marked
+  `x-should-retry: false` is sent once on either kind,
+  `a_5xx_marked_not_to_retry_is_sent_once`). The Messages kind pays one more wait than
+  at `2ac77424`: nanocode waits its backoff after the last allowed attempt (8 s, up
+  to 25% over) before the request kata refuses.
+- What it costs, stated: kata's rebuilt Responses retry policy carries no
+  WebSocket-to-HTTPS fallback (nanocode's `with_standard_transport_fallback` is
+  crate-private), so a WebSocket the provider refuses fails the call
+  (`a_refused_websocket_connect_is_marked_conservatively`), and the runner re-runs a
+  transient stage.
+- Every attempt is **metered on the wire**, never read off nanocode's events: a
+  completed attempt is charged the usage its response states (a Responses `usage`; a
+  Messages stream's `message_start` and `message_delta` usage through its
+  `message_stop`); an attempt the provider refused with a 4xx answer (or a WebSocket
+  `error` event stating a 4xx), or that never left, nothing; every other attempt — a
+  5xx, a stream cut or ended early, a transport failure after the request left, a
+  completed response that states no usage — UNKNOWN, which makes the turn's charge
+  unknown, a COMPLETED turn's usage (`None`) as much as a failed one's
+  (`nanocode_qualification`'s `a_completed_turn_with_a_cut_attempt_is_charged_unknown`).
+
 - **by name**, before nanocode's retry advice is read, for two codes the answer
   names in `error.type` or `error.code`: `usage_limit_reached` (a ChatGPT plan's
   usage quota) is **refused** on either Responses transport — an HTTPS 429, which
@@ -728,14 +774,11 @@ context-window or image refusal nanocode reshaped from its status, a malformed
 response — stays `Ambiguous`, as does every break of the tool-host wire and a provider
 failure on a turn kata asked to stop. A Responses HTTPS response the connection cut
 mid-body is no longer among them: at `8ec3b215` nanocode reports it as a retryable
-transport failure and re-sends the call (above), so a cut its re-sends do not outlast
-is **transient** (MEASURED, 1 + 5 + 1 requests; at `2ac77424` it was an undecodable
-body with no retry advice, `Ambiguous`). A re-sent stream may have been billed for
-output no event reports, so the turn's charge is a known one only when no stream can
-have billed unseen: the provider refused the failing request with an error answer and
-nanocode re-sent no attempt of the turn. Then it is the completed calls' usage, or
-nothing at all when none completed; every other provider failure — a transient one, or
-any turn with a re-sent attempt — is charged UNKNOWN (`Observed::failed_turn_charge`;
+transport failure and re-sends the call (above), so a cut kata's attempt budget ends
+on is **transient** (MEASURED, 1 + 5 requests; at `2ac77424` it was an undecodable
+body with no retry advice, `Ambiguous`). The turn's charge is the wire's meter
+(above): known only when no attempt can have billed unseen
+(`kata_agent_nanocode::adapter::wire::Wire::failed_turn_charge`;
 `nanocode_qualification`'s `a_failed_turn_with_a_resent_attempt_is_charged_unknown`).
 The outcome
 is `TurnOutcome::ProviderFailed`, which also states whether a tool call left the
@@ -746,7 +789,7 @@ harness during the turn and what the turn is charged; the worker settles it
 `a_plan_usage_limit_is_refused_on_both_transports_naming_the_quota`,
 `a_plan_usage_limit_in_a_response_failed_event_is_refused_naming_the_quota`,
 `a_previous_response_not_found_is_transient_on_both_transports`,
-`a_transient_failure_past_the_harness_retries_is_classed_transient`,
+`a_transient_failure_past_the_attempt_budget_is_classed_transient`,
 `a_server_error_the_harness_does_not_retry_stays_ambiguous`,
 `a_model_connection_dropped_mid_response_is_a_transient_failure` and the
 `a_refused_*_connect_is_marked_conservatively` cells pin this classification on both
@@ -767,7 +810,7 @@ re-run backoffs among it).
 commit sha, or a branch or tag the remote resolves, such as `master`. It runs these
 steps in order and stops at the first failure:
 
-1. `scripts/nanocode-vendor.py bump` rewrites the three direct pins in `Cargo.toml`
+1. `scripts/nanocode-vendor.py bump` rewrites the four direct pins in `Cargo.toml`
    and `NANOCODE_REV`. It then re-derives `vendor/nanocode-code-mode-engine` at the
    new rev and re-applies the patch. If the patch no longer applies, it fails
    loudly with `git apply`'s error and leaves the tree as the pristine upstream
@@ -844,11 +887,15 @@ The recipe does not finish the bump. After it:
   reads (above): `NanocodeError::Response`, `BackendFailure::{retryable, as_any}`,
   `ClaudeError::{Http, is_transient}`, `ResponseError::responses_error` and
   `ResponsesError::{HttpRejected, HandshakeRejected, Api, retry_advice}` (the
-  WebSocket `error` event's `status` field among them), the Messages client's eleven
-  attempts, and the Responses client's re-sends past the `max_attempts` kata configures
-  (`STREAM_MAX_RETRIES`) and both clients' patience (`PATIENCE`), which no knob
-  reaches. A variant that moved fails the build; a classification
-  that moved reds the cells named above, which are then re-measured, never weakened.
+  WebSocket `error` event's `status` field among them), and what kata's wire stands
+  on (`adapter/wire.rs`): `DefaultResponsesService` as `Retry<ResponsesRetryPolicy,
+  ResponsesService>` with `Retry::into_inner`, `ResponsesRetryPolicy::default`, the
+  `ResponsesServiceResponse` parts it rebuilds, `ClaudeError::{Http, Transport,
+  StreamError, IncompleteStream}` it rebuilds from the wire, and the clients'
+  backoff it leaves within `wait_cap` (the Messages client's 500 ms doubling; the
+  Responses client's 1 s doubling). A variant that moved fails the build; a
+  classification or a budget that moved reds the cells named above, which are then
+  re-measured, never weakened.
 - Re-check, at the new rev, the private `ChatGptSubscription` state fields kata
   reads out of nanocode's store, `credential.{refresh_token, account_id,
   expires_at}`: `kata_agent_nanocode::credential::login_state` reads all three for

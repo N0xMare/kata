@@ -798,10 +798,10 @@ pins = "a panel's seat-0 capsule whose frame the delivery door cannot build is s
 [[property.cell]]
 package = "kata-worker"
 binary = "agent_turn_capsule"
-test = "a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_nothing_unless_resent"
+test = "a_provider_refused_nanocode_turn_is_proven_not_performed_and_charged_nothing"
 kind = "host-free"
 layer = "L1"
-pins = "on both nanocode kinds and both Responses transports, a turn whose one request the provider refused for credit (an HTTP 400; on the WebSocket, the `error` event stating status 400, and also a 429 `insufficient_quota` event), through the worker and the real accept path, read off a second raw handle: verdict `proven_not_performed`, `provider_failure` `refused`, and the provider's error type and message in the worker's reason; the authoritative `0` charge and one request in the mock's own log where nanocode sent the request once, and an `unavailable` charge with the request and its five re-sends for the WebSocket 400 event, which nanocode re-sends since 8ec3b215 (red at a81296c51: `proven_ambiguous`; the WebSocket row red while the error event went unread)"
+pins = "on both nanocode kinds and both Responses transports, a turn whose one request the provider refused for credit (an HTTP 400; on the WebSocket, the `error` event stating status 400, and also a 429 `insufficient_quota` event), through the worker and the real accept path, read off a second raw handle: verdict `proven_not_performed`, `provider_failure` `refused`, the authoritative `0` charge, the provider's error type and message in the worker's reason, and one request in the mock's own log: kata's wire re-sends no refusal, though nanocode would re-send the WebSocket 400 event five times (red at a81296c51: `proven_ambiguous`; the WebSocket row red while the error event went unread; red before kata's wire: six requests and an `unavailable` charge)"
 
 [[property.cell]]
 package = "kata-worker"
@@ -809,7 +809,7 @@ binary = "agent_turn_capsule"
 test = "a_transient_nanocode_failure_is_not_performed_and_a_fresh_attempt_completes"
 kind = "host-free"
 layer = "L1"
-pins = "on both nanocode kinds, a turn whose first call's every attempt is answered 500 (a 529 is waited out for up to 600 s since 8ec3b215; the Responses client sends 6, kata's one attempt and nanocode's five re-sends, the Messages client 1, `retry-after` 61 s) is, durably, `proven_not_performed` with `provider_failure` `transient` naming HTTP 500 and an `Unavailable` charge; a fresh attempt against the same mock completes on its next answer (red at a81296c51: `proven_ambiguous`, which the main never re-runs)"
+pins = "on both nanocode kinds, a turn whose first call's every attempt is answered 500 is sent to kata's attempt budget, five requests on either kind, and is, durably, `proven_not_performed` with `provider_failure` `transient` naming HTTP 500 and an `Unavailable` charge; a fresh attempt against the same mock completes on its next answer (red at a81296c51: `proven_ambiguous`, which the main never re-runs)"
 
 [[property.cell]]
 package = "kata-worker"
@@ -873,7 +873,7 @@ binary = "nanocode_qualification"
 test = "no_model_request_leaves_once_the_turn_future_is_dropped"
 kind = "host-free"
 layer = "L1"
-pins = "a turn future dropped with no stop asked of nanocode, while a Code Mode cell's tool call is in flight: the cell's yield makes nanocode ask the model again, and the mock's own log still holds one request 2 s after the drop and after `close`, the watermark read at the drop unchanged (dropping the future closes the gate, and `IssuanceMark` refuses every attempt called once it is closed)"
+pins = "a turn future dropped with no stop asked of nanocode, while a Code Mode cell's tool call is in flight: the cell's yield makes nanocode ask the model again, and the mock's own log still holds one request 2 s after the drop and after `close`, the watermark read at the drop unchanged (dropping the future closes the gate, and kata's wire refuses every attempt made once it is closed)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -905,7 +905,7 @@ binary = "nanocode_qualification"
 test = "a_refused_messages_connect_is_marked_conservatively"
 kind = "host-free"
 layer = "L1"
-pins = "on the Anthropic kind with one attempt allowed, a refused connect ends the turn a `Transient` ProviderFailed charged Unknown, naming the Messages transport, with the watermark at `ModelTokens`"
+pins = "on the Anthropic kind, a refused connect ends the turn a `Transient` ProviderFailed charged NOTHING (each attempt failed unsent), naming the Messages transport, with the watermark at `ModelTokens`, within kata's attempt budget"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -913,7 +913,7 @@ binary = "nanocode_qualification"
 test = "an_anthropic_dropped_model_connection_after_a_tool_frame_is_a_transient_failure"
 kind = "host-free"
 layer = "L1"
-pins = "the Anthropic kind: the provider drops the MODEL connection on the request after a `Bash` frame was forwarded: a `Transient` provider failure that says a tool ran, the watermark at the first crossing, `ModelTokens`, the tool's frame on the double's log, and the mock's log holding the first call and nanocode's eleven attempts of the dropped one, one send and ten re-sends (MEASURED at 8ec3b215, about 180 s; the cell's turn is bounded at 300 s under its own nextest kill); the toolhost wire's own break stays ambiguous"
+pins = "the Anthropic kind: the provider drops the MODEL connection on the request after a `Bash` frame was forwarded: a `Transient` provider failure that says a tool ran, the watermark at the first crossing, `ModelTokens`, the tool's frame on the double's log, and the mock's log holding the first call and the dropped one's five attempts, kata's attempt budget (nanocode alone makes eleven, about 180 s, MEASURED at 8ec3b215); the toolhost wire's own break stays ambiguous"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -926,18 +926,50 @@ pins = "on both kinds, a 400 refusing the turn's first request for credit ends t
 [[property.cell]]
 package = "kata-agent-nanocode"
 binary = "nanocode_qualification"
-test = "a_transient_failure_past_the_harness_retries_is_classed_transient"
+test = "a_transient_failure_past_the_attempt_budget_is_classed_transient"
 kind = "host-free"
 layer = "L1"
-pins = "on both kinds, every attempt of the turn's first call answered 500 (a 529 is now waited out for up to 600 s): the mock's own log holds every attempt the kind's client makes (the Responses client's one attempt, as kata configures it, re-sent five times, 6; the Messages client's hard-coded eleven) and the turn ends `ProviderFailed` classed `Transient`, naming the provider's answer, charged UNKNOWN, never zero (red at a81296c51: `Ambiguous{ModelTokens}`)"
+pins = "on both kinds, every request answered 500: the mock's own log holds kata's attempt budget, five, and the turn ends `ProviderFailed` classed `Transient`, naming the provider's 500, never kata's refusal, charged UNKNOWN, never zero (red at a81296c51: `Ambiguous{ModelTokens}`)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
 binary = "nanocode_qualification"
-test = "the_responses_client_sends_a_failing_call_six_times_within_seconds"
+test = "a_call_answered_503_every_time_ends_on_the_attempt_budget"
 kind = "host-free"
 layer = "L1"
-pins = "kata configures nanocode's Responses client to one attempt (`RESPONSES_MAX_ATTEMPTS`), so a call every send of which fails is sent six times over HTTPS (answered 500) and seven over the WebSocket (dropped at once; nanocode falls back to HTTPS), each count read off the mock's own log, and the turn ends `Transient` within 6.2 s to 16.5 s (MEASURED at 8ec3b215: 6.22 s on each transport; red with `configure` left at nanocode's default five attempts: the call sent past the script, the turn completed at 17.5 s)"
+pins = "on both kinds at once, every request answered 503 (which nanocode alone waits out up to 600 s: MEASURED at 8ec3b215, Messages 22 requests in 578 s, Responses 49 in 605 s): exactly five requests in the mock's own log, the turn over within 13.5 s to 18.5 s (Responses) or 15.5 s to 21.4 s (Messages) (MEASURED: 16.3 s, 17.4 s), `ProviderFailed` classed `Transient` naming HTTP 503 and the provider's message, never kata's refusal, charged UNKNOWN (red before kata's wire, and with the budget unbounded: past TURN_BOUND, 30 s)"
+
+[[property.cell]]
+package = "kata-agent-nanocode"
+binary = "nanocode_qualification"
+test = "a_429_asking_two_minutes_is_waited_at_most_the_wires_cap"
+kind = "host-free"
+layer = "L1"
+pins = "on both kinds at once, every request answered 429 with `retry-after: 120`: five requests, the turn over within kata's backoff (each wait capped at 1.1 s × 2ⁿ: the Responses policy's wait cut, the Messages `retry-after` removed), `Transient` naming HTTP 429, charged NOTHING (red before kata's wire, and with the waits uncapped: past TURN_BOUND, 30 s)"
+
+[[property.cell]]
+package = "kata-agent-nanocode"
+binary = "nanocode_qualification"
+test = "a_call_cut_mid_response_every_time_ends_on_the_attempt_budget"
+kind = "host-free"
+layer = "L1"
+pins = "on both kinds at once, every response cut mid-body before its terminal event: five requests, `Transient`, charged UNKNOWN, the Messages turn within its budget backoff (red before kata's wire: six Responses requests, the Messages turn past TURN_BOUND)"
+
+[[property.cell]]
+package = "kata-agent-nanocode"
+binary = "nanocode_qualification"
+test = "a_5xx_marked_not_to_retry_is_sent_once"
+kind = "host-free"
+layer = "L1"
+pins = "ADR 0003 F3 at kata's wire: on both kinds every request answered 500 with `x-should-retry: false` is sent ONCE (nanocode's Responses client alone re-sends it five times), and the turn ends `Ambiguous{ModelTokens}` naming the provider's 500, never kata's refusal (red before kata's wire: six Responses requests)"
+
+[[property.cell]]
+package = "kata-agent-nanocode"
+binary = "nanocode_qualification"
+test = "a_completed_turn_with_a_cut_attempt_is_charged_unknown"
+kind = "host-free"
+layer = "L1"
+pins = "on both kinds, a call cut mid-body once and then answered whole completes with usage `None`, unknown, the cut attempt's billing unseen, two requests in the mock's own log; without the cut the same turn's usage is the call's, metered on the wire (Responses 1/1, Messages 10 in, 3 out) (red before kata's wire: `Some` of the completed call's usage; red with the Messages `output_tokens` misread)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -953,7 +985,7 @@ binary = "nanocode_qualification"
 test = "a_websocket_error_event_with_a_4xx_status_is_the_providers_refusal"
 kind = "host-free"
 layer = "L1"
-pins = "on the Responses kind's production transport, the WebSocket, the turn's one request answered with an `error` event stating status 400 (credit) or 429 (`insufficient_quota`) ends `ProviderFailed` classed `Refused`, naming the status, type and message, charged Unknown (nanocode re-sent the event's stream, so a retried attempt ran), six requests in the mock's own log (the call and nanocode's five re-sends); an `error` event stating no status and a `response.failed` event stay `Ambiguous{ModelTokens}` (red while the error event went unread: every row ambiguous; red with a missing status read as 400: the status-less row `Refused`; red at 8ec3b215 with a `response.failed` event's error read as a 400 answer: that row `Refused`)"
+pins = "on the Responses kind's production transport, the WebSocket, the turn's one request answered with an `error` event stating status 400 (credit) or 429 (`insufficient_quota`) ends `ProviderFailed` classed `Refused`, naming the status, type and message, charged NOTHING, one request in the mock's own log (kata's wire re-sends no refusal; red with that rule dropped: five requests); an `error` event stating no status (re-sent to the budget, five requests) and a `response.failed` event stay `Ambiguous{ModelTokens}` (red while the error event went unread: every row ambiguous; red with a missing status read as 400: the status-less row `Refused`; red at 8ec3b215 with a `response.failed` event's error read as a 400 answer: that row `Refused`)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -961,7 +993,7 @@ binary = "nanocode_qualification"
 test = "a_plan_usage_limit_is_refused_on_both_transports_naming_the_quota"
 kind = "host-free"
 layer = "L1"
-pins = "a ChatGPT plan's usage quota answer (`error.type = \"usage_limit_reached\"`) to the turn's one request — an HTTPS 429 nanocode reads as retryable, a WebSocket `error` event stating 429, and one stating no status — ends `ProviderFailed` classed `Refused` on each, its reason naming the usage quota, the code and the provider's message (the HTTPS 429 carries `retry-after: 3600`, which nanocode's 600 s patience does not wait out; the WebSocket events' streams re-sent five times) (red before the adapter read the code by name: the HTTPS row `Transient`)"
+pins = "a ChatGPT plan's usage quota answer (`error.type = \"usage_limit_reached\"`) to the turn's one request — an HTTPS 429 with `retry-after: 3600`, a WebSocket `error` event stating 429, and one stating no status — ends `ProviderFailed` classed `Refused` on each, its reason naming the usage quota, the code and the provider's message, each sent once (nanocode would re-send each; kata's wire re-sends no refusal), charged NOTHING for the 4xx answers and UNKNOWN for the status-less event (red before the adapter read the code by name: the HTTPS row `Transient`)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -977,7 +1009,7 @@ binary = "nanocode_qualification"
 test = "a_previous_response_not_found_is_transient_on_both_transports"
 kind = "host-free"
 layer = "L1"
-pins = "a `previous_response_not_found` 400 to the turn's one request, over HTTPS and as a WebSocket `error` event stating 400, ends `ProviderFailed` classed `Transient`, naming the code (the WebSocket event's stream re-sent five times) (red before the adapter read the code by name: the HTTPS row `Refused`)"
+pins = "a `previous_response_not_found` 400 to the turn's one request, over HTTPS and as a WebSocket `error` event stating 400, ends `ProviderFailed` classed `Transient`, naming the code (the WebSocket event's stream re-sent to kata's attempt budget, five requests) (red before the adapter read the code by name: the HTTPS row `Refused`)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -993,7 +1025,7 @@ binary = "nanocode_qualification"
 test = "a_model_connection_dropped_mid_response_is_a_transient_failure"
 kind = "host-free"
 layer = "L1"
-pins = "on the Responses HTTPS transport, a second response the mock cuts mid-body after a tool frame went out is a retryable transport failure nanocode re-sends five times (at nanocode 2ac77424 it was an undecodable body with no retry advice, `Ambiguous`), so the turn ends `ProviderFailed` classed `Transient` saying a tool ran, and the mock's own log holds seven requests: the first call, the cut one and its five re-sends (MEASURED at 8ec3b215)"
+pins = "on the Responses HTTPS transport, a second response the mock cuts mid-body after a tool frame went out is a retryable transport failure nanocode re-sends (at nanocode 2ac77424 it was an undecodable body with no retry advice, `Ambiguous`), so the turn ends `ProviderFailed` classed `Transient` saying a tool ran, and the mock's own log holds six requests: the first call and the cut one's five attempts, kata's budget"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -1001,7 +1033,7 @@ binary = "nanocode_qualification"
 test = "a_failed_turn_with_a_resent_attempt_is_charged_unknown"
 kind = "host-free"
 layer = "L1"
-pins = "a failed turn any of whose attempts nanocode re-sent is charged UNKNOWN, never only what the completed calls reported: a Responses turn whose first call completed with its usage and whose second call the mock cuts mid-body on every send (seven requests in the mock's own log) ends `Transient` charged `Unknown`; on both kinds a call answered 500 and then, re-sent, refused 400 for credit (two requests) ends `Refused` charged `Unknown` (red on the charge before: `Metered` with the first call's usage, and `Nothing`)"
+pins = "a failed turn any attempt of which may have billed unseen is charged UNKNOWN, never only what the completed calls reported: a Responses turn whose first call completed with its usage and whose second call the mock cuts mid-body on every send (six requests in the mock's own log) ends `Transient` charged `Unknown`; on both kinds a call answered 500 and then, re-sent, refused 400 for credit (two requests) ends `Refused` charged `Unknown`, the 500 promising nothing (red on the charge before nanocode 8ec3b215's re-sends were counted: `Metered` with the first call's usage, and `Nothing`)"
 
 [[property.cell]]
 package = "kata"
@@ -1054,10 +1086,10 @@ pins = "MEASURED: a refused HTTPS connect happens inside the Generation attempt 
 [[property.cell]]
 package = "kata-agent-nanocode"
 binary = "nanocode_qualification"
-test = "a_refused_websocket_connect_falls_back_and_is_marked_conservatively"
+test = "a_refused_websocket_connect_is_marked_conservatively"
 kind = "host-free"
 layer = "L1"
-pins = "with both the WebSocket and the HTTPS endpoint refusing connects, the Responses turn ends a `Transient` ProviderFailed naming the Responses HTTPS request, with the watermark at `ModelTokens` (the WebSocket's own unmarked Connect attempt is not observed)"
+pins = "on the WebSocket transport, with both endpoints refusing connects, the Responses turn's Generation attempt is marked by kata's wire and the turn ends a `Transient` ProviderFailed naming the WebSocket handshake: kata's rebuilt retry policy carries no HTTPS fallback (red before kata's wire: the failure the HTTPS request's)"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -1973,7 +2005,7 @@ binary = "nanocode_qualification"
 test = "a_toolhost_wedged_mid_write_reads_its_stdin_dropped_at_the_turn_end"
 kind = "host-free"
 layer = "L1"
-pins = "a Code Mode cell's 2 MiB write stuck on a double that stopped reading at its header and stays alive: `prompt` returns a transient ProviderFailed within 20 s, and within 1 s after it the still-running double reads its stdin closed (no `write_file` reached it); `close` then returns confirmed"
+pins = "a Code Mode cell's 2 MiB write stuck on a double that stopped reading at its header and stays alive: `prompt` returns within 20 s (the next model call answered a 500 marked `x-should-retry: false`, `Ambiguous`, sent once), and within 1 s after it the still-running double reads its stdin closed (no `write_file` reached it); `close` then returns confirmed"
 
 [[property.cell]]
 package = "kata-agent-nanocode"
@@ -14190,7 +14222,7 @@ binary = "nanocode_qualification"
 test = "a_refusal_after_a_call_that_reported_no_usage_is_charged_unknown"
 kind = "host-free"
 layer = "L1"
-pins = "on the Responses kind, a first call that ran `true` and completed stating no usage, then a 400 refusal: `ProviderFailed` classed `Refused`, charged UNKNOWN (red with the charge's completed-call test removed: `Nothing`)"
+pins = "on the Responses kind, a first call that ran `true` and completed stating no usage, then a 400 refusal: `ProviderFailed` classed `Refused`, charged UNKNOWN (red with `Wire::completed` charging a stated-no-usage attempt nothing: `Nothing`)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14198,7 +14230,7 @@ binary = "nanocode_qualification"
 test = "a_refusal_after_a_retried_attempt_is_charged_unknown"
 kind = "host-free"
 layer = "L1"
-pins = "on both kinds, a 529 the client retries and then a 400 refusal: `ProviderFailed` classed `Refused`, charged UNKNOWN, never zero; two requests in the mock's own log (red with the charge's retried-attempt test removed: `Nothing`)"
+pins = "on both kinds, a 529 the client retries and then a 400 refusal: `ProviderFailed` classed `Refused`, charged UNKNOWN, never zero, the 529 promising nothing; two requests in the mock's own log (red with the wire charging every error answer nothing: `Nothing`)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"

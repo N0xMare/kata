@@ -109,32 +109,6 @@ pub async fn turn(session: &mut dyn AgentSession, prompt: &Prompt) -> TurnOutcom
     cancellable_turn(session, prompt, &CancelToken::new()).await
 }
 
-/// How long a cell waits for a turn whose Messages call must exhaust
-/// nanocode's retries: MEASURED at 8ec3b215, the Messages client makes eleven
-/// attempts of a call whose every attempt fails transiently (a dropped
-/// connection, a 5xx it does not wait out), 500 ms × 2ⁿ apart, capped at 32 s,
-/// with up to 25 % jitter: 159.5 s to 199.4 s of backoff, 178.8 s and 183.8 s
-/// measured. A cell that waits this long names itself in
-/// `nanocode_qualification`'s `RETRY_EXHAUSTION_CELLS`, which
-/// `the_turn_bound_is_at_most_half_of_nextests_kill` holds to a nextest kill
-/// of at least twice this.
-pub const RETRY_EXHAUSTION_BOUND: Duration = Duration::from_secs(300);
-
-/// One turn, bounded by [`RETRY_EXHAUSTION_BOUND`].
-pub async fn exhausting_turn(session: &mut dyn AgentSession, prompt: &Prompt) -> TurnOutcome {
-    tokio::time::timeout(
-        RETRY_EXHAUSTION_BOUND,
-        session.prompt(prompt, &CancelToken::new()),
-    )
-    .await
-    .unwrap_or_else(|_| {
-        panic!(
-            "the turn did not end within RETRY_EXHAUSTION_BOUND, {} s",
-            RETRY_EXHAUSTION_BOUND.as_secs()
-        )
-    })
-}
-
 /// One turn under the caller's cancel token, bounded by [`TURN_BOUND`].
 pub async fn cancellable_turn(
     session: &mut dyn AgentSession,

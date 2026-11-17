@@ -3607,6 +3607,7 @@ dependencies = [
  "nanocode-backend-codex",
  "nanocode-code-mode-engine",
  "nanocode-process-contracts",
+ "nanocode-sync",
  "reqwest",
  "rustix",
  "serde",

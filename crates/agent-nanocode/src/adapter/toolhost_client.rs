@@ -116,12 +116,12 @@ pub(crate) const STOPPING: &str = "the turn is stopping; no further tool call ru
 
 /// The turn's gate: the issuance watermark and whether the turn is stopping,
 /// under ONE lock, shared by the session, the seam, the client and the model
-/// clients (`IssuanceMark`, `MessagesMark`). It closes when a stop is asked (an
+/// clients' wire (`super::wire`). It closes when a stop is asked (an
 /// operator cancel, a latch), when `prompt`'s future is dropped, and at every
 /// turn end; once closed, the client queues no frame that could change the
 /// capsule (module doc, "The gate holds the queue"), no seam call answers the
-/// model, and no model request leaves on either kind (`IssuanceMark`,
-/// `MessagesMark`; `session.rs`, "The watermark is final once the gate
+/// model, and no model request leaves on either kind (`super::wire`;
+/// `session.rs`, "The watermark is final once the gate
 /// closes"). Closing takes the lock a frame is queued and a mark
 /// taken under, and a mark is taken only while the gate is open, so once the
 /// gate is closed the watermark never moves again.

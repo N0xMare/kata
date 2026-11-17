@@ -180,7 +180,8 @@ commonware-codec        = { git = "https://github.com/commonwarexyz/monorepo", r
 commonware-conformance  = { git = "https://github.com/commonwarexyz/monorepo", rev = "d476a2361ce6840d2b9d0aa6fb30a924429046d4" }
 
 # The nanocode agent harness (`crates/agent-nanocode`): only its three direct
-# backend crates, never the `nanocode` facade, whose `Runtime` brings a session
+# backend crates and the stream trait its HTTP layers' bodies are made of
+# (`nanocode-sync`, which kata's wire implements for the bodies it hands back), never the `nanocode` facade, whose `Runtime` brings a session
 # store kata does not use. Pinned to one nanocodexyz/nanocode commit because the host
 # seam kata implements (`crates/core/process/src/lib.rs`) and the tools each
 # backend registers over it move between commits. A bump is a deliberate change:
@@ -196,12 +197,13 @@ commonware-conformance  = { git = "https://github.com/commonwarexyz/monorepo", r
 # crates.io crates (serde, serde_json, rustls and others) with copies of its own;
 # a `[patch]` binds only the workspace that declares it, so kata builds nanocode
 # against the crates.io releases its lock names.
-# `just nanocode-bump <rev>` moves these three revs, `NANOCODE_REV`, the lock, the
+# `just nanocode-bump <rev>` moves these four revs, `NANOCODE_REV`, the lock, the
 # vendored engine below and the flake hash together
 # (docs/development/nanocode.md).
 nanocode-backend-codex     = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
 nanocode-backend-claude    = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
 nanocode-process-contracts = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
+nanocode-sync              = { git = "https://github.com/nanocodexyz/nanocode", rev = "8ec3b215ed9280219956b4cea9edcd871fd541fb" }
 # The vendored engine itself, for `crates/code-mode-host`, which fills its
 # worker seam, and `crates/agent-nanocode`, which installs nanocode's platform
 # through it (the `[patch]` below routes nanocode's own dependents to it).

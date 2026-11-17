@@ -12,14 +12,16 @@
 //! 4. Build the agent over kata's seam, always with the capsule's execution
 //!    environment, so nanocode probes nothing on the host. The Anthropic kind
 //!    takes nanocode's own system blocks for the turn's model, and its client
-//!    sends them without the Claude Agent SDK identity that opens them
-//!    ([`without_claude_code_blocks`]).
+//!    sends them without the Claude Agent SDK identity that opens them and the
+//!    bypass-mode steer ([`without_claude_code_blocks`]).
 //! 5. Tool-set check: the host tool set is exactly kata's, with no dynamic or
 //!    attachable provider.
 //! 6. Prompt. The issuance watermark is marked `ModelTokens` INSIDE the model
-//!    client, before a request leaves: per Generation or Compaction attempt on
-//!    the Responses kind ([`IssuanceMark`]), per Messages request on the
-//!    Anthropic kind ([`MessagesMark`]). So a failure before the client is
+//!    client, before a request leaves, by kata's wire (`super::wire`): per
+//!    Generation or Compaction attempt on the Responses kind, below nanocode's
+//!    retry layer (`ResponsesWire`), per Messages request on the Anthropic
+//!    kind ([`MessagesMark`]). The wire also bounds each call's attempts and
+//!    meters every attempt's usage. So a failure before the client is
 //!    asked for any request is a refusal, not an ambiguity; a refused connect
 //!    is inside the first request, marked (over-marked, never under-marked).
 //!    Once the turn's gate is closed, both refuse every request nanocode
@@ -42,11 +44,13 @@
 //! | the cancel token fired, no confirmation within 5 s, watermark crossed | `Ambiguous` at the crossed class |
 //! | the cancel token fired, no confirmation within 5 s, watermark clean | `Cancelled{usage: None}` |
 //! | `TurnCancelled` nobody asked for | `Ambiguous` at the crossed class |
+//! | nobody asked a stop, watermark crossed, and kata's wire refused a request of the call (its attempt budget spent, or a re-send the provider said not to make: `super::wire::ended_by_the_wire`) | the provider's last real failure of the call, as the rows below read it: `ProviderFailed`, or `Ambiguous{crossed, its account}` |
 //! | nobody asked a stop, watermark crossed, not kata's own gate refusal, and nanocode's typed error is the provider's refusal or a transient failure ([`provider_failed`]) | `ProviderFailed{class, the provider's answer, charge, tool_called}` |
 //! | any other `Err`, watermark clean | `Refused{model_unreachable}` |
 //! | any other `Err`, watermark crossed | `Ambiguous{crossed, error}` |
 //!
-//! A gate refusal is [`IssuanceMark`]'s or [`MessagesMark`]'s answer to a
+//! A gate refusal is the wire's answer (`super::wire::ResponsesWire`'s or
+//! [`MessagesMark`]'s) to a
 //! model request nanocode makes after the turn's gate closed and before it
 //! confirms the cancel; `prompt` recognises it down nanocode's error and its
 //! sources ([`stopped_by_the_gate`]), so `model_unreachable` never names it. A
@@ -79,7 +83,7 @@
 //!    `Shutdown`, and a frame a seam call queued before the close precedes
 //!    the `KillAll` below (`toolhost_client.rs`, "The gate holds the queue").
 //!    No model request nanocode makes from here is sent, on either kind
-//!    ([`IssuanceMark`], [`MessagesMark`]);
+//!    (`super::wire::ResponsesWire`, [`MessagesMark`]);
 //! 2. `KillAll`, waited for its `Done` within [`TURN_END_GRACE`]: once that
 //!    `Done` is read no process the toolhost started is alive, a background
 //!    job (codex's session past its yield, claude's `run_in_background`
@@ -159,12 +163,10 @@
 //! it is dropped. So the worker's `issuance()` read after it drops the future
 //! (an unconfirmed stop) is final: nanocode's turn "continues running when
 //! dropped", but a model request it makes after that, on either kind, is
-//! refused before it leaves ([`IssuanceMark`], [`MessagesMark`]), and a tool
-//! frame is never queued. What the read cannot see is a request already under
-//! way, each marked before it left: a Responses attempt called before the
-//! close runs on, and nanocode's own retry layer, below [`IssuanceMark`], may
-//! send it again; a Messages request that passed [`MessagesMark`] before the
-//! close runs on.
+//! refused before it leaves (`super::wire::ResponsesWire`, [`MessagesMark`]),
+//! and a tool frame is never queued: each wire attempt, nanocode's own
+//! retries included, is marked or refused on its own. What the read cannot see
+//! is a request already under way, marked before it left, which runs on.
 //!
 //! # Durability
 //!
@@ -173,10 +175,7 @@
 //! mid-turn settles through kata's own recovery as PROVEN AMBIGUOUS.
 
 use std::borrow::Cow;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -191,13 +190,13 @@ use kata_types::agent::{AdapterKind, Prompt, SessionEvidence};
 use kata_types::effect::ProviderFailureClass;
 use nanocode_backend_claude::ClaudeError;
 use nanocode_backend_claude::transport::{HttpError, layer};
-use nanocode_backend_codex::client::tower as nanocode_tower;
-use nanocode_backend_codex::transport::{ResponsesAttempt, ResponsesAttemptKind, ResponsesError};
+use nanocode_backend_codex::transport::ResponsesError;
 use nanocode_backend_codex::{NanocodeError, ResponseError, Tools, TurnResult};
 use nanocode_process_contracts::ShellExecutor;
 
 use super::events::Observed;
 use super::seam::{Seam, WORKSPACE};
+use super::wire::{ResponsesWireLayer, Wire};
 use super::toolhost_client::{
     HandshakeRefusal, ProtocolLatch, ToolhostClient, ToolhostReader, ToolhostWriter, TurnGate,
     handshake,
@@ -244,7 +243,7 @@ pub(crate) const PLATFORM: &str = "linux";
 /// `instructions::default_system_blocks`, which no public API exposes, so kata
 /// leaves the selection to nanocode and edits the wire). The edited body is the
 /// same JSON re-serialized: its members' order may differ, its values do not.
-fn without_claude_code_blocks(mut request: layer::Request) -> layer::Request {
+pub(super) fn without_claude_code_blocks(mut request: layer::Request) -> layer::Request {
     let Ok(mut body) = serde_json::from_slice::<serde_json::Value>(&request.body) else {
         return request;
     };
@@ -364,6 +363,8 @@ pub struct NanocodeSession {
     client: Option<Arc<ToolhostClient>>,
     latch: Arc<ProtocolLatch>,
     gate: Arc<TurnGate>,
+    /// Every model request of the turn: its attempt budget and its meter.
+    wire: Arc<Wire>,
     observed: Observed,
     prompted: bool,
     /// The turn's seam, held so the turn's end can end it.
@@ -403,6 +404,7 @@ impl NanocodeSession {
             client: None,
             latch: Arc::new(ProtocolLatch::default()),
             gate: Arc::new(TurnGate::new()),
+            wire: Arc::default(),
             observed: Observed::default(),
             prompted: false,
             seam: None,
@@ -542,8 +544,9 @@ impl NanocodeSession {
             );
         }
         let client = match client
-            .layer(IssuanceMarkLayer {
+            .layer(ResponsesWireLayer {
                 gate: Arc::clone(&self.gate),
+                wire: Arc::clone(&self.wire),
             })
             .build()
         {
@@ -634,6 +637,7 @@ impl NanocodeSession {
         let url = messages_url(&self.endpoint);
         let client = ClaudeClient::with_api_key(url, key).with_http_layer(MessagesMark {
             gate: Arc::clone(&self.gate),
+            wire: Arc::clone(&self.wire),
         });
         let mut environment = ClaudeEnvironment::new()
             .working_directory(WORKSPACE)
@@ -775,6 +779,20 @@ impl NanocodeSession {
         watermark_at(self.gate.crossed())
     }
 
+    /// The provider failed the turn with `class`, its account `reason`.
+    fn provider_failed_outcome(&self, class: ProviderFailureClass, reason: &str) -> TurnOutcome {
+        // Closed before `tool_called` is read: a cell nanocode detached from
+        // the failed turn can mark a tool call until the gate closes, and the
+        // turn end closes it anyway.
+        self.gate.close();
+        TurnOutcome::ProviderFailed {
+            class,
+            reason: self.scope.secrets().bound(reason),
+            charge: self.wire.failed_turn_charge(),
+            tool_called: self.gate.tool_called(),
+        }
+    }
+
     /// Step 8.
     fn outcome(
         &self,
@@ -793,7 +811,7 @@ impl NanocodeSession {
                 );
                 TurnOutcome::Completed {
                     response,
-                    usage: self.observed.usage(),
+                    usage: self.wire.usage(),
                     model: self.observed.model(),
                     response_exceeded,
                     // nanocode states no stop reason.
@@ -801,25 +819,27 @@ impl NanocodeSession {
                 }
             }
             Err(error) => {
-                if let Some((class, reason)) = provider_failed(asked, self.gate.crossed(), &error) {
-                    // Closed before `tool_called` is read: a cell nanocode
-                    // detached from the failed turn can mark a tool call until
-                    // the gate closes, and the turn end closes it anyway.
-                    self.gate.close();
-                    return TurnOutcome::ProviderFailed {
-                        class,
-                        reason: secrets.bound(&reason),
-                        charge: self.observed.failed_turn_charge(class),
-                        tool_called: self.gate.tool_called(),
+                let crossed = self.gate.crossed();
+                // A call kata's wire ended (its attempt budget spent, or a
+                // re-send the provider said not to make) ends on the
+                // provider's last real failure, classified as that failure
+                // ending the call without kata.
+                if let (None, Some(issued)) = (asked, crossed)
+                    && super::wire::ended_by_the_wire(&error)
+                    && let Some(ended) = self.wire.ended()
+                {
+                    return match super::wire::classified(ended, error) {
+                        (Some((class, reason)), _) => self.provider_failed_outcome(class, &reason),
+                        (None, account) => TurnOutcome::Ambiguous {
+                            issued,
+                            evidence: secrets.bound(&account),
+                        },
                     };
                 }
-                classify_error(
-                    asked,
-                    self.gate.crossed(),
-                    &error,
-                    self.observed.usage(),
-                    secrets,
-                )
+                if let Some((class, reason)) = provider_failed(asked, crossed, &error) {
+                    return self.provider_failed_outcome(class, &reason);
+                }
+                classify_error(asked, crossed, &error, self.wire.usage(), secrets)
             }
         }
     }
@@ -1102,7 +1122,7 @@ fn provider_failed(
 /// code above, a context-window
 /// or image refusal nanocode reshaped from its status, a malformed response — is
 /// not classified here, and stays the ambiguous failure it was.
-fn provider_failure(error: &NanocodeError) -> Option<(ProviderFailureClass, String)> {
+pub(super) fn provider_failure(error: &NanocodeError) -> Option<(ProviderFailureClass, String)> {
     let backend = match error {
         NanocodeError::Response(backend) => backend,
         NanocodeError::Shutdown(inner) => return provider_failure(inner),
@@ -1119,19 +1139,48 @@ fn provider_failure(error: &NanocodeError) -> Option<(ProviderFailureClass, Stri
                 _ => None,
             }
         } else if let Some(response) = any.downcast_ref::<ResponseError>() {
-            match response.responses_error() {
-                Some(
-                    ResponsesError::HttpRejected { status, body, .. }
-                    | ResponsesError::HandshakeRejected { status, body, .. },
-                ) => Some((Some(*status), Cow::Borrowed(body.as_str()))),
-                Some(ResponsesError::Api { event, .. }) => websocket_error_event(event)
-                    .map(|error| (error.status, Cow::Borrowed(event.as_str())))
-                    .or_else(|| response_failed_error(event).map(|body| (None, Cow::Owned(body)))),
-                _ => None,
-            }
+            response.responses_error().and_then(responses_answer)
         } else {
             None
         };
+    classify_answer(answered, failure.retryable(), || error.to_string())
+}
+
+/// [`provider_failure`]'s answer for a Responses attempt's own failure, as
+/// kata's wire reads it off the attempt (`super::wire`): the same rules on the
+/// same typed error, retryable exactly when nanocode's `ResponseError` would
+/// be (its `retry_advice`).
+pub(super) fn responses_failure(error: &ResponsesError) -> Option<(ProviderFailureClass, String)> {
+    classify_answer(
+        responses_answer(error),
+        error.retry_advice().is_some(),
+        || error.to_string(),
+    )
+}
+
+/// The provider's answer a Responses failure carries: an HTTP error answer's
+/// status and body, or an error event's ([`websocket_error_event`],
+/// [`response_failed_error`]); `None` for any other failure.
+fn responses_answer(error: &ResponsesError) -> Option<(Option<u16>, Cow<'_, str>)> {
+    match error {
+        ResponsesError::HttpRejected { status, body, .. }
+        | ResponsesError::HandshakeRejected { status, body, .. } => {
+            Some((Some(*status), Cow::Borrowed(body.as_str())))
+        }
+        ResponsesError::Api { event, .. } => websocket_error_event(event)
+            .map(|error| (error.status, Cow::Borrowed(event.as_str())))
+            .or_else(|| response_failed_error(event).map(|body| (None, Cow::Owned(body)))),
+        _ => None,
+    }
+}
+
+/// [`provider_failure`]'s rules over a failure's provider `answered`, whether
+/// nanocode calls it `retryable`, and its `account` when it carries no answer.
+fn classify_answer(
+    answered: Option<(Option<u16>, Cow<'_, str>)>,
+    retryable: bool,
+    account: impl FnOnce() -> String,
+) -> Option<(ProviderFailureClass, String)> {
     let answered = answered
         .as_ref()
         .map(|(status, body)| (*status, body.as_ref()));
@@ -1155,11 +1204,8 @@ fn provider_failure(error: &NanocodeError) -> Option<(ProviderFailureClass, Stri
             provider_answer(status, body),
         ));
     }
-    if failure.retryable() {
-        let reason = answered.map_or_else(
-            || error.to_string(),
-            |(status, body)| provider_answer(status, body),
-        );
+    if retryable {
+        let reason = answered.map_or_else(account, |(status, body)| provider_answer(status, body));
         return Some((ProviderFailureClass::Transient, reason));
     }
     match answered {
@@ -1195,16 +1241,16 @@ fn provider_error_names(body: &str, code: &str) -> bool {
 }
 
 /// A Responses WebSocket `error` event, as [`websocket_error_event`] reads it.
-struct WebsocketErrorEvent {
+pub(super) struct WebsocketErrorEvent {
     /// The HTTP status the event states: on the WebSocket transport, where the
     /// provider has no HTTP response for a request it refuses, the event's own
     /// statement of one. `None` when it states none.
-    status: Option<u16>,
+    pub(super) status: Option<u16>,
 }
 
 /// `event` read as a Responses `error` event (`{"type": "error", "status":
 /// <status>, "error": {...}}`); `None` for any other event.
-fn websocket_error_event(event: &str) -> Option<WebsocketErrorEvent> {
+pub(super) fn websocket_error_event(event: &str) -> Option<WebsocketErrorEvent> {
     let event = serde_json::from_str::<serde_json::Value>(event).ok()?;
     if event.get("type").and_then(serde_json::Value::as_str) != Some("error") {
         return None;
@@ -1260,12 +1306,16 @@ fn provider_answer(status: Option<u16>, body: &str) -> String {
 }
 
 /// Whether `error` is, or has among its sources, the refusal of a model
-/// request made once the turn's gate was closed: [`IssuanceMark`]'s, a
-/// [`TurnStopped`] itself, or [`MessagesMark`]'s ([`is_messages_refusal`]).
+/// request made once the turn's gate was closed: the Responses wire's
+/// ([`is_responses_refusal`]), a [`TurnStopped`] itself, or [`MessagesMark`]'s
+/// ([`is_messages_refusal`]).
 fn stopped_by_the_gate(error: &NanocodeError) -> bool {
     let mut source: Option<&(dyn std::error::Error + 'static)> = Some(error);
     while let Some(error) = source {
-        if error.downcast_ref::<TurnStopped>().is_some() || is_messages_refusal(error) {
+        if error.downcast_ref::<TurnStopped>().is_some()
+            || is_messages_refusal(error)
+            || is_responses_refusal(error)
+        {
             return true;
         }
         source = error.source();
@@ -1282,6 +1332,18 @@ fn is_messages_refusal(error: &(dyn std::error::Error + 'static)) -> bool {
     matches!(
         error.downcast_ref::<HttpError>(),
         Some(HttpError::Transport { unsent: true, detail, .. }) if *detail == TurnStopped.to_string()
+    )
+}
+
+/// The Responses wire's refusal (`super::wire::ResponsesWire`) as nanocode's
+/// Responses client hands it back: the `HttpRequest` failure whose detail is
+/// exactly [`TurnStopped`]'s.
+fn is_responses_refusal(error: &(dyn std::error::Error + 'static)) -> bool {
+    matches!(
+        error
+            .downcast_ref::<ResponseError>()
+            .and_then(ResponseError::responses_error),
+        Some(ResponsesError::HttpRequest { detail, .. }) if *detail == TurnStopped.to_string()
     )
 }
 
@@ -1345,38 +1407,14 @@ fn turn_date() -> String {
     chrono::Utc::now().format("%Y-%m-%d").to_string()
 }
 
-/// The attempts nanocode's Responses client makes of one model call before
-/// its stream re-sends ([`configure`]): one, the fewest it takes. kata is the
-/// retry authority (the runner re-runs a transient stage and walks a fallback
-/// panel), so the harness's own retrying is held as near as nanocode's public
-/// knobs allow to what it was at 2ac77424, five attempts with 1, 2, 4 and 8 s of
-/// backoff between them. Since 8ec3b215 the client re-sends a Generation call
-/// whose stream failed reconnectably five more times beyond `max_attempts`
-/// (its `STREAM_MAX_RETRIES`, 200 ms doubling), each re-send with
-/// `max_attempts` attempts of its own, and no knob reaches that count: at one
-/// attempt a call that keeps failing is sent six times in about 6.2 s of
-/// backoff (seven on the WebSocket, which first falls back to HTTPS), where
-/// nanocode's default five would send it thirty. MEASURED at 8ec3b215
-/// (`nanocode_qualification`'s
-/// `the_responses_client_sends_a_failing_call_six_times_within_seconds`). No
-/// knob reaches nanocode's patience either: a 429, 502, 503, 504 or 529 (or an
-/// overload or rate-limit error event) is retried whatever `max_attempts` says
-/// until its backoff would pass 600 s from the call's first attempt
-/// (`nanocode_http`'s `PATIENCE`; MEASURED at 8ec3b215, a call answered 503
-/// every time: 49 sends over 605 s), and a compaction call, which nanocode
-/// does not re-send, makes its one attempt.
-const RESPONSES_MAX_ATTEMPTS: std::num::NonZeroU32 = std::num::NonZeroU32::MIN;
-
 /// The Responses client pointed where `endpoint` says (nanocode's own provider
-/// endpoints in production), making [`RESPONSES_MAX_ATTEMPTS`] attempts of a
-/// call.
+/// endpoints in production).
 #[cfg(feature = "test-support")]
 fn configure(
     client: nanocode_backend_codex::client::OpenAiBuilder,
     endpoint: &Endpoint,
 ) -> nanocode_backend_codex::client::OpenAiBuilder {
     use nanocode_backend_codex::transport::ResponsesTransport;
-    let client = client.max_attempts(RESPONSES_MAX_ATTEMPTS);
     let Some(test) = endpoint.test.as_ref() else {
         return client;
     };
@@ -1394,7 +1432,7 @@ const fn configure(
     client: nanocode_backend_codex::client::OpenAiBuilder,
     _endpoint: &Endpoint,
 ) -> nanocode_backend_codex::client::OpenAiBuilder {
-    client.max_attempts(RESPONSES_MAX_ATTEMPTS)
+    client
 }
 
 fn messages_url(endpoint: &Endpoint) -> String {
@@ -1431,87 +1469,19 @@ fn session_uuid(scope: &AttemptScope) -> String {
     )
 }
 
-/// Marks the issuance watermark `ModelTokens` on every Generation and
-/// Compaction attempt, on either Responses transport, before the attempt runs.
-/// A `Connect` attempt (the WebSocket's preconnect) is not marked: it carries
-/// no request body. Once the turn's gate is closed, every attempt nanocode
-/// calls, of any kind, is refused ([`TurnStopped`]) without reaching
-/// nanocode's transport. The layer wraps nanocode's whole Responses service,
-/// its retry layer included, so it sees each attempt nanocode CALLS, not each
-/// retry of one.
-#[derive(Clone)]
-pub(crate) struct IssuanceMarkLayer {
-    gate: Arc<TurnGate>,
-}
-
-impl<S> nanocode_tower::Layer<S> for IssuanceMarkLayer {
-    type Service = IssuanceMark<S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        IssuanceMark {
-            inner,
-            gate: Arc::clone(&self.gate),
-        }
-    }
-}
-
-/// The service [`IssuanceMarkLayer`] wraps nanocode's Responses service in.
-#[derive(Clone)]
-pub(crate) struct IssuanceMark<S> {
-    inner: S,
-    gate: Arc<TurnGate>,
-}
-
-impl<S> nanocode_tower::Service<ResponsesAttempt> for IssuanceMark<S>
-where
-    S: nanocode_tower::Service<ResponsesAttempt>,
-    S::Error: Into<ResponseError>,
-    S::Future: Send + 'static,
-    S::Response: 'static,
-{
-    type Response = S::Response;
-    type Error = ResponseError;
-    type Future = Pin<Box<dyn Future<Output = Result<S::Response, ResponseError>> + Send>>;
-
-    fn poll_ready(&mut self, context: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(context).map_err(Into::into)
-    }
-
-    fn call(&mut self, attempt: ResponsesAttempt) -> Self::Future {
-        let marks = match attempt.kind() {
-            ResponsesAttemptKind::Connect | ResponsesAttemptKind::Warmup => false,
-            // Generation and Compaction send a request body; a kind this rev
-            // does not name is marked too, so a new kind can only over-mark.
-            _ => true,
-        };
-        let admitted = if marks {
-            self.gate
-                .mark_while_open(IssuanceFrame::ModelToken)
-                .is_some_and(|marked| {
-                    matches!(act_on_marked_frame(&marked), IssuanceFrame::ModelToken)
-                })
-        } else {
-            !self.gate.is_closed()
-        };
-        if !admitted {
-            return Box::pin(async { Err(ResponseError::service(TurnStopped)) });
-        }
-        let attempt = self.inner.call(attempt);
-        Box::pin(async move { attempt.await.map_err(Into::into) })
-    }
-}
-
 /// Marks the issuance watermark `ModelTokens` on every Messages request the
-/// Anthropic kind's client makes, and sends it [`without_claude_code_blocks`],
-/// before the request leaves: the client's HTTP
-/// layer sees each request it sends, nanocode's own retries of one included,
-/// and with an API key the client sends nothing but the Messages POST. Once
-/// the turn's gate is closed, every request is refused without reaching the
-/// network, as an unsent and non-retryable error whose message is
-/// [`TurnStopped`]'s (the layer's error carries a message and flags only,
-/// which [`is_messages_refusal`] reads back).
-struct MessagesMark {
-    gate: Arc<TurnGate>,
+/// Anthropic kind's client makes, before the request leaves, and hands it to
+/// kata's wire (`super::wire::send_messages`: the attempt budget, the meter,
+/// and [`without_claude_code_blocks`]): the client's HTTP layer sees each
+/// request it sends, nanocode's own retries of one included, and with an API
+/// key the client sends nothing but the Messages POST. Once the turn's gate is
+/// closed, every request is refused without reaching the network, as an unsent
+/// and non-retryable error whose message is [`TurnStopped`]'s (the layer's
+/// error carries a message and flags only, which [`is_messages_refusal`] reads
+/// back).
+pub(super) struct MessagesMark {
+    pub(super) gate: Arc<TurnGate>,
+    pub(super) wire: Arc<Wire>,
 }
 
 impl nanocode_backend_claude::transport::Layer for MessagesMark {
@@ -1531,14 +1501,14 @@ impl nanocode_backend_claude::transport::Layer for MessagesMark {
                 Err(layer::Error::new(TurnStopped.to_string()).unsent(true))
             });
         }
-        next.send(without_claude_code_blocks(request))
+        super::wire::send_messages(&self.wire, request, next)
     }
 }
 
 /// What a model request nanocode makes once the turn's gate is closed gets in
 /// place of its response: nothing was sent.
 #[derive(Debug)]
-struct TurnStopped;
+pub(super) struct TurnStopped;
 
 impl std::fmt::Display for TurnStopped {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -1629,12 +1599,16 @@ mod tests {
     };
 
     /// The error a turn ends with when nanocode called a model attempt after
-    /// the turn's gate closed: [`super::IssuanceMark`]'s refusal, converted to
-    /// nanocode's error by nanocode's own `From`, and once more inside
-    /// nanocode's transparent `Shutdown` wrapper.
+    /// the turn's gate closed: the Responses wire's refusal
+    /// (`super::super::wire::ResponsesWire`), converted to nanocode's error by
+    /// nanocode's own `From`, and once more inside nanocode's transparent
+    /// `Shutdown` wrapper.
     fn gate_refusals() -> [NanocodeError; 2] {
-        let refused =
-            || NanocodeError::from(nanocode_backend_codex::ResponseError::service(TurnStopped));
+        let refused = || {
+            NanocodeError::from(nanocode_backend_codex::ResponseError::service(
+                super::super::wire::unsent(&TurnStopped.to_string()),
+            ))
+        };
         [
             refused(),
             NanocodeError::Shutdown(std::sync::Arc::new(refused())),
@@ -1981,6 +1955,7 @@ mod tests {
         gate.close();
         let refusal = a_claude_turn_refused_by(MessagesMark {
             gate: Arc::clone(&gate),
+            wire: Arc::default(),
         })
         .await;
         assert_eq!(gate.crossed(), None, "a refused request marks nothing");

@@ -1630,10 +1630,10 @@ fn a_provider_failing_its_response_mid_turn_settles_proven_ambiguous_live() {
 const WRITTEN_BEFORE_THE_CUT: &str = "written-before-the-cut";
 
 /// The requests one attempt of the cut cell's first member sends: the call
-/// that runs the command, then the call whose response the mock cuts, sent
-/// once and re-sent by nanocode five times (`STREAM_MAX_RETRIES`) past the one
-/// attempt kata configures.
-const CUT_ATTEMPT_REQUESTS: usize = 1 + 6;
+/// that runs the command, then the call whose response the mock cuts, sent to
+/// kata's attempt budget (`kata_agent_nanocode`'s `adapter::wire::ATTEMPTS`,
+/// five).
+const CUT_ATTEMPT_REQUESTS: usize = 1 + 5;
 
 /// **Cell I′ — a model provider that cuts its response mid-body, mid-turn,
 /// fails the attempt TRANSIENTLY: PROVEN NOT PERFORMED, re-run on the same
@@ -1642,7 +1642,7 @@ const CUT_ATTEMPT_REQUESTS: usize = 1 + 6;
 /// answer: the first member's first response asks for one `exec_command`, which
 /// writes `src/app.txt` in the real container; the mock then begins the second
 /// response — its head declaring the whole body — and drops the connection
-/// before the terminal event, on the call and on each of nanocode's re-sends.
+/// before the terminal event, on the call and on each of its re-sends.
 /// Since nanocode 8ec3b215 that cut is a retryable transport failure, so the
 /// turn ends `ProviderFailed` classed `Transient`
 /// (`nanocode_qualification`'s

@@ -28,7 +28,8 @@ or before it enrolls by its 180 s enrollment budget, and the main kills it (with
 subtree when the main's cgroup is delegated) before its attempts settle and starts a new
 one, which enrolls afresh, while a `local_socket` daemon judged dead is settled and left
 running; the login lives wherever the worker runs, though a rotating refresh token
-tolerates one refresher; issuance survives only if the worker does (`IssuanceMarkLayer`),
+tolerates one refresher; issuance survives only if the worker does (kata's wire marks,
+`kata_agent_nanocode::adapter::wire`),
 usage is a worker claim, and bounds act only at stage terminals; a cut-off worker keeps
 spending, and a main restart settles every live attempt AMBIGUOUS
 (`settle_capsule_attempts_after_restart`; `cancelled` under a standing stop) but one
@@ -428,9 +429,18 @@ same effect verdict, an unknown charge. S3 pins the closed non-output and `Rejec
 per protocol. A 401 refreshes the login and re-issues under a new mark; nothing that may
 have been processed is re-issued, by the gateway or by the harness: kata's host transport
 and the gateway hand every `Unknown` back to the harness as not retryable
-(`x-should-retry: false`) on both backends, so nanocode's own retry layers (Responses: 5
-tries by default; Messages: 5, or 3 without tools, fixed in the backend) send each request
-once per mark (M0 F3).
+(`x-should-retry: false`) on both backends, and kata's wire, which every model request
+of both kinds passes below nanocode's own retry layers
+(`kata_agent_nanocode::adapter::wire`), refuses before it leaves any re-send of a
+request whose answer said so, so each request is sent once per mark (M0 F3). nanocode's
+clients alone would not hold it: at `8ec3b215` the Responses client re-sends a 5xx
+stream whatever the header says (MEASURED: the request and five re-sends), and both
+retry up to eleven times or 600 s; the wire also bounds every call to five failed
+attempts. Pinned by `nanocode_qualification`'s `a_5xx_marked_not_to_retry_is_sent_once`
+(a 500 answered `x-should-retry: false`: one request on either kind). What the wire
+reads is an answer's header, so its refusal covers an error answer, not a stream cut
+after its head (which carries no header): nanocode re-sends such a cut within the wire's
+budget, and that case of F3 stays open until the gateway's cut carries the refusal too.
 
 **Adoption.** The gateway ships marks and terminals asynchronously, idempotent by
 `(generation, mark sequence)`; kata-control commits them in batches, off every request
@@ -455,7 +465,7 @@ spend on that slice up to its grant and deadline; under `time_bound` alone, its 
 | some delivered, otherwise | PROVEN AMBIGUOUS, never re-run |
 
 The charge is the `Completed` usage plus unknown for each `Unknown` mark, never zero.
-`IssuanceMarkLayer` and the tool-frame issuance mark are deleted. If kata-control is down,
+kata's wire's issuance marks and the tool-frame issuance mark are deleted. If kata-control is down,
 marks queue and only refills wait. A gateway restart turns its open marks into
 `Unknown{gateway_lost, delivered = true}` and keeps its slices. A lost downstream cuts the
 upstream at once. A down gateway holds every embedded-harness dispatch, leaves running

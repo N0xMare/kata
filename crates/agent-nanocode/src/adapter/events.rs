@@ -1,19 +1,13 @@
-//! nanocode's agent events folded into what kata keeps of a turn: the usage
-//! summed per model call (the metering source), the model the provider
-//! reported, the bounded evidence record, and the ephemeral progress
-//! observations.
-//!
-//! Usage is summed over `model.call.completed`, not read from `TurnResult`
-//! alone, so a cancelled or ambiguous turn keeps the spend observed so far, and
-//! a turn on which no call reported usage stays `None` — never a zero.
+//! nanocode's agent events folded into what kata keeps of a turn: the model the
+//! provider reported, the bounded evidence record, and the ephemeral progress
+//! observations. What the turn cost is metered on the wire, attempt by attempt
+//! (`super::wire`), never read off these events: no event reports an attempt
+//! that did not complete.
 
 use std::sync::Arc;
 
-use kata_agent::adapter::FailedTurnCharge;
 use kata_agent::adapter::scope::{ObservationClass, SessionObservation, SessionProgressSink};
 use kata_types::agent::{SESSION_EVIDENCE_EVENTS, SessionEvidence, SessionEvidenceEvent};
-use kata_types::cache::TokenUsage;
-use kata_types::effect::ProviderFailureClass;
 use kata_types::redaction::{LiftedSecrets, RollingScrub, elide};
 use nanocode_backend_codex::events::{
     AgentEvent, AgentEventKind, AssistantDelta, ModelCallCompleted, ModelCallFailed, RunError,
@@ -29,47 +23,15 @@ const TURN_END_RECORDS: usize = 2;
 /// What one session has observed.
 #[derive(Debug, Default)]
 pub(crate) struct Observed {
-    usage: Option<TokenUsage>,
     model: Option<SmolStr>,
     events: Vec<SessionEvidenceEvent>,
     events_dropped: u32,
-    /// `model.call.completed` events seen, whether or not each reported usage.
-    calls_completed: u32,
-    /// `model.attempt.retrying` events seen: attempts the harness sent again.
-    attempts_retried: u32,
     /// The session's assistant deltas, scrubbed as ONE stream: a lifted value
     /// the provider splits across deltas is in no single delta.
     delta_scrub: RollingScrub,
 }
 
 impl Observed {
-    /// The usage summed over every call that reported it, or `None`.
-    pub(crate) const fn usage(&self) -> Option<TokenUsage> {
-        self.usage
-    }
-
-    /// What a turn its provider failed with `class` is charged, never less than
-    /// the provider billed. A known charge only when no response stream of
-    /// the turn can have billed output kata never saw: the provider REFUSED
-    /// the failing request (an error answer, no output) and nanocode re-sent
-    /// no attempt of any call (a re-sent attempt may be one whose stream was
-    /// cut after it billed, and no event reports an unfinished attempt's
-    /// usage). Then the charge is the usage the completed calls reported, or
-    /// nothing at all when none completed. Every other failure — a transient
-    /// one, or any turn with a re-sent attempt — is UNKNOWN, whatever the
-    /// completed calls reported: since nanocode 8ec3b215 a stream cut
-    /// mid-response is transient and re-sent, each re-send possibly billed.
-    pub(crate) const fn failed_turn_charge(&self, class: ProviderFailureClass) -> FailedTurnCharge {
-        if !matches!(class, ProviderFailureClass::Refused) || self.attempts_retried > 0 {
-            return FailedTurnCharge::Unknown;
-        }
-        match self.usage {
-            Some(usage) => FailedTurnCharge::Metered(usage),
-            None if self.calls_completed == 0 => FailedTurnCharge::Nothing,
-            None => FailedTurnCharge::Unknown,
-        }
-    }
-
     /// The model the last completed call reported.
     pub(crate) fn model(&self) -> Option<SmolStr> {
         self.model.clone()
@@ -171,42 +133,13 @@ impl Observed {
                 }
             }
             AgentEventKind::ModelCallStarted => observe("model_call_started", None),
-            AgentEventKind::ModelAttemptRetrying => {
-                self.attempts_retried = self.attempts_retried.saturating_add(1);
-            }
             AgentEventKind::ModelCallCompleted => {
-                self.calls_completed = self.calls_completed.saturating_add(1);
                 let Ok(completed) = event.decode_payload::<ModelCallCompleted>() else {
                     self.record(SessionEvidenceEvent::Notice {
                         method: SmolStr::new_static("model.call.completed"),
                     });
                     return;
                 };
-                if let Some(reported) = completed.usage.as_ref() {
-                    let details = reported.input_tokens_details.as_ref();
-                    let cached = details.map_or(0, |details| details.cached_tokens);
-                    let written = details.map_or(0, |details| details.cache_write_tokens);
-                    let call = TokenUsage {
-                        // The reported `input_tokens` INCLUDES the cache read
-                        // AND the cache write — nanocode's Claude backend sums
-                        // the Messages API's three input classes into it, and
-                        // OpenAI's prompt count holds both details — while
-                        // kata's four classes are disjoint: `input` is the
-                        // uncached part alone.
-                        input: reported
-                            .input_tokens
-                            .saturating_sub(cached)
-                            .saturating_sub(written),
-                        output: reported.output_tokens,
-                        cache_read: cached,
-                        cache_write: written,
-                    };
-                    let sum = self.usage.get_or_insert_with(TokenUsage::default);
-                    sum.input = sum.input.saturating_add(call.input);
-                    sum.output = sum.output.saturating_add(call.output);
-                    sum.cache_read = sum.cache_read.saturating_add(call.cache_read);
-                    sum.cache_write = sum.cache_write.saturating_add(call.cache_write);
-                }
                 let model = secrets.bound_field(&completed.model);
                 self.model = Some(model.clone());
                 self.record(SessionEvidenceEvent::ModelCall {

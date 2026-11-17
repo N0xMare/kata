@@ -1905,7 +1905,7 @@ nanocode_drift_self_test() {
     printf 'target/\n' >"$kata/.gitignore"
     {
         printf '[workspace]\nmembers = ["crates/agent-nanocode"]\nresolver = "2"\n\n[workspace.dependencies]\n'
-        for crate in nanocode-backend-codex nanocode-backend-claude nanocode-process-contracts; do
+        for crate in nanocode-backend-codex nanocode-backend-claude nanocode-process-contracts nanocode-sync; do
             printf '%s = { git = "https://github.com/nanocodexyz/nanocode", rev = "%s" }\n' "$crate" "$u1"
         done
         printf '\n[patch."https://github.com/nanocodexyz/nanocode"]\n'
