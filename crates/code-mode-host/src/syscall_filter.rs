@@ -39,9 +39,20 @@
 //! shipped `kata` binary run as an interpreter by hand), or one named for a
 //! reason given beside it. Removing any one ends the confined interpreter of
 //! `every_listed_call_runs_and_every_thread_is_filtered`, which issues each;
-//! removing most also ended an honest cell of those suites by SIGSYS
-//! (MEASURED with nanocode's QuickJS engine at `2ac77424`: 25 of the 34,
-//! `sched_yield` and `restart_syscall`, unseen under strace, among them).
+//! removing most also ends an honest cell of those suites (MEASURED with
+//! nanocode's djs engine at `8ec3b215`, each call removed alone and
+//! kata-code-mode-host's suite with kata-agent-nanocode's Code Mode and
+//! qualification binaries run: 22 of the 34, 21 by SIGSYS — `read`, `write`,
+//! the six memory calls, `futex`, `clone`, `clone3`, `rseq`,
+//! `set_robust_list`, `prctl`, `sched_getaffinity`, `gettid`, `sigaltstack`,
+//! `getrandom`, `rt_sigprocmask`, `restart_syscall` and `openat` — and
+//! `sched_yield`, whose removal reds two cells with no SIGSYS line (a spinning
+//! cell's interpreter seen burning no CPU, a cell's exec missing); with
+//! QuickJS at `2ac77424` it was 25). The other twelve no honest cell needed
+//! under djs: `close`, `writev`, `exit`, `exit_group`, `rt_sigaction`,
+//! `rt_sigreturn`, `getpid`, `tgkill` (its removal reds only the filter's own
+//! digest pin), and the four clock reads the vDSO serves; each stays for the
+//! reason given beside it.
 //! nanocode's djs engine (since `8ec3b215`) needed no change to the list:
 //! strace of `interpreter_process`'s interpreters past their confinement saw
 //! only listed calls (`clone` and `clone3`, `futex`, `getrandom`, `gettid`,

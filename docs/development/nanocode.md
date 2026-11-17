@@ -412,10 +412,12 @@ runs a cell in the hosting process; there is no fallback.
   memory or CPU clock: the
   process hosting it survives its `kill` (`tests::a_compromised_interpreter_cannot_kill_its_parent`).
   It is x86-64's: on another target the interpreter refuses before `Ready`.
-  MEASURED, release, with nanocode's QuickJS engine at `2ac77424`: compiling and
-  installing it takes 141 µs (p99 303 µs), and a cell costs 1.135 ms against
-  1.119 ms with no filter (a new interpreter's first cell 4.96 ms against 4.90);
-  the filter is unchanged since, the cell's cost under djs not re-measured.
+  MEASURED, release, with nanocode's djs engine at `8ec3b215` (200 interpreters
+  of 50 trivial cells each, the probe in the interpreter): compiling and
+  installing it takes 243 µs (p50 280 µs, p99 338 µs), and a cell costs 665 µs to
+  672 µs against 552 µs to 555 µs with the install removed (three runs each), a
+  new interpreter's first cell 3.99 ms to 4.16 ms against 3.83 ms to 3.93 ms
+  (with QuickJS at `2ac77424`: 141 µs, and 1.135 ms against 1.119 ms a cell).
 - Not refused, stated: the listed calls on the arguments they admit
   (`sched_getaffinity` tells whether a process id exists); its own CPU until the
   wall's kill and memory up to its limits; and frames up to `FRAME_CAP`, which
