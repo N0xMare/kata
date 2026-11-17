@@ -1,0 +1,92 @@
+[package]
+name = "kata-agent-nanocode"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "kata's embedding of the nanocode agent harness."
+
+# kata-worker depends on this crate: its production adapter registry installs the
+# Code Mode limits from here and registers the nanocode adapter for both kinds.
+
+[features]
+# `NanocodeAdapter::with_endpoint`: the one door that points a session's model
+# client at a mock provider. Gated so it cannot become a production config key:
+# no release build enables it (only dev-dependencies do: this crate's own on
+# itself and kata-worker's, which a workspace-wide test build unifies into every
+# test binary), and no `[agents.x]` field names a model endpoint.
+test-support = []
+
+[dependencies]
+kata-agent = { path = "../agent" }
+kata-types.workspace = true
+kata-toolhost-protocol.workspace = true
+# The direct backend crates and the host seam, never the `nanocode` facade (its
+# `Runtime` brings a session store kata does not use).
+nanocode-backend-codex.workspace = true
+nanocode-backend-claude.workspace = true
+nanocode-process-contracts.workspace = true
+# The vendored Code Mode engine (`vendor/nanocode-code-mode-engine`): the library
+# names kata's Code Mode limits as its `NativeLimits`.
+nanocode-code-mode-engine.workspace = true
+# Runs every Code Mode cell in an interpreter process, a confined child of the
+# process hosting the worker: `install_code_mode_limits` installs it with the
+# limits, and the adapter reads its report of an interpreter's end.
+kata-code-mode-host.workspace = true
+async-trait.workspace = true
+# The execution environment states the turn's UTC date.
+chrono.workspace = true
+serde_json.workspace = true
+# The login store's refusals print their fix with the path shell-quoted.
+shlex.workspace = true
+smol_str.workspace = true
+# The session's log line for a stop nobody confirmed before any issuance, whose
+# outcome carries no evidence.
+tracing.workspace = true
+# `io-util`: the toolhost's taken FIFO streams. `sync`: the reply slots, the
+# per-session output channels and the latch's `Notify`. `rt`: the frame reader and
+# writer run as tasks of the turn. `time`: the Hello deadline, the exec yield timer
+# and the close grace. `macros`: `select!` in the turn drive. NOT `process`: the
+# adapter builds no `Command` (`crates/agent/tests/adapter_contract.rs` reads these
+# sources).
+tokio = { workspace = true, features = ["io-util", "sync", "rt", "time", "macros"] }
+# `IssuanceMark` is a `tower::Layer` over nanocode's Responses service: the one
+# place every Generation attempt passes on either transport.
+tower.workspace = true
+# `credential` (kata's own login, the one host-side module): the store's state
+# envelope; the effective uid its owner-only checks compare against; and the
+# HTTP client its ChatGPT store reaches the token issuer with, at the version and
+# TLS setup nanocode's own codex client already locks (no feature beyond it).
+serde.workspace = true
+rustix.workspace = true
+reqwest.workspace = true
+
+[build-dependencies]
+# `build.rs` hashes the vendored Code Mode engine into `CODE_MODE_ENGINE_DIGEST`.
+blake3.workspace = true
+
+[dev-dependencies]
+# Self dev-dependency turns on `test-support` for this crate's own `tests/`, the
+# same shape as kata-worker's.
+kata-agent-nanocode = { path = ".", features = ["test-support"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "io-util", "time", "sync", "process"] }
+# The mock Responses endpoint's WebSocket half. Already in the lockfile through
+# nanocode's codex client, at nanocode's version; no feature beyond the handshake.
+tokio-tungstenite.workspace = true
+futures.workspace = true
+tempfile.workspace = true
+ulid.workspace = true
+# `nanocode_rev_matches_the_lockfile` parses `Cargo.lock`, and the engine
+# digest cell the workspace manifest's `[patch]` entry.
+toml.workspace = true
+# The engine digest cell recomputes `build.rs`'s blake3.
+blake3.workspace = true
+# `credential`'s cells mint unsigned JWTs for the stored ChatGPT login.
+base64.workspace = true
+# `the_anthropic_session_id_is_rederived_from_the_seed` reads the session id
+# nanocode's own telemetry spans name. Already in the tree.
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

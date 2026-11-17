@@ -1,0 +1,24 @@
+[package]
+name = "kata-effects-contract"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# The repository and forge boundary: the traits kata's main calls and kata-vcs
+# implements, with the values they carry. It holds no implementation; kata-vcs
+# depends on it, never the reverse. It links no jj-lib, gix or gix-pack:
+# tests/manifest.rs refuses each from the lockfile's resolve.
+[dependencies]
+kata-types.workspace = true
+serde = { workspace = true, features = ["derive"] }
+smol_str.workspace = true
+ulid.workspace = true
+
+[dev-dependencies]
+# tests/manifest.rs reads `cargo metadata`'s JSON.
+serde_json.workspace = true
+
+[lints]
+workspace = true

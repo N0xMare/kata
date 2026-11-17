@@ -1,0 +1,21 @@
+workflow check: pass (passed)
+name:   change-refine
+source: /home/[redacted-private_session-1]/kata-evidence/counted-34d5c77c8ff7/e2-refine-claude-agent-acp/change-refine.star
+format: starlark
+checked_ir: version=11 hash=47eea170cbf02af3f8dd17cf0b4cee6e468c6d1a5886c5b72fdb71672d2e1a0f workflow_class=4766f22ff7dd63cce5a9787fd260c4433385adedcd0374a2451c206626316de1 verifier=pass diagnostics=6
+diagnostics: errors=0 warnings=0 info=6
+deny_warnings: false
+note: not judged without a booted node: environment — a booted node judges them at admission
+capsule_network:
+  - approve: offline
+  - implement (agent default): vendor_egress_only (api.anthropic.com:443)
+  - plan (agent default): vendor_egress_only (api.anthropic.com:443)
+  - test: offline
+verifier_diagnostics:
+  - info code=unstructured_stage_output stage=commit stage commit declares no structured outputs; validators cannot machine-check its envelope
+  - info code=unstructured_stage_output stage=export stage export declares no structured outputs; validators cannot machine-check its envelope
+  - info code=unstructured_stage_output stage=implement stage implement declares no structured outputs; validators cannot machine-check its envelope
+  - info code=unstructured_stage_output stage=park_unfinished stage park_unfinished declares no structured outputs; validators cannot machine-check its envelope
+  - info code=unstructured_stage_output stage=promote stage promote declares no structured outputs; validators cannot machine-check its envelope
+  - info code=validation_criteria_declared validation_criteria declares 1 completion criterion/criteria for operator and preflight evidence
+result: passed

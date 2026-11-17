@@ -1,0 +1,13 @@
+id = "python-multifile"
+title = "Fix two conversion bugs that span separate modules so the route tests pass"
+required_tool = "python3"
+max_cost_micro_usd = 3000000
+
+prompt = """
+test_route.py fails. Two separate bugs are involved and they live in DIFFERENT
+files: one in units.py and one in route.py. Fixing only one of them leaves the
+suite failing. Make `python3 test_route.py` print ok. Do not edit the test.
+"""
+
+[mock]
+strategy = "solve"

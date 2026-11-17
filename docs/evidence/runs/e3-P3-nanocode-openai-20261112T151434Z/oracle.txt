@@ -1,0 +1,14 @@
+control 1: KATA_FAULT_INJECT=operational.after_container_exited_before_result_published (the first worker)
+execution 01M7856D14W3FRZXMNHDJKD7G8
+control 2 (the abort line in the killed worker's log): [kata-fault-inject] crash point reached: operational.after_container_exited_before_result_published (KATA_FAULT_INJECT=operational.after_container_exited_before_result_published, action=abort); aborting process now
+control 3 (wait status): ExitStatus(unix_wait_status(6)), signal Some(6)
+at the worker's death: event_inbox buffered 0, accepted 0; plan event_accepted 0; plan attempt state Some("failed"); the worker's attempt roots ["/tmp/.tmpzjwpdH/data/oci-worker-state/attempts/01M7856D68R311J2EXDA2ET9W3"]
+kata run show status: failed
+raw failed `plan` transition: Some("{\"delivery\":{\"awaiting_approval_at_ms\":null,\"child_execution_id\":null,\"dispatched_at_ms\":1794496476363,\"finished_at_ms\":1794496504081,\"last_checkpoint\":0,\"stage_name\":\"plan\",\"started_at_ms\":1794496476370,\"worker_id\":\"local-worker-0\"},\"reason\":\"worker local-worker-0 died: its connection closed (network error: connection closed by peer); its process 1397025 exists in state Z. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)\",\"terminal_charge\":{\"token_usage\":{\"cache_read\":0,\"cache_savings_micro_usd\":0,\"cache_write\":0,\"cost\":{\"backend\":\"nanocode_openai\",\"model\":\"gpt-6-luna\",\"quality\":\"unavailable\"},\"input\":0,\"output\":0}},\"verdict\":\"proven_ambiguous\"}")
+after 10 s: plan claimed transitions 1, plan attempt rows 1, plan event_accepted 0; the worker's attempt roots []
+transcript: plan issued model calls 3 (recorded only: the dead worker's coalesced frames never left it)
+git: parked/01M7856D14W3FRZXMNHDJKD7G8 = Some("0ca2630dcb9822ec64b440627da03ef6536689d3")
+assert_no_mutation: trunk unmoved, no kata/<exec> on the remote, the fake gh ran nothing, no commit/promote/export resolved
+assert_no_container_residue: no live container, no kata.* cgroup
+kata's known tokens (completed plan/implement attempts, raw accepting transitions; [input, cache_read, cache_write, output]): [0, 0, 0, 0]
+outcome: pass: settled proven-ambiguous, every oracle held

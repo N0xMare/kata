@@ -1,0 +1,30 @@
+Requirements	readme	sudo apt-get update
+Requirements	readme	sudo apt-get install -y build-essential git curl
+Requirements	readme	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+Requirements	readme	sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install) --daemon --yes
+Requirements	readme	mkdir -p ~/.config/nix ~/.local/bin ~/.local/state
+Requirements	readme	chmod go-w ~/.config ~/.local ~/.local/state
+Requirements	readme	echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
+Requirements	readme	git config --global user.name 'Your Name'
+Requirements	readme	git config --global user.email 'you@example.com'
+Requirements	readme	sudo apt-get install -y gh   # only for pull requests; then run `gh auth login` once
+Install from source	substituted	git clone ~/e9/kata.bundle kata
+Install from source	readme	cd kata
+Install from source	readme	cargo build --release --locked
+Install from source	readme	cargo build --release --locked --target x86_64-unknown-linux-musl -p kata-toolhost
+Install from source	readme	mkdir -p ~/.local/bin ~/.local/state
+Install from source	readme	chmod go-w ~/.local ~/.local/state
+Install from source	readme	ln -sf "$PWD/target/release/kata" "$PWD/target/release/kata-worker" ~/.local/bin/
+Install from source	readme	~/.local/bin/kata --version
+Quickstart	glue	mkdir -p ~/e9-demo && cd ~/e9-demo && git init -q -b main && git commit -q --allow-empty -m 'e9: empty root'
+Quickstart	readme	kata init
+Quickstart	readme	systemd-run --user --scope -p Delegate=yes -- kata host setup --install-apparmor
+Quickstart	readme-bg	systemd-run --user --scope -p Delegate=yes -- kata serve --config .kata/kata.toml   # terminal 1
+Quickstart	glue	for _ in $(seq 120); do kata run list >/dev/null 2>&1 && break; sleep 1; done; kata run list >/dev/null
+Quickstart	readme	kata run std.hello --wait --timeout-secs 60                                          # terminal 2
+Checks	glue	cd ~/e9-demo
+Checks	glue	kata --version
+Checks	glue	kata doctor --config .kata/kata.toml
+Checks	glue	test "$(git -C ~/kata rev-parse HEAD)" = 4da3b2fe2aa434cfd68b267c1177354510c32c2f
+Checks	glue	python3 -I ~/e9/run/oracle.py .kata/kata.toml
+Checks	glue	sudo apt-get install -y sqlite3 && sqlite3 --version

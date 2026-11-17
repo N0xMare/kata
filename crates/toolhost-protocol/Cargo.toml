@@ -1,0 +1,31 @@
+[package]
+name = "kata-toolhost-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "The wire between a kata worker and kata-toolhost, the init of an agent capsule: its frames, TOOLHOST_PROTOCOL_VERSION, and the source digest the toolhost's Hello must state."
+
+# A LEAF, for the provider protocol's reason: `kata-toolhost` runs inside the
+# capsule and links this crate and nothing of kata's type system. The one internal
+# dependency allowed is `kata-provider-protocol`, whose frame codec this wire
+# reuses so the two wires cannot disagree about a length rule.
+# `the_manifest_names_no_internal_crate_but_the_provider_protocol` reads this file
+# and fails on any other.
+[dependencies]
+base64.workspace = true
+kata-provider-protocol.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[build-dependencies]
+blake3.workspace = true
+
+[dev-dependencies]
+blake3.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

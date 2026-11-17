@@ -1,0 +1,7 @@
+["kata_transport::types::conformance::SerdeConformance<WorkerControl>"]
+n_cases = 512
+hash = "3c2fae5f0fd5b54de91416b9923e9ad64cd54db40c7022f9b4e6d2caeb280cf2"
+
+["kata_transport::types::conformance::SerdeConformance<WorkerMessage>"]
+n_cases = 512
+hash = "002fb02f7a27a91178ca0d648c5ad43a59375ee7d11ae219bc2c4b641e8fcf26"

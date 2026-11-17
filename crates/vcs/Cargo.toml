@@ -1,0 +1,48 @@
+[package]
+name = "kata-vcs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# Exposes `kata_vcs::test_support` — the default trunk target resolved and
+# frozen through a provider, the way the executor's submit path does — to the
+# integration tests of this crate and its dependents, and compiles in the
+# effect verbs' `KATA_WORKSPACE_EFFECT_CRASH_ARM` crash arms those tests arm.
+# Off in shipped builds; the self dev-dependency below turns it on for this
+# crate's own `tests/`.
+test-support = []
+
+[dependencies]
+kata-effects-contract.workspace = true
+kata-types.workspace = true
+tokio = { workspace = true, features = ["sync", "rt", "io-util"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+futures.workspace = true
+chrono.workspace = true
+jj-lib.workspace = true
+metrics.workspace = true
+smol_str.workspace = true
+ulid.workspace = true
+tracing.workspace = true
+blake3.workspace = true
+thiserror.workspace = true
+tempfile.workspace = true
+gix.workspace = true
+gix-pack.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true
+
+[dev-dependencies]
+# Self dev-dependency turns on `test-support` for this crate's own `tests/`.
+kata-vcs = { path = ".", features = ["test-support"] }
+tokio = { workspace = true, features = ["full"] }
+kata-test-utils.workspace = true
+metrics-util.workspace = true
+
+[lints]
+workspace = true

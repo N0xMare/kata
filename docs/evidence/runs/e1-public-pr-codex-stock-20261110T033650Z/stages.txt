@@ -1,0 +1,11 @@
+execution 01M71RFAX3MW608JKQGTD83EHA (completed)
+stage   ordinal  state      accepted  adapter           model       effort  model_reported  schema_sent  charge     provider_failure  input  output  cache_read  cache_write  cost
+------  -------  ---------  --------  ----------------  ----------  ------  --------------  -----------  ---------  ----------------  -----  ------  ----------  -----------  ------------------
+find    0        completed  1         codex_app_server  gpt-6-luna  medium  gpt-6-luna      1            completed  -                 19457  376     49664       0            unavailable(codex)
+verify  0        completed  1         codex_app_server  gpt-6-luna  medium  gpt-6-luna      1            completed  -                 7453   492     42624       0            unavailable(codex)
+
+stage totals (every attempt):
+stage   attempts  occurrences  retries  unknown_charges  input  output  cache_read  cache_write  cost
+------  --------  -----------  -------  ---------------  -----  ------  ----------  -----------  -----------
+find    1         1            0        0                19457  376     49664       0            unavailable
+verify  1         1            0        0                7453   492     42624       0            unavailable

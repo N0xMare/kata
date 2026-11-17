@@ -1,0 +1,13 @@
+# Fires the L2 nightly at 03:00 local, spread by up to 30 minutes. Persistent: a night
+# the host was off runs at the next boot. Installed by `just nightly-install`.
+[Unit]
+Description=kata L2 nightly deep tier, daily at 03:00
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=kata-nightly.service
+
+[Install]
+WantedBy=timers.target

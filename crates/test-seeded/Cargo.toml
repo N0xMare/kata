@@ -1,0 +1,21 @@
+[package]
+name = "kata-test-seeded"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# `run_seeded` and its `Seed`, apart from kata-test-utils: commonware's
+# deterministic runtime brings a dependency closure (aws-lc-sys, blst, criterion,
+# a second OpenTelemetry/tonic/prost/axum stack) that rustc links into every
+# binary loading a crate that depends on it. Here only the test binaries that
+# import `kata_test_seeded` link it; the rest of kata-test-utils' consumers do not.
+[dependencies]
+# commonware runtime — deterministic::Runner, deterministic::Config,
+# Runner::start, Supervisor::child. Pinned by the workspace.
+commonware-runtime.workspace = true
+ulid.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,40 @@
+# Coding-agent local state — never tracked
+.claude/
+
+# Rust build output
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# Gate-snapshot, nightly and contributor worktrees
+/.worktrees/
+
+# Operator-local secrets + runtime overrides (see .env.example)
+.env
+.env.*
+!.env.example
+.kata/
+
+# `nix build` out-link (the flake's default package result)
+result
+result-*
+
+# Node dependency dirs (local JS tooling)
+node_modules
+node_modules/
+
+# Editor / OS scratch files
+*.swp
+*~
+.DS_Store
+*_grep.txt
+__pycache__/
+*.py[cod]
+
+# jj working-copy artifacts — jj-default test/smoke runs with a relative jj_repo="."
+# can materialize these in the repo tree; never commit them.
+.jj/
+
+# jj adopted-repo execution workspaces (vcs.jj_repo="." → agents/<exec-id>
+# secondary workspaces are created IN-REPO by a running node; never commit them)
+/agents/

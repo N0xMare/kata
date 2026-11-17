@@ -1,0 +1,21 @@
+[package]
+name = "kata-op-contract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared kata operation contract: one typed Operation/Request/Response/OpEnvelope per class-A operator op, kept CLI≡MCP≡API contract-equivalent."
+
+[lints]
+workspace = true
+
+# LEAF crate rule: the contract is a pure
+# serde/schemars leaf (kata-types is the permitted ceiling, but the class-A
+# Req/Resp structs need only primitives, so nothing internal is pulled in). The
+# CLI binary, the REST API, and the typed client all depend on IT without any
+# dependency cycle. Do NOT add kata-client / kata-api / kata-workflow here.
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+schemars.workspace = true

@@ -1,0 +1,24 @@
+1794498154700	#connected
+1794498154700	HTTP/1.0 200 OK
+1794498154700	content-type: text/event-stream
+1794498154700	cache-control: no-cache
+1794498154700	date: Thu, 12 Nov 2026 15:42:34 GMT
+1794498154700	
+1794498177402	#connected
+1794498177403	HTTP/1.0 200 OK
+1794498177403	content-type: text/event-stream
+1794498177403	cache-control: no-cache
+1794498177403	date: Thu, 12 Nov 2026 15:42:57 GMT
+1794498177403	
+1794498177404	id: 1
+1794498177404	event: ledger
+1794498177404	data: {"execution_id":"01M786SM8GW732P0SR51GBX1B1","assignment_id":"01M786SMFVFZ9E9BR7DK0NCYFS","stage_name":"plan","new_status":{"kind":"pending"},"output":null}
+1794498177404	
+1794498177404	id: 2
+1794498177404	event: ledger
+1794498177404	data: {"execution_id":"01M786SM8GW732P0SR51GBX1B1","assignment_id":"01M786SMFVFZ9E9BR7DK0NCYFS","stage_name":"plan","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794498177404	
+1794498177404	id: 3
+1794498177404	event: ledger
+1794498177404	data: {"execution_id":"01M786SM8GW732P0SR51GBX1B1","assignment_id":"01M786SMFVFZ9E9BR7DK0NCYFS","stage_name":"plan","new_status":{"kind":"failed","worker_id":"local-worker-0","reason":"the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)"},"output":null,"terminal_charge":{"token_usage":{"input":0,"output":0,"cache_read":0,"cache_write":0,"cache_savings_micro_usd":0,"cost":{"quality":"unavailable","backend":"nanocode_anthropic","model":"claude-sonnet-5-5"}}}}
+1794498177404	

@@ -1,0 +1,70 @@
+1794498202535	#connected
+1794498202535	HTTP/1.0 200 OK
+1794498202535	content-type: text/event-stream
+1794498202535	cache-control: no-cache
+1794498202536	date: Thu, 12 Nov 2026 15:43:22 GMT
+1794498202536	
+1794498202851	id: 1
+1794498202851	event: ledger
+1794498202851	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","new_status":{"kind":"pending"},"output":null}
+1794498202851	
+1794498202851	id: 2
+1794498202851	event: ledger
+1794498202851	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794498202851	
+1794498202860	id: 3
+1794498202860	event: ledger
+1794498202860	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","new_status":{"kind":"running","worker_id":"local-worker-0"},"output":null}
+1794498202860	
+1794498202956	event: progress
+1794498202956	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":18,"preview":"model_call_started","dropped":0,"at_ms":1794498202956}
+1794498202956	
+1794498204536	event: progress
+1794498204536	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":38,"preview":"model_call_completed","dropped":0,"at_ms":1794498204535}
+1794498204536	
+1794498204536	event: progress
+1794498204536	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":44,"preview":"tool_call: `exec`","dropped":0,"at_ms":1794498204535}
+1794498204536	
+1794498204553	event: progress
+1794498204553	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":50,"preview":"tool_call: `Bash`","dropped":0,"at_ms":1794498204552}
+1794498204553	
+1794498204560	event: progress
+1794498204560	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":89,"preview":"tool_result: `[redacted-provider_payload-34]/code-1`","dropped":0,"at_ms":1794498204560}
+1794498204560	
+1794498204562	event: progress
+1794498204562	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":121,"preview":"tool_result: `[redacted-provider_payload-34]`","dropped":0,"at_ms":1794498204561}
+1794498204562	
+1794498204562	event: progress
+1794498204562	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":139,"preview":"model_call_started","dropped":0,"at_ms":1794498204562}
+1794498204562	
+1794498207543	event: progress
+1794498207543	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":142,"preview":"agent_message_chunk: `{`","dropped":0,"at_ms":1794498207542}
+1794498207543	
+1794498207544	event: progress
+1794498207544	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":405,"preview":"agent_message_chunk: `\"summary\":\"src/app.txt currently contains the single line ","dropped":0,"at_ms":1794498207543}
+1794498207544	
+1794498207544	event: progress
+1794498207544	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","byte_offset":425,"preview":"model_call_completed","dropped":0,"at_ms":1794498207543}
+1794498207544	
+1794498232535	#connected
+1794498232536	HTTP/1.0 200 OK
+1794498232536	content-type: text/event-stream
+1794498232536	cache-control: no-cache
+1794498232536	date: Thu, 12 Nov 2026 15:43:52 GMT
+1794498232536	
+1794498232537	id: 1
+1794498232537	event: ledger
+1794498232537	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","new_status":{"kind":"pending"},"output":null}
+1794498232537	
+1794498232537	id: 2
+1794498232537	event: ledger
+1794498232537	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794498232537	
+1794498232537	id: 3
+1794498232537	event: ledger
+1794498232537	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","new_status":{"kind":"running","worker_id":"local-worker-0"},"output":null}
+1794498232537	
+1794498232537	id: 4
+1794498232537	event: ledger
+1794498232537	data: {"execution_id":"01M786V2Z93MGA1AY51N2TVCFS","assignment_id":"01M786V36NZKWB8PQXY9Y8JHV6","stage_name":"plan","new_status":{"kind":"failed","worker_id":"local-worker-0","reason":"the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)"},"output":null,"terminal_charge":{"token_usage":{"input":0,"output":0,"cache_read":0,"cache_write":0,"cache_savings_micro_usd":0,"cost":{"quality":"unavailable","backend":"nanocode_anthropic","model":"claude-sonnet-5-5"}}}}
+1794498232537	

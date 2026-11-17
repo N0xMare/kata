@@ -1,0 +1,1 @@
+{"findings": [], "summary": "The change correctly detects an explicitly stored undefined source and preserves the child-to-parent overwrite order. The regression test covers the case; no defects found.", "verdict": "approve"}

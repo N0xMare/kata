@@ -1,0 +1,9 @@
+execution 01M7853FAJMAQJPTNXR22ANA0F
+control (no model call open at the kill, from the transcript): open = []
+killed the main: wait status Some(ExitStatus(unix_wait_status(9))), signal Some(9)
+kata approvals after the restart: the same assignment "01M7854DFT7YD7N480X6R3SGJX" re-listed: true
+kata run show status after the decision: Some("completed")
+assert_final_state: one accepted attempt per occurrence, trunk = kata/<exec> = the committed commit, one `gh pr create`, no attempt roots, containers or cgroups
+spend: issued calls of the agent attempts that never completed 0 (unmetered_calls; started 0, completed 0, unclosed 0, open false); the case kills no model call, so 0
+recorded usage [in, cache_read, cache_write, out]: [15656, 46592, 0, 723]
+outcome: pass: settled resumed-at-gate, every oracle held

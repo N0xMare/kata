@@ -1,0 +1,96 @@
+[package]
+name = "kata"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+default-run = "kata"
+
+[lib]
+name = "kata"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kata"
+path = "src/main.rs"
+
+[features]
+# Exposes only integration-test seams such as explicit installed-lifecycle
+# lease paths. Attachment discovery remains fixed in every binary target,
+# including all-features builds.
+test-support = ["kata-api/test-support"]
+
+[dependencies]
+parking_lot.workspace = true
+rusqlite.workspace = true
+nix.workspace = true
+shlex.workspace = true
+libc.workspace = true
+kata-types.workspace = true
+kata-op-contract.workspace = true
+kata-core.workspace = true
+kata-crypto.workspace = true
+blake3.workspace = true
+kata-transport.workspace = true
+kata-worker.workspace = true
+# `kata login` / `kata logout` / `kata doctor`: kata's own login for the
+# embedded harness (`kata_agent_nanocode::credential`, the crate's one host-side
+# module). Already in this binary's closure through kata-worker.
+kata-agent-nanocode.workspace = true
+kata-program.workspace = true
+kata-workflow.workspace = true
+kata-api.workspace = true
+kata-client.workspace = true
+kata-effects-contract.workspace = true
+kata-vcs.workspace = true
+tokio.workspace = true
+clap = { workspace = true, features = ["env"] }
+dotenvy.workspace = true
+futures.workspace = true
+tracing.workspace = true
+anyhow.workspace = true
+toml.workspace = true
+toml_edit.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+smol_str.workspace = true
+ulid.workspace = true
+chrono.workspace = true
+hex.workspace = true
+# The runtime threads' stack size is the host's soft `RLIMIT_STACK`.
+rustix.workspace = true
+
+[build-dependencies]
+chrono.workspace = true
+cc.workspace = true
+
+[dev-dependencies]
+# Integration tests link the library without `cfg(test)`. The self
+# dev-dependency enables the narrowly gated test-support seams for those test
+# binaries while leaving production builds unchanged.
+kata = { path = ".", features = ["test-support"] }
+kata-test-utils.workspace = true
+# `test-support` reaches the fixture-agent installers the rigs declare agents
+# through (`kata_program::test_harness::install_rig_agents`).
+kata-program = { workspace = true, features = ["test-support"] }
+kata-workflow = { workspace = true, features = ["test-support"] }
+kata-worker = { workspace = true, features = ["test-support"] }
+# `kata login status --check`'s cell points the check at a loopback port
+# (`CheckHosts::local_for_test`).
+kata-agent-nanocode = { workspace = true, features = ["test-support"] }
+# `the_nanocode_init_model_is_one_nanocode_knows` asks nanocode's own model
+# catalog (`Model::known`). Already in the tree, at the workspace's pinned rev.
+nanocode-backend-codex.workspace = true
+axum.workspace = true
+# `code_mode_host_live` serves its mock model through the nanocode fixtures'
+# `mock_provider.rs`, which answers WebSocket Responses too.
+tokio-tungstenite.workspace = true
+tower.workspace = true
+# `StandInExecution` impls in src tests (`cli/recovery_capture`) — the trait
+# itself declares `#[async_trait]`.
+async-trait.workspace = true
+
+[lints]
+workspace = true

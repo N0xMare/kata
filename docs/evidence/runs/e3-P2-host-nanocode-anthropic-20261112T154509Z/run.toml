@@ -1,0 +1,47 @@
+capsule_network = "offline"
+case = "P2-host"
+cell = "E3"
+cost_provider = "unavailable: per-run provider usage not attributable"
+cost_recorded = "unavailable"
+credential_mode = "api_key"
+effort = "medium"
+harness = "nanocode-anthropic"
+kata_sha = "4da3b2fe2aa434cfd68b267c1177354510c32c2f"
+kata_tree = "74133d703da4dd98910352faa569d87e8c06666f"
+model = "claude-sonnet-5-5"
+nanocode_rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2"
+outcome = "fail"
+outcome_source = """oracle.txt: an oracle did not hold: e3_crash_matrix_host_live: the settled attempt names the worker's death and its ambiguity: {"delivery":{"awaiting_approval_at_ms":null,"child_execution_id":null,"dispatched_at_ms":1794498317788,"finished_at_ms":1794498339349,"last_checkpoint":0,"stage_name":"implement","started_at_ms":1794498317815,"worker_id":"local-worker-0"},"reason":"the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)","terminal_charge":{"token_usage":{"cache_read":0,"cache_savings_micro_usd":0,"cache_write":0,"cost":{"backend":"nanocode_anthropic","model":"claude-sonnet-5-5","quality":"unavailable"},"input":0,"output":0}},"verdict":"proven_ambiguous"} (expected proven-ambiguous)"""
+settlement = "proven-ambiguous"
+started_utc = "2026-11-12T15:45:09Z"
+surface = "cli"
+tokens_provider = "unavailable: per-run provider usage not attributable"
+unknown_charges = 1
+unmetered_calls = 1
+wall_seconds = 3
+
+[[artifacts]]
+path = "oracle.txt"
+what = "every outside-kata read this cell's outcome rests on, in order"
+
+[[artifacts]]
+path = "sse-transcript.txt"
+what = "the client-side GET /api/v1/events transcript, one received-ms-stamped line per SSE line"
+
+[[artifacts]]
+path = "change.star"
+what = 'the pack this run submitted: workflows/std/change.star at kata_sha with progress_visibility = "summary" added to plan and implement, nothing else'
+
+[[artifacts]]
+path = "tree.txt"
+what = "git rev-parse HEAD, HEAD^{tree} and git status --porcelain of the tree the binaries were built from: kata_sha names exactly what ran only when the status is empty"
+
+[[artifacts]]
+path = "spend-ledger.toml"
+what = "ledger.py record over the kept node's database (a second, read-only handle): the known tokens, the unknown charges (unknown_charges: one per attempt kata could not meter) and kata's cost"
+
+[tokens_recorded]
+cache_read = 19968
+cache_write = 1264
+input = 8
+output = 480

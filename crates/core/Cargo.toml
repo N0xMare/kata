@@ -1,0 +1,110 @@
+[package]
+name = "kata-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "kata runtime kernel: DurableEventLog, ConfigManager, SystemHealth."
+
+[lints]
+workspace = true
+
+[features]
+# Exposes test-only/fault-injection accessors (differential oracles, forced
+# persist/store/log failures, index-desync injection) to integration-test
+# crates. NOT enabled in shipped builds — `#[cfg(any(test, feature =
+# "test-support"))]` keeps these off the production surface while the crate's
+# own `tests/` (via the self dev-dependency below) can still reach them.
+test-support = []
+
+[dependencies]
+# Shared kata crates
+kata-types  = { workspace = true }
+
+# SQLite for the workflow intent table + durable event log
+rusqlite = { workspace = true }
+
+# Hashing for the content-addressed store
+blake3 = { workspace = true }
+# Lowercase-hex rendering for operator-facing refusal messages (one spelling, shared
+# with kata-types, rather than a per-module fold over `{byte:02x}`).
+hex    = { workspace = true }
+
+# Fail-closed local SQLite inspection
+libc     = { workspace = true }
+rustix   = { workspace = true }
+# `fault_inject`'s stop action raises SIGSTOP on the CALLING thread (`raise`, a
+# thread-directed `tgkill`), which rustix offers only as an unsafe call.
+nix      = { workspace = true }
+
+# Async + concurrency
+tokio        = { workspace = true }
+tokio-stream = { workspace = true }
+parking_lot  = { workspace = true }
+arc-swap     = { workspace = true }
+dashmap      = { workspace = true }
+
+# Observability
+tracing                 = { workspace = true }
+tracing-log             = { workspace = true }
+tracing-subscriber      = { workspace = true }
+tracing-opentelemetry   = { workspace = true }
+opentelemetry           = { workspace = true }
+opentelemetry_sdk       = { workspace = true }
+opentelemetry-otlp      = { workspace = true }
+
+# Metrics pipeline (metrics-rs facade + prometheus exporter)
+metrics                     = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+
+# Serde
+serde      = { workspace = true }
+serde_json = { workspace = true }
+
+# Typed process-wrapper errors (`environment::nix::NixError`), so a Nix CLI
+# refusal carries its argv, exit status and sanitized stderr tail as DATA rather
+# than as a pre-formatted string.
+thiserror  = { workspace = true }
+
+
+# Identity
+ulid   = { workspace = true }
+
+# String + transport (recovery subsystem)
+smol_str       = { workspace = true }
+kata-transport = { workspace = true }
+
+# Config hot-reload
+notify = { workspace = true }
+toml   = { workspace = true }
+
+[dev-dependencies]
+# Self dev-dependency: turns on `test-support` for this crate's own `tests/`
+# integration binaries (they link the lib built WITHOUT `cfg(test)`), so the
+# gated fault-injection/oracle accessors stay reachable from them.
+kata-core       = { path = ".", features = ["test-support"] }
+kata-test-utils = { path = "../test-utils" }
+# The event-log unit tests stamp fabricated events with `Utc::now()`.
+chrono          = { workspace = true }
+metrics-util    = { workspace = true }
+# `operational_crash_matrix::Group` derives `EnumIter` so the matrix's
+# transaction axis is the ENUM rather than a hand-typed `ALL` roster beside it —
+# the same pattern as `sandbox_posture::ContainmentLever`. Dev-only: nothing in
+# `src/` needs it.
+strum           = { workspace = true, features = ["derive"] }
+tempfile        = { workspace = true }
+# Benches: criterion micro-benchmarks for kata-core's hot paths
+# (`OperationalDb::claim_attempt`, the recovery reads).
+# Run via `just bench-crate core` — NOT part of `just gate`.
+criterion       = { workspace = true }
+
+[[bench]]
+name = "hot_paths"
+harness = false
+
+# 100k-event recovery-read benchmarks (indexed per-execution
+# read vs whole-log scan+filter). Run via `just bench-crate core` — NOT gated.
+[[bench]]
+name = "recovery_100k"
+harness = false

@@ -1,0 +1,41 @@
+[package]
+name = "kata-provider-youki"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "The rootless OCI execution provider kata does not link: it starts the container kata already described in full, from the OciBundlePlan bytes on the wire."
+
+[[bin]]
+name = "kata-provider-youki"
+path = "src/main.rs"
+
+# An out-of-tree provider is one NOT LINKED INTO KATA, and the
+# temptation here is sharp: `kata_worker::oci_bundle` already has
+# `materialize_bundle`, and `kata_worker::oci_runtime` already has
+# `run_bundle`. Calling either would make this process a re-entry into kata's own
+# launch path rather than a peer that received a description of one — and the
+# whole claim of this crate is that a provider kata does not link can start
+# the container kata planned from the frame alone.
+#
+# So the closure is the WIRE, `serde_json` (the `--measured-basis` argv is JSON
+# because the certificate field is), `sha2` (re-deriving the pinned runtime's digest
+# is unavoidably a hash), and `libc` for ONE thing: installing a `SIGTERM` handler,
+# so a cancelled provider tears its container down instead of dying with it running.
+# Nothing else here needs it — the runtime client is killed through
+# `std::process::Child::kill`, which is this process's own child — and that is why
+# the dependency is one `signal(2)` call and one `#[allow(unsafe_code)]`. No
+# `kata-worker`, no `kata-types`, no `kata-core`.
+#
+# `crates/worker/tests/provider_supervisor.rs` reads this manifest and
+# FAILS on any internal dependency but `kata-provider-protocol`, so this comment
+# is a test.
+[dependencies]
+kata-provider-protocol = { path = "../../crates/provider-protocol" }
+libc.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,51 @@
+[e9-e1] $ kata doctor --config .kata/kata.toml
+kata doctor: pass (failures=0 warnings=4)
+config: ./.kata/kata.toml
+[pass] config_file                  config file exists
+[pass] config_validation            config parsed and validated
+[pass] data_dir                     configured data directory exists
+[pass] oci_attempt_roots_retained   no OCI attempt root is retained over an unconfirmed container teardown
+[pass] starter_agents               starter workflow agent labels are configured
+[pass] kata_login                   every `kata_login` agent's login is stored, owner-only
+      [agents.default] anthropic-api-key: an API key is stored
+      [agents.gate] anthropic-api-key: an API key is stored
+      [agents.reviewer] anthropic-api-key: an API key is stored
+[pass] agent_backends               every declared agent block passes the doors the CHECK judges a block by on config alone (`kata config check`'s judgement); the doors that need a stage are `kata check`'s
+      [agents.default] codex: capsule launch declared (adapter `nanocode_anthropic`; the kind fixes its launch)
+      [agents.gate] codex: capsule launch declared (adapter `nanocode_anthropic`; the kind fixes its launch)
+      [agents.reviewer] codex: capsule launch declared (adapter `nanocode_anthropic`; the kind fixes its launch)
+      [agents.shell] shell: reserved `shell` label — stages run `sh` inside the node environment
+[pass] target_repo_ignore           the target repository ignores every path kata writes into it
+      .jj/ — ignored by .gitignore:3 (`/.jj/`)
+      agents/ — ignored by .gitignore:4 (`/agents/`)
+      .kata/data/ — ignored by .gitignore:5 (`/.kata/data/`)
+[pass] trunk_resolution             kata resolves this repository's trunk as `main`
+      trunk `main` resolved from remote_head (1 branch(es), 1 kata did not create)
+[pass] commit_identity              kata would commit as `Your Name <you@example.com>` in this repository
+      resolved by asking git — `git -c user.useConfigOnly=true var GIT_AUTHOR_IDENT` at the repository root, which covers the environment, the system/global/local config layers and `includeIf`
+[pass] containment_runtime          the pinned youki 0.7.0 at `/nix/store/dwi0lfqpz41vv8sap08c2ykdga1970nl-youki-seccomp-0.7.0/bin/youki` holds exactly the pinned bytes (sha256 599108f43913c42f383e9a32d44a54bcf2e0fcd8ae7cee647a04bf759e502f8b); the capsule driver re-derives this digest before every stage
+[warn] containment_userns           the kernel restricts (or does not let this process read whether it restricts) unprivileged user namespaces; the exact-path AppArmor profile is installed byte-identical to the render, but the kernel's loaded-profile list needs CAP_MAC_ADMIN to read, so whether it is LOADED is unknown from here — never assumed. `kata execution-provider certify oci` starts a container and settles it
+[pass] containment_syscall_fence    every capsule's config.json carries the seccomp DENY-list (rendered unconditionally — no operator lever reaches it), and the pinned runtime reports libseccomp 2.6.1, the witness that it loads `linux.seccomp`
+[warn] containment_cgroup_delegation cgroup v2 delegation cannot carry a stage bound: controller(s) memory, pids are not usable where a stage cgroup would be created. Observed: cgroup v2 is mounted and this process sits in `/sys/fs/cgroup/user.slice/user-1000.slice/session-1.scope`, which OFFERS [memory cpu pids] — but creating a child cgroup there was REFUSED, so kata cannot place a stage under any bound: mkdir /sys/fs/cgroup/user.slice/user-1000.slice/session-1.scope/.kata-bounds-probe-29599: Permission denied (os error 13). Offering a controller and delegating the subtree are different facts; only the second lets an unprivileged process write a limit. Measured for THIS process's cgroup; a worker started here would refuse `delegation_incomplete` at capsule-route admission. A worker under a delegated scope (`systemd-run --user --scope -p Delegate=yes`) measures its own.
+[pass] containment_env_levers       3 containment lever(s) SET in this environment: KATA_EXTERNAL_EXECUTION_PROVIDER (reshapes), KATA_EXTERNAL_EXECUTION_PROVIDER_ADDRESS (tightens), KATA_EXTERNAL_PROVIDER_STORE (tightens); the declared OCI provider resolves to its content address in the declared store
+[pass] project_workflow_dir         project workflow override directory exists
+[pass] product_objective            product objective context file exists
+[pass] product_validation           product validation criteria file exists
+[pass] product_steering             product steering file exists
+[pass] hello_starter_file           project self-contained hello starter workflow exists
+[pass] starter_workflow_file        project starter factory workflow exists
+[pass] starter_preflight_file       project starter preflight workflow exists
+[pass] memory_objective_proposal    memory inbox proposal decodes
+[pass] memory_validation_proposal   memory inbox proposal decodes
+[pass] workflow_library             workflow library has effective workflows
+[pass] workflow_check               workflow std.hello compiles to checked execution IR
+[warn] workflow_check               workflow std.software_factory.kata_self_improve compiles but is refused on facts this node does not declare
+      error: failed to compile resolved workflow at ./.kata/workflows/std.software_factory.kata_self_improve.star into checked execution IR: validation error: egress_undeclared: stage "closeout" authors `net = "host"` selecting agent `default`, but this node declares no `[node] egress_allow`. Under `oci` the stage's only route out is the worker's CONNECT proxy over exactly that set; declare it, or author `net = "offline"`.
+[warn] workflow_check               workflow std.software_factory.kata_self_improve_preflight compiles but is refused on facts this node does not declare
+      error: failed to compile resolved workflow at ./.kata/workflows/std.software_factory.kata_self_improve_preflight.star into checked execution IR: validation error: egress_undeclared: stage "validate" authors `net = "host"`, but this node declares no `[node] egress_allow` authorities — under `oci` an authored `host` names exactly that set through the worker's CONNECT proxy, and an empty set is `egress_undeclared`, not `Offline`. Declare the exact `host:port` authorities the stage may reach in `[node] egress_allow`, or author `net = "offline"`.
+next:
+  kata check --all
+  systemd-run --user --scope -p Delegate=yes -- kata serve --config ./.kata/kata.toml
+  kata doctor --config ./.kata/kata.toml --online
+  kata factory run std.software_factory.kata_self_improve_preflight --wait --timeout-secs 900
+[e9-e1] rc=0

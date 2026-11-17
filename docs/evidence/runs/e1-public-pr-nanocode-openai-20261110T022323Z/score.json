@@ -1,0 +1,11 @@
+{
+  "ok": true,
+  "structure_errors": [],
+  "warnings": [],
+  "path_errors": [],
+  "verdict": "approve",
+  "findings": 0,
+  "seeded_found": "0/0 (unmatched 0 of 0 findings)",
+  "unmatched_findings": 0,
+  "defects": []
+}

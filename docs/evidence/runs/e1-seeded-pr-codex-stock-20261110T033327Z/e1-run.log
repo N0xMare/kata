@@ -1,0 +1,10 @@
+e1-run: seeded-pr rest execution 01M71R94NHRSDHT52TM3H4P0K4
+PASS terminal-completed
+PASS frozen-head-is-forge-head
+PASS review-validates-and-scores
+PASS remote-unchanged
+PASS no-target-pin-left
+PASS stages-read
+PASS turns-read
+PASS spend-read
+e1-run: 0 oracle(s) failed; seeded row: score-e1: ok seeded 3/3 (unmatched 0 of 3 findings)

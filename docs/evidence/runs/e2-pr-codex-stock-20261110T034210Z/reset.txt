@@ -1,0 +1,12 @@
+exec 01M71RS2Q2WS1S943WD6XS8JMN pr 11
+✓ Closed pull request N0xMare/kata-e2-fixture#11 (kata change)
+close rc=0
+To github.com:N0xMare/kata-e2-fixture.git
+ - [deleted]         kata/01M71RS2Q2WS1S943WD6XS8JMN
+delete rc=0
+CLOSED merged=null
+-- remote heads:
+45235ea1c860df735eb9ad6bf58e0911f0e7e18f	refs/heads/e1-seeded
+01a7cd25555241e27eb4669807fc7452eb82d0f4	refs/heads/main
+-- open PRs:
+#1 e1-seeded

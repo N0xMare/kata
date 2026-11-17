@@ -1,0 +1,1185 @@
+# The TLC runs ADR 0003's checked model owes (plan M0), read by
+# scripts/model-check.py through `just model-check-0003`.
+#
+# expect = "pass": TLC explores the whole bounded state space with no violation.
+# expect = "<Name>": TLC must stop on a violation of exactly <Name>. Two kinds:
+#   * a MUTANT (MUTANT = "<mutant>"): the RED half. The invariant is not vacuous,
+#     and the mechanism the mutant removes is the one it rests on.
+#   * a FINDING (MUTANT = "none"): the ADR as written, at the constants named, breaks
+#     a property it claims. Each is reported against the ADR; the check pins the
+#     counterexample until the ADR or the model changes.
+# A mutant or finding check runs only the invariant it names. A finding carries its
+# id (`finding`), the one the M0 report and the models' README use.
+
+# ─── LeaseOrder: §4 node session, provider-owned kill, settlement order ───────
+
+[spec.LeaseOrder]
+file = "LeaseOrder.tla"
+invariants = [
+    "TypeOK",
+    "NoCapsuleAfterSettlement",
+    "NoDoubleDelivery",
+    "NotPerformedIsSound",
+    "PastGKeepsReportedOutcome",
+    "NoMarkOnClosedSliceOrRevokedNode",
+    "NoMarkAfterRevokeCommitted",
+]
+properties = ["VerdictsOnlyForward"]
+typing = ["TypeOK"]
+refuted = ["NoMarkAfterRevokeCommitted"]
+
+# Exact clocks (rho = 0): L = 3, K = 1 (the provider, D to an empty subtree),
+# K_CONTAIN = 1 (a live node's kill_and_contain after a provider death),
+# SLACK = 2, so W = L + K + SLACK = 6 real units.
+[spec.LeaseOrder.constants]
+Nodes = "{n1}"
+MaxAttempts = 1
+MaxInc = 2
+L = 3
+K = 1
+K_CONTAIN = 1
+SLACK = 2
+RHO_NUM = 0
+RHO_DEN = 1
+T_RENEW = 1
+G_WAIT = 2
+HARNESS_IN_NODE = true
+Kinds = '{"shell", "embedded"}'
+ALLOW_STALL = false
+ALLOW_CRASH = false
+ALLOW_PROVIDER_DEATH = false
+ALLOW_CONTROL_RESTART = false
+ALLOW_REVOKE = false
+ALLOW_GATEWAY_DOWN = false
+ALLOW_NODE_WIPE = false
+ALLOW_SUSPEND = false
+ALLOW_PARTITION = false
+MaxFaults = 2
+EXCUSE_CRASHED = true
+MUTANT = "none"
+
+[[check]]
+name = "lease-order-node-faults"
+spec = "LeaseOrder"
+expect = "pass"
+[check.constants]
+ALLOW_STALL = true
+ALLOW_CRASH = true
+ALLOW_PROVIDER_DEATH = true
+ALLOW_NODE_WIPE = true
+ALLOW_SUSPEND = true
+ALLOW_PARTITION = true
+
+[[check]]
+name = "lease-order-control-restart"
+spec = "LeaseOrder"
+expect = "pass"
+[check.constants]
+ALLOW_CONTROL_RESTART = true
+ALLOW_STALL = true
+ALLOW_PARTITION = true
+
+[[check]]
+name = "lease-order-revoke-gateway"
+spec = "LeaseOrder"
+expect = "pass"
+[check.constants]
+ALLOW_REVOKE = true
+ALLOW_GATEWAY_DOWN = true
+ALLOW_STALL = true
+ALLOW_PARTITION = true
+
+# After S4 the turn runs in the capsule: the only requester is the capsule.
+[[check]]
+name = "lease-order-capsule-harness"
+spec = "LeaseOrder"
+expect = "pass"
+[check.constants]
+HARNESS_IN_NODE = false
+ALLOW_STALL = true
+ALLOW_CRASH = true
+ALLOW_PROVIDER_DEATH = true
+ALLOW_PARTITION = true
+
+# Two attempts of the retry chain: a re-run only after PROVEN NOT PERFORMED, never
+# beside its predecessor's capsule.
+[[check]]
+name = "lease-order-retry-chain"
+spec = "LeaseOrder"
+expect = "pass"
+[check.constants]
+MaxAttempts = 2
+MaxFaults = 1
+ALLOW_STALL = true
+ALLOW_CRASH = true
+ALLOW_PARTITION = true
+ALLOW_GATEWAY_DOWN = true
+
+# Every one of the nine faults, any two of them.
+[[check]]
+name = "lease-order-fault-pairs"
+spec = "LeaseOrder"
+expect = "pass"
+[check.constants]
+ALLOW_STALL = true
+ALLOW_CRASH = true
+ALLOW_PROVIDER_DEATH = true
+ALLOW_CONTROL_RESTART = true
+ALLOW_REVOKE = true
+ALLOW_GATEWAY_DOWN = true
+ALLOW_NODE_WIPE = true
+ALLOW_SUSPEND = true
+ALLOW_PARTITION = true
+
+# Two nodes beside the two-attempt retry chain: a re-run landing on the other node
+# while the first is partitioned, stalled or crashed, or while kata-control restarts.
+# Shell attempts only, one incarnation per node, one fault: the nodes are permuted
+# (SYMMETRY), and every invariant is unchanged by renaming them.
+[[check]]
+name = "lease-order-two-nodes"
+spec = "LeaseOrder"
+expect = "pass"
+symmetry = "Symmetry"
+[check.constants]
+Nodes = "{n1, n2}"
+MaxAttempts = 2
+MaxInc = 1
+Kinds = '{"shell"}'
+HARNESS_IN_NODE = false
+MaxFaults = 1
+ALLOW_STALL = true
+ALLOW_CRASH = true
+ALLOW_CONTROL_RESTART = true
+ALLOW_PARTITION = true
+
+# Two nodes and a second incarnation each: a node that crashed, or lost its lease
+# behind a partition, says Hello again and its intake settles the attempt, the re-run
+# landing on either node. L = 2 keeps the space finite enough to finish.
+[[check]]
+name = "lease-order-two-nodes-rejoin"
+spec = "LeaseOrder"
+expect = "pass"
+symmetry = "Symmetry"
+[check.constants]
+Nodes = "{n1, n2}"
+MaxAttempts = 2
+MaxInc = 2
+L = 2
+Kinds = '{"shell"}'
+HARNESS_IN_NODE = false
+MaxFaults = 1
+ALLOW_CRASH = true
+ALLOW_PARTITION = true
+
+# Drifting clocks, rho = 1/10 per clock against real time: L = 5 measures 4..6 real
+# units on the node's clock; W = ceil(5 * 1.1) + 1 + 2 = 9 cannot end before 8 real
+# units on kata-control's. Mutant w_without_rho drops the drift term at these bounds.
+[[check]]
+name = "lease-order-drift"
+spec = "LeaseOrder"
+expect = "pass"
+[check.constants]
+L = 5
+RHO_NUM = 1
+RHO_DEN = 10
+T_RENEW = 2
+MaxFaults = 1
+ALLOW_STALL = true
+ALLOW_PARTITION = true
+
+# Drift with provider death needs SLACK = 3. At SLACK = 2 a provider dying at its own
+# kill hands the capsule to kill_and_contain (K_CONTAIN = 1), which ends on the very
+# integer instant W does: F1's class, made a tie by the widening (L rounds up to 6 real
+# units, W down to 8). In dense time the capsule is gone at 7.56, before W's 7.73;
+# the third unit is that rounding margin, not a design margin.
+[[check]]
+name = "lease-order-drift-provider-death"
+spec = "LeaseOrder"
+expect = "pass"
+[check.constants]
+L = 5
+SLACK = 3
+RHO_NUM = 1
+RHO_DEN = 10
+T_RENEW = 2
+MaxFaults = 1
+ALLOW_STALL = true
+ALLOW_PROVIDER_DEATH = true
+ALLOW_PARTITION = true
+
+# FINDING F1. ADR §4 pins K (the provider's D-to-empty-subtree) below the slack and
+# claims the order "against ... a provider that dies under a live node". A provider
+# that dies just before its own kill hands the capsule to the node's kill_and_contain,
+# whose latency no term of W covers: with K = 1 < SLACK = 2 as the ADR requires and
+# K_CONTAIN = 4, a capsule outlives its settlement (also in dense time: the provider
+# may die strictly before D and the node's containment still ends after W).
+[[check]]
+name = "lease-order-finding-containment-outside-w"
+spec = "LeaseOrder"
+expect = "NoCapsuleAfterSettlement"
+finding = "F1"
+invariants = ["NoCapsuleAfterSettlement"]
+properties = []
+[check.constants]
+K_CONTAIN = 4
+MaxFaults = 1
+ALLOW_PROVIDER_DEATH = true
+
+# FINDING F7. ADR §4 names one double fault, "a dead provider under a stalled node".
+# A dead provider under a CRASHED node has no kill path either (no provider at D, no
+# node to contain it; under systemd the unit's stop sends SIGTERM, which the capsule's
+# PID-namespace init ignores until TimeoutStopSec), so the order holds only with that
+# case named as well (EXCUSE_CRASHED = true in every passing check).
+[[check]]
+name = "lease-order-finding-dead-provider-under-crashed-node"
+spec = "LeaseOrder"
+expect = "NoCapsuleAfterSettlement"
+finding = "F7"
+invariants = ["NoCapsuleAfterSettlement"]
+properties = []
+[check.constants]
+EXCUSE_CRASHED = false
+ALLOW_CRASH = true
+ALLOW_PROVIDER_DEATH = true
+
+# FINDING F4, at the gateway. ADR §3: "`kata node revoke` commits `revoked` first; from
+# then on ... the gateway refuses the node's requests". The gateway learns a revocation
+# over its session with kata-control, after the commit, and the command reports
+# success at the commit: until the gateway's mirror holds it (while that session is
+# down, up to the open slices' grants and deadlines), the revoked node's requests are
+# marked and forwarded on its open slices. With F4's correction (report once the mirror holds it) no mark follows the
+# report: NoMarkOnClosedSliceOrRevokedNode, read on the mirror, holds.
+[[check]]
+name = "lease-order-finding-mark-after-revoke-commit"
+spec = "LeaseOrder"
+expect = "NoMarkAfterRevokeCommitted"
+finding = "F4"
+invariants = ["NoMarkAfterRevokeCommitted"]
+properties = []
+[check.constants]
+MaxFaults = 1
+ALLOW_REVOKE = true
+
+# ─── LeaseOrder mutants (RED) ────────────────────────────────────────────────
+
+[[check]]
+name = "lease-order-mutant-kill-on-node-process"
+spec = "LeaseOrder"
+expect = "NoCapsuleAfterSettlement"
+invariants = ["NoCapsuleAfterSettlement"]
+properties = []
+[check.constants]
+MUTANT = "kill_on_node_process"
+MaxFaults = 1
+ALLOW_STALL = true
+
+[[check]]
+name = "lease-order-mutant-settle-at-revoke"
+spec = "LeaseOrder"
+expect = "NoCapsuleAfterSettlement"
+invariants = ["NoCapsuleAfterSettlement"]
+properties = []
+[check.constants]
+MUTANT = "settle_at_revoke"
+MaxFaults = 1
+ALLOW_REVOKE = true
+
+[[check]]
+name = "lease-order-mutant-no-boot-wait"
+spec = "LeaseOrder"
+expect = "NoCapsuleAfterSettlement"
+invariants = ["NoCapsuleAfterSettlement"]
+properties = []
+[check.constants]
+MUTANT = "no_boot_wait"
+MaxFaults = 1
+ALLOW_CONTROL_RESTART = true
+
+[[check]]
+name = "lease-order-mutant-no-slack"
+spec = "LeaseOrder"
+expect = "NoCapsuleAfterSettlement"
+invariants = ["NoCapsuleAfterSettlement"]
+properties = []
+[check.constants]
+MUTANT = "no_slack"
+MaxFaults = 1
+ALLOW_PARTITION = true
+
+[[check]]
+name = "lease-order-mutant-w-without-rho"
+spec = "LeaseOrder"
+expect = "NoCapsuleAfterSettlement"
+invariants = ["NoCapsuleAfterSettlement"]
+properties = []
+[check.constants]
+MUTANT = "w_without_rho"
+L = 5
+RHO_NUM = 1
+RHO_DEN = 10
+T_RENEW = 2
+MaxFaults = 1
+ALLOW_STALL = true
+ALLOW_PARTITION = true
+
+[[check]]
+name = "lease-order-mutant-hello-without-sweep"
+spec = "LeaseOrder"
+expect = "NoCapsuleAfterSettlement"
+invariants = ["NoCapsuleAfterSettlement"]
+properties = []
+[check.constants]
+MUTANT = "hello_without_sweep"
+MaxFaults = 0
+
+[[check]]
+name = "lease-order-mutant-redeliver-after-hello"
+spec = "LeaseOrder"
+expect = "NoDoubleDelivery"
+invariants = ["NoDoubleDelivery"]
+properties = []
+[check.constants]
+MUTANT = "redeliver_after_hello"
+MaxFaults = 1
+ALLOW_CRASH = true
+
+[[check]]
+name = "lease-order-mutant-lost-frame-not-performed"
+spec = "LeaseOrder"
+expect = "NotPerformedIsSound"
+invariants = ["NotPerformedIsSound"]
+properties = []
+[check.constants]
+MUTANT = "lost_frame_not_performed"
+ALLOW_CONTROL_RESTART = true
+ALLOW_STALL = true
+
+[[check]]
+name = "lease-order-mutant-settle-before-slice-close"
+spec = "LeaseOrder"
+expect = "NotPerformedIsSound"
+invariants = ["NotPerformedIsSound"]
+properties = []
+[check.constants]
+MUTANT = "settle_before_slice_close"
+MaxFaults = 1
+ALLOW_PARTITION = true
+
+[[check]]
+name = "lease-order-mutant-trust-wiped-intake"
+spec = "LeaseOrder"
+expect = "NotPerformedIsSound"
+invariants = ["NotPerformedIsSound"]
+properties = []
+[check.constants]
+MUTANT = "trust_wiped_intake"
+ALLOW_CRASH = true
+ALLOW_NODE_WIPE = true
+
+[[check]]
+name = "lease-order-mutant-start-before-intake"
+spec = "LeaseOrder"
+expect = "NotPerformedIsSound"
+invariants = ["NotPerformedIsSound"]
+properties = []
+[check.constants]
+MUTANT = "start_before_intake"
+MaxFaults = 1
+ALLOW_CRASH = true
+
+[[check]]
+name = "lease-order-mutant-past-g-drops-outcome"
+spec = "LeaseOrder"
+expect = "PastGKeepsReportedOutcome"
+invariants = ["PastGKeepsReportedOutcome"]
+properties = []
+[check.constants]
+MUTANT = "past_g_drops_outcome"
+MaxFaults = 1
+ALLOW_GATEWAY_DOWN = true
+
+[[check]]
+name = "lease-order-mutant-result-after-settlement"
+spec = "LeaseOrder"
+expect = "VerdictsOnlyForward"
+invariants = []
+properties = ["VerdictsOnlyForward"]
+[check.constants]
+MUTANT = "result_after_settlement"
+MaxFaults = 1
+ALLOW_STALL = true
+
+[[check]]
+name = "lease-order-mutant-mark-on-closed-slice"
+spec = "LeaseOrder"
+expect = "NoMarkOnClosedSliceOrRevokedNode"
+invariants = ["NoMarkOnClosedSliceOrRevokedNode"]
+properties = []
+[check.constants]
+MUTANT = "mark_on_closed_slice"
+MaxFaults = 1
+ALLOW_PARTITION = true
+
+[[check]]
+name = "lease-order-mutant-mark-despite-revocation"
+spec = "LeaseOrder"
+expect = "NoMarkOnClosedSliceOrRevokedNode"
+invariants = ["NoMarkOnClosedSliceOrRevokedNode"]
+properties = []
+[check.constants]
+MUTANT = "mark_despite_revocation"
+MaxFaults = 1
+ALLOW_REVOKE = true
+
+# ─── SliceBudget: §5 escrowed slices, marks, SliceRevoke/SliceClosed, G ───────
+
+[spec.SliceBudget]
+file = "SliceBudget.tla"
+invariants = [
+    "NoForwardPastTheBound",
+    "SpendWithinBoundPlusInFlight",
+    "NoReissue",
+    "NoForwardWithoutMark",
+    "NotPerformedIsSound",
+    "PastGAmbiguousOnlyUnreported",
+    "ChargeNeverZeroForUnknown",
+    "AdoptionComplete",
+    "NewSliceAfterOwedRevokes",
+    "NoMarkOnClosedSlice",
+]
+properties = ["NoRefillWhenFrozen"]
+refuted = ["NoForwardPastTheBound"]
+
+# Two sibling attempts in one token-bounded scope: B = 2, grants and refills of
+# CHUNK = 1, one request's usage up to UMAX = 2 (it may overshoot its grant).
+[spec.SliceBudget.constants]
+Attempts = "{1, 2}"
+MaxReq = 2
+BOUNDED = true
+B = 2
+CHUNK = 1
+UMAX = 2
+MaxMarks = 3
+HARNESS_RETRIES = false
+ALLOW_GW_CRASH = false
+ALLOW_GW_LOSS = false
+ALLOW_LINK_LOSS = false
+ALLOW_CTL_CRASH = false
+MaxFaults = 1
+MUTANT = "none"
+
+# Every invariant but the bound's literal claim, which FINDING F2 refutes, over three
+# marks and one fault: a gateway crash, a lost session or a kata-control crash (a lost
+# gateway journal needs the crash first: two faults, the next check).
+[[check]]
+name = "slice-budget-faults"
+spec = "SliceBudget"
+expect = "pass"
+invariants = [
+    "SpendWithinBoundPlusInFlight",
+    "NoReissue",
+    "NoForwardWithoutMark",
+    "NotPerformedIsSound",
+    "PastGAmbiguousOnlyUnreported",
+    "ChargeNeverZeroForUnknown",
+    "AdoptionComplete",
+    "NewSliceAfterOwedRevokes",
+    "NoMarkOnClosedSlice",
+]
+[check.constants]
+ALLOW_GW_CRASH = true
+ALLOW_GW_LOSS = true
+ALLOW_LINK_LOSS = true
+ALLOW_CTL_CRASH = true
+
+# Any two of the four faults over two marks: a lost gateway journal (the crash that
+# stops the gateway, then the loss), and every other pair.
+[[check]]
+name = "slice-budget-fault-pairs"
+spec = "SliceBudget"
+expect = "pass"
+invariants = [
+    "SpendWithinBoundPlusInFlight",
+    "NoReissue",
+    "NoForwardWithoutMark",
+    "NotPerformedIsSound",
+    "PastGAmbiguousOnlyUnreported",
+    "ChargeNeverZeroForUnknown",
+    "AdoptionComplete",
+    "NewSliceAfterOwedRevokes",
+    "NoMarkOnClosedSlice",
+]
+[check.constants]
+MaxMarks = 2
+MaxFaults = 2
+ALLOW_GW_CRASH = true
+ALLOW_GW_LOSS = true
+ALLOW_LINK_LOSS = true
+ALLOW_CTL_CRASH = true
+
+# One attempt refilled across its whole bound.
+[[check]]
+name = "slice-budget-refills"
+spec = "SliceBudget"
+expect = "pass"
+invariants = ["SpendWithinBoundPlusInFlight", "NoReissue", "NotPerformedIsSound"]
+[check.constants]
+Attempts = "{1}"
+MaxReq = 3
+MaxMarks = 4
+ALLOW_LINK_LOSS = true
+
+# time_bound alone, with nanocode's retry layers off.
+[[check]]
+name = "slice-budget-time-bound"
+spec = "SliceBudget"
+expect = "pass"
+invariants = [
+    "NoReissue",
+    "NoForwardWithoutMark",
+    "NotPerformedIsSound",
+    "PastGAmbiguousOnlyUnreported",
+    "ChargeNeverZeroForUnknown",
+    "AdoptionComplete",
+    "NewSliceAfterOwedRevokes",
+    "NoMarkOnClosedSlice",
+]
+properties = []
+[check.constants]
+BOUNDED = false
+MaxMarks = 2
+ALLOW_GW_CRASH = true
+ALLOW_LINK_LOSS = true
+
+# FINDING F2. ADR §5: "no request is forwarded in a bounded scope once its grants
+# are spent by known usage ...; overshoot is at most the usage of requests in flight
+# at the crossing". The gateway checks each slice's own grant, so after one sibling's
+# request overshoots and the scope's known usage reaches its bound, another sibling
+# still holds escrowed grant and is forwarded.
+[[check]]
+name = "slice-budget-finding-sibling-overshoot"
+spec = "SliceBudget"
+expect = "NoForwardPastTheBound"
+finding = "F2"
+invariants = ["NoForwardPastTheBound"]
+properties = []
+
+# FINDING F3. ADR §1 and §5: a model request is never re-issued; "nothing that may
+# have been processed is re-issued". kata runs nanocode's own retry layers (Responses:
+# `ResponsesRetryPolicy`'s default 5 tries; Messages: 5, or 3 without tools, fixed in
+# the backend, beyond any `max_attempts`), which re-send a request whose stream failed
+# before a response reached the harness. Under time_bound alone (no Unknown freeze) a
+# request that failed so (Unknown{delivered = false}, or Unknown{gateway_lost} after a
+# gateway crash: either may have been processed) is sent again by the harness, through
+# the gateway, under a new mark. The fix is at kata's host transport and the gateway,
+# on both backends: every Unknown reaches the harness as `x-should-retry: false`.
+[[check]]
+name = "slice-budget-finding-harness-retries"
+spec = "SliceBudget"
+expect = "NoReissue"
+finding = "F3"
+invariants = ["NoReissue"]
+properties = []
+[check.constants]
+BOUNDED = false
+HARNESS_RETRIES = true
+MaxMarks = 2
+
+# ─── SliceBudget mutants (RED) ───────────────────────────────────────────────
+
+[[check]]
+name = "slice-budget-mutant-no-unknown-freeze"
+spec = "SliceBudget"
+expect = "SpendWithinBoundPlusInFlight"
+invariants = ["SpendWithinBoundPlusInFlight"]
+properties = []
+[check.constants]
+MUTANT = "no_unknown_freeze"
+MaxMarks = 4
+MaxFaults = 0
+
+[[check]]
+name = "slice-budget-mutant-refill-ignores-remainder"
+spec = "SliceBudget"
+expect = "SpendWithinBoundPlusInFlight"
+invariants = ["SpendWithinBoundPlusInFlight"]
+properties = []
+[check.constants]
+MUTANT = "refill_ignores_remainder"
+Attempts = "{1}"
+MaxReq = 3
+MaxMarks = 4
+MaxFaults = 0
+
+[[check]]
+name = "slice-budget-mutant-refill-despite-unclosed"
+spec = "SliceBudget"
+expect = "NoRefillWhenFrozen"
+invariants = []
+properties = ["NoRefillWhenFrozen"]
+[check.constants]
+MUTANT = "refill_despite_unclosed"
+MaxFaults = 0
+
+[[check]]
+name = "slice-budget-mutant-unclosed-in-memory"
+spec = "SliceBudget"
+expect = "NoRefillWhenFrozen"
+invariants = []
+properties = ["NoRefillWhenFrozen"]
+[check.constants]
+MUTANT = "unclosed_in_memory"
+ALLOW_CTL_CRASH = true
+
+[[check]]
+name = "slice-budget-mutant-ignore-gateway-generation"
+spec = "SliceBudget"
+expect = "NoRefillWhenFrozen"
+invariants = []
+properties = ["NoRefillWhenFrozen"]
+[check.constants]
+MUTANT = "ignore_gateway_generation"
+MaxMarks = 2
+MaxFaults = 2
+ALLOW_GW_CRASH = true
+ALLOW_GW_LOSS = true
+
+[[check]]
+name = "slice-budget-mutant-no-slice-revoke-resend"
+spec = "SliceBudget"
+expect = "NewSliceAfterOwedRevokes"
+invariants = ["NewSliceAfterOwedRevokes"]
+properties = []
+[check.constants]
+MUTANT = "no_slice_revoke_resend"
+ALLOW_LINK_LOSS = true
+
+[[check]]
+name = "slice-budget-mutant-settle-before-slice-close"
+spec = "SliceBudget"
+expect = "NotPerformedIsSound"
+invariants = ["NotPerformedIsSound"]
+properties = []
+[check.constants]
+MUTANT = "settle_before_slice_close"
+MaxFaults = 0
+
+[[check]]
+name = "slice-budget-mutant-past-g-drops-outcome"
+spec = "SliceBudget"
+expect = "PastGAmbiguousOnlyUnreported"
+invariants = ["PastGAmbiguousOnlyUnreported"]
+properties = []
+[check.constants]
+MUTANT = "past_g_drops_outcome"
+MaxFaults = 0
+
+[[check]]
+name = "slice-budget-mutant-mark-after-first-byte"
+spec = "SliceBudget"
+expect = "NoForwardWithoutMark"
+invariants = ["NoForwardWithoutMark"]
+properties = []
+[check.constants]
+MUTANT = "mark_after_first_byte"
+ALLOW_GW_CRASH = true
+
+[[check]]
+name = "slice-budget-mutant-charge-from-adopted"
+spec = "SliceBudget"
+expect = "ChargeNeverZeroForUnknown"
+invariants = ["ChargeNeverZeroForUnknown"]
+properties = []
+[check.constants]
+MUTANT = "charge_from_adopted"
+MaxFaults = 0
+
+[[check]]
+name = "slice-budget-mutant-adopt-by-seq-only"
+spec = "SliceBudget"
+expect = "AdoptionComplete"
+invariants = ["AdoptionComplete"]
+properties = []
+[check.constants]
+MUTANT = "adopt_by_seq_only"
+MaxMarks = 2
+MaxFaults = 2
+ALLOW_GW_CRASH = true
+ALLOW_GW_LOSS = true
+
+[[check]]
+name = "slice-budget-mutant-admit-on-closed-slice"
+spec = "SliceBudget"
+expect = "NoMarkOnClosedSlice"
+invariants = ["NoMarkOnClosedSlice"]
+properties = []
+[check.constants]
+MUTANT = "admit_on_closed_slice"
+MaxFaults = 0
+
+[[check]]
+name = "slice-budget-mutant-gateway-reissues-unknown"
+spec = "SliceBudget"
+expect = "NoReissue"
+invariants = ["NoReissue"]
+properties = []
+[check.constants]
+MUTANT = "gateway_reissues_unknown"
+BOUNDED = false
+MaxMarks = 2
+MaxFaults = 0
+
+# ─── Restore: §2 identity, generations, revocation mirror; §10 restore ─────────
+
+[spec.Restore]
+file = "Restore.tla"
+invariants = [
+    "RevokedNeverWelcomed",
+    "NoRepeatWithoutOperator",
+    "NoCapsuleAfterSettlement",
+    "OneCapsulePerStage",
+]
+properties = []
+
+# LK = L + K = 2, W = 3 (> LK).
+[spec.Restore.constants]
+Keys = "{k1, k2}"
+LK = 2
+W = 3
+REVOKE_ACK = "mirror"
+WRITES_WAIT = true
+RESUME_AFTER_W = true
+WORK = true
+ALLOW_SERVER_LOSS = false
+ALLOW_DATA_LOSS = false
+ALLOW_LINK_LOSS = false
+MaxFaults = 2
+MUTANT = "none"
+
+# The ADR with corrections F4, F5 and F6 applied: a revocation reported only once the
+# gateway's mirror holds it, admission writes held until the gateway answers a restored
+# registry, every dispatch of a restored control plane held until W from boot.
+# Admission and work are independent halves of the model, each checked against every
+# fault, two of them (two restores: a server loss, then a data loss, included).
+[[check]]
+name = "restore-corrected-admission"
+spec = "Restore"
+expect = "pass"
+invariants = ["RevokedNeverWelcomed"]
+[check.constants]
+WORK = false
+ALLOW_SERVER_LOSS = true
+ALLOW_DATA_LOSS = true
+ALLOW_LINK_LOSS = true
+
+[[check]]
+name = "restore-corrected-work"
+spec = "Restore"
+expect = "pass"
+invariants = ["NoRepeatWithoutOperator", "NoCapsuleAfterSettlement", "OneCapsulePerStage"]
+[check.constants]
+Keys = "{}"
+ALLOW_SERVER_LOSS = true
+ALLOW_DATA_LOSS = true
+ALLOW_LINK_LOSS = true
+
+# The ADR as written: the claims that hold without the corrections. They rest on two
+# mechanisms the ADR does not state (the README's assumptions): restored attempts
+# settle only after W from boot (mutant restore_settles_at_boot), and an older
+# generation's capsule gets no further grant (mutant resume_across_restore).
+[[check]]
+name = "restore-as-written"
+spec = "Restore"
+expect = "pass"
+invariants = ["NoRepeatWithoutOperator", "NoCapsuleAfterSettlement"]
+[check.constants]
+Keys = "{}"
+REVOKE_ACK = "commit"
+WRITES_WAIT = false
+RESUME_AFTER_W = false
+ALLOW_SERVER_LOSS = true
+ALLOW_DATA_LOSS = true
+ALLOW_LINK_LOSS = true
+
+# FINDING F4. ADR §2, decision 7: "Revocations do not roll back". `kata node
+# revoke` commits `revoked` in admission.db and reports success; the gateway's mirror
+# learns it over its session later. kata-control's data directory is lost before the
+# mirror (or a shipped backup) holds it; the restore adopts a mirror that lacks it,
+# and the revoked key is welcomed.
+[[check]]
+name = "restore-finding-revocation-rolled-back"
+spec = "Restore"
+expect = "RevokedNeverWelcomed"
+finding = "F4"
+invariants = ["RevokedNeverWelcomed"]
+[check.constants]
+REVOKE_ACK = "commit"
+WRITES_WAIT = false
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+# FINDING F6. The restored registry adopts the mirror by comparing sequence numbers
+# (ADR §2), with every revocation acknowledged only once the mirror holds it. Only
+# Hello waits for the gateway's answer: an admission written after the restore (a
+# join) advances the restored sequence to the mirror's, the mirror is not "newer", its
+# revocation is not adopted, and the revoked key is welcomed.
+[[check]]
+name = "restore-finding-sequence-adoption-write"
+spec = "Restore"
+expect = "RevokedNeverWelcomed"
+finding = "F6"
+invariants = ["RevokedNeverWelcomed"]
+[check.constants]
+WRITES_WAIT = false
+WORK = false
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+# FINDING F5. ADR §10 holds every execution open at the backup's point for the
+# operator, but nothing holds the operator's resume until W from boot: a stage the
+# backup does not know is still running in a capsule its old lease keeps alive, and
+# the resume dispatches the stage again beside it.
+[[check]]
+name = "restore-finding-resume-beside-orphan"
+spec = "Restore"
+expect = "OneCapsulePerStage"
+finding = "F5"
+invariants = ["OneCapsulePerStage"]
+[check.constants]
+RESUME_AFTER_W = false
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+# ─── Restore mutants (RED), on the corrected model ────────────────────────────
+
+[[check]]
+name = "restore-mutant-no-mirror-adopt"
+spec = "Restore"
+expect = "RevokedNeverWelcomed"
+invariants = ["RevokedNeverWelcomed"]
+[check.constants]
+MUTANT = "no_mirror_adopt"
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+[[check]]
+name = "restore-mutant-hello-before-adoption"
+spec = "Restore"
+expect = "RevokedNeverWelcomed"
+invariants = ["RevokedNeverWelcomed"]
+[check.constants]
+MUTANT = "hello_before_adoption"
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+[[check]]
+name = "restore-mutant-keep-keys-without-mirror"
+spec = "Restore"
+expect = "RevokedNeverWelcomed"
+invariants = ["RevokedNeverWelcomed"]
+[check.constants]
+MUTANT = "keep_keys_without_mirror"
+MaxFaults = 1
+ALLOW_SERVER_LOSS = true
+
+# The server is lost, the no-mirror restore drops every key, its data is lost before a
+# backup of it ships, and the next restore reuses the older backup. Had the drop left
+# the sequence where it was, the new gateway's mirror ("no keys") would not be newer
+# than that backup, whose admitted set still holds the revoked key.
+[[check]]
+name = "restore-mutant-drop-without-seq-bump"
+spec = "Restore"
+expect = "RevokedNeverWelcomed"
+invariants = ["RevokedNeverWelcomed"]
+[check.constants]
+MUTANT = "drop_without_seq_bump"
+WORK = false
+ALLOW_SERVER_LOSS = true
+ALLOW_DATA_LOSS = true
+
+[[check]]
+name = "restore-mutant-no-hold"
+spec = "Restore"
+expect = "NoRepeatWithoutOperator"
+invariants = ["NoRepeatWithoutOperator"]
+[check.constants]
+MUTANT = "no_hold"
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+[[check]]
+name = "restore-mutant-no-schedule-hold"
+spec = "Restore"
+expect = "NoRepeatWithoutOperator"
+invariants = ["NoRepeatWithoutOperator"]
+[check.constants]
+MUTANT = "no_schedule_hold"
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+[[check]]
+name = "restore-mutant-restore-settles-at-boot"
+spec = "Restore"
+expect = "NoCapsuleAfterSettlement"
+invariants = ["NoCapsuleAfterSettlement"]
+[check.constants]
+MUTANT = "restore_settles_at_boot"
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+[[check]]
+name = "restore-mutant-resume-across-restore"
+spec = "Restore"
+expect = "NoCapsuleAfterSettlement"
+invariants = ["NoCapsuleAfterSettlement"]
+[check.constants]
+Keys = "{}"
+MUTANT = "resume_across_restore"
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+# ─── FenceExemption: plan M0's question on fence_inbound_attempt_frame ────────
+
+[spec.FenceExemption]
+file = "FenceExemption.tla"
+invariants = ["NoForeignFrameAccepted", "NoGenuineTerminalRefused"]
+properties = []
+
+[spec.FenceExemption.constants]
+Nodes = "{n1, n2}"
+MaxEpoch = 2
+PLACE_IN_DISPATCH = true
+EXEMPTION = false
+MUTANT = "none"
+
+# THE ANSWER: with the placement committed in the dispatch transaction (ADR 0003) and
+# the exemption deleted, no genuine terminal is refused and no foreign frame accepted.
+[[check]]
+name = "fence-placement-in-dispatch"
+spec = "FenceExemption"
+expect = "pass"
+
+# Keeping the exemption after placement-in-dispatch is a hole: an attempt is NULL-placed
+# only before its first dispatch and while parked, and any admitted node's frame at the
+# parked attempt's epoch passes.
+[[check]]
+name = "fence-finding-exemption-kept"
+spec = "FenceExemption"
+expect = "NoForeignFrameAccepted"
+finding = "F8"
+invariants = ["NoForeignFrameAccepted"]
+[check.constants]
+EXEMPTION = true
+
+# Today's split (placement written after the dispatch commit) with the exemption: no
+# genuine terminal is refused, at the residual the ingress fence's comment states.
+[[check]]
+name = "fence-today"
+spec = "FenceExemption"
+expect = "pass"
+invariants = ["NoGenuineTerminalRefused"]
+[check.constants]
+PLACE_IN_DISPATCH = false
+EXEMPTION = true
+
+[[check]]
+name = "fence-today-residual"
+spec = "FenceExemption"
+expect = "NoForeignFrameAccepted"
+finding = "R1"
+invariants = ["NoForeignFrameAccepted"]
+[check.constants]
+PLACE_IN_DISPATCH = false
+EXEMPTION = true
+
+# RED: today's split refusing an unplaced attempt's frame wedges a genuine terminal,
+# which is why the exemption exists until placement-in-dispatch lands.
+[[check]]
+name = "fence-mutant-refuse-unplaced"
+spec = "FenceExemption"
+expect = "NoGenuineTerminalRefused"
+invariants = ["NoGenuineTerminalRefused"]
+[check.constants]
+PLACE_IN_DISPATCH = false
+EXEMPTION = true
+MUTANT = "refuse_unplaced"
+
+[[check]]
+name = "fence-mutant-no-placement-check"
+spec = "FenceExemption"
+expect = "NoForeignFrameAccepted"
+invariants = ["NoForeignFrameAccepted"]
+[check.constants]
+MUTANT = "no_placement_check"
+
+[[check]]
+name = "restore-mutant-orphan-never-killed"
+spec = "Restore"
+expect = "OneCapsulePerStage"
+invariants = ["OneCapsulePerStage"]
+[check.constants]
+Keys = "{}"
+MUTANT = "orphan_never_killed"
+MaxFaults = 1
+ALLOW_DATA_LOSS = true
+
+# ─── ForgeIntent: "Effects" and E1, forge intents behind a pre-intent read ─────
+
+[spec.ForgeIntent]
+file = "ForgeIntent.tla"
+invariants = [
+    "NoWireEffectWithoutIntent",
+    "NoPushOverUnreadHead",
+    "NoPushWithoutVerdict",
+    "OnePullRequest",
+    "ObserverVerdictSound",
+    "NotPerformedIsSound",
+    "NoUnclassifiedBeforeTheBound",
+    "NoAskPastTheBound",
+    "BeyondBoundSettlesAtOnce",
+]
+properties = []
+
+[spec.ForgeIntent.constants]
+MaxFaults = 3
+MaxAsks = 2
+EXCUSE_ABA = true
+MUTANT = "none"
+
+[[check]]
+name = "forge-intent"
+spec = "ForgeIntent"
+expect = "pass"
+
+# FINDING F9. The push's observer is the remote ref (ADR "Effects"). If, after kata's
+# push and before its observer's first answered read, the branch is back on the very
+# head kata leased on (moved back by any path, or deleted when kata found it absent),
+# the ref reads as the lease: NOT PERFORMED, and the push is sent again (CI and
+# webhooks act twice). No ref-only observer can tell; the ADR states it beside the
+# marker residual for pull requests. Unanswered reads do not close the window, so a
+# read error's bounded re-ask keeps it open while the remote is down.
+[[check]]
+name = "forge-intent-finding-aba"
+spec = "ForgeIntent"
+expect = "ObserverVerdictSound"
+finding = "F9"
+invariants = ["ObserverVerdictSound"]
+[check.constants]
+EXCUSE_ABA = false
+
+[[check]]
+name = "forge-intent-mutant-no-pre-intent-read"
+spec = "ForgeIntent"
+expect = "NoPushOverUnreadHead"
+invariants = ["NoPushOverUnreadHead"]
+[check.constants]
+MUTANT = "no_pre_intent_read"
+
+[[check]]
+name = "forge-intent-mutant-intent-after-push"
+spec = "ForgeIntent"
+expect = "NoWireEffectWithoutIntent"
+invariants = ["NoWireEffectWithoutIntent"]
+[check.constants]
+MUTANT = "intent_after_push"
+
+[[check]]
+name = "forge-intent-mutant-open-prs-only"
+spec = "ForgeIntent"
+expect = "OnePullRequest"
+invariants = ["OnePullRequest"]
+[check.constants]
+MUTANT = "open_prs_only"
+
+[[check]]
+name = "forge-intent-mutant-redo-without-verdict"
+spec = "ForgeIntent"
+expect = "NoPushWithoutVerdict"
+invariants = ["NoPushWithoutVerdict"]
+[check.constants]
+MUTANT = "redo_without_verdict"
+
+[[check]]
+name = "forge-intent-mutant-naive-push-observer"
+spec = "ForgeIntent"
+expect = "ObserverVerdictSound"
+invariants = ["ObserverVerdictSound"]
+[check.constants]
+MUTANT = "naive_push_observer"
+
+[[check]]
+name = "forge-intent-mutant-unreachable-is-not-performed"
+spec = "ForgeIntent"
+expect = "NotPerformedIsSound"
+invariants = ["NotPerformedIsSound"]
+[check.constants]
+MUTANT = "unreachable_is_not_performed"
+
+# The read-error semantics (owner decision #15): an unanswered read leaves the intent
+# open, the MaxAsks-th settles it UNCLASSIFIED. The mutant is the code before it: the
+# first unanswered read settled UNCLASSIFIED.
+[[check]]
+name = "forge-intent-mutant-unread-is-unclassified"
+spec = "ForgeIntent"
+expect = "NoUnclassifiedBeforeTheBound"
+invariants = ["NoUnclassifiedBeforeTheBound"]
+[check.constants]
+MUTANT = "unread_is_unclassified"
+
+[[check]]
+name = "forge-intent-mutant-unbounded-reask"
+spec = "ForgeIntent"
+expect = "NoAskPastTheBound"
+invariants = ["NoAskPastTheBound"]
+[check.constants]
+MUTANT = "unbounded_reask"
+
+# The count and its settlement are two transactions; a crash between them leaves an
+# intent at the bound, open. The drive's pre-check settles it without asking; without
+# that check the next drive asks it again.
+[[check]]
+name = "forge-intent-mutant-ask-at-bound"
+spec = "ForgeIntent"
+expect = "NoAskPastTheBound"
+invariants = ["NoAskPastTheBound"]
+[check.constants]
+MUTANT = "ask_at_bound"
+
+# A marker listing that reaches its bound is an answer that rules nothing out:
+# UNCLASSIFIED at once, never counted as a read the forge did not answer.
+[[check]]
+name = "forge-intent-mutant-beyond-bound-unanswered"
+spec = "ForgeIntent"
+expect = "BeyondBoundSettlesAtOnce"
+invariants = ["BeyondBoundSettlesAtOnce"]
+[check.constants]
+MUTANT = "beyond_bound_unanswered"
+
+# A contradicting state asked again, as if unread, lets the branch come back to the
+# lease after an answered read, outside F9's window: NOT PERFORMED of a landed push.
+[[check]]
+name = "forge-intent-mutant-contradiction-reasked"
+spec = "ForgeIntent"
+expect = "ObserverVerdictSound"
+invariants = ["ObserverVerdictSound"]
+[check.constants]
+MUTANT = "contradiction_reasked"
+
+# The lookup before the pull request's intent adopts an open pull request whose marker
+# was deleted; without it (or reading an unanswered lookup as "none open") a second
+# pull request opens beside it.
+[[check]]
+name = "forge-intent-mutant-no-pr-lookup"
+spec = "ForgeIntent"
+expect = "OnePullRequest"
+invariants = ["OnePullRequest"]
+[check.constants]
+MUTANT = "no_pr_lookup"
+
+[[check]]
+name = "forge-intent-mutant-unread-lookup-is-none"
+spec = "ForgeIntent"
+expect = "OnePullRequest"
+invariants = ["OnePullRequest"]
+[check.constants]
+MUTANT = "unread_lookup_is_none"

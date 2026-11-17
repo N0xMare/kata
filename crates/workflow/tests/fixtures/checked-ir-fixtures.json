@@ -1,0 +1,396 @@
+{
+  "_comment": "THIS FILE IS A COVERAGE MANIFEST, NOT EXAMPLE CHECKED IR. Its ONLY consumer is crates/workflow/tests/checked_ir_coverage.rs (the coverage authority), which reads the coverage_manifest (required_features + representatives) and, per fixture, ONLY the id/features/frontend fields. Each fixture row below is the coverage surface it stands in for; the manifest is the authority. Genuine example checked IR belongs to a dedicated golden, not this coverage manifest.",
+  "coverage_manifest": {
+    "schema_version": 1,
+    "required_features": [
+      {
+        "id": "kata.workflow.graph",
+        "description": "checked graph nodes and edges lower into ExecutionProgram IR"
+      },
+      {
+        "id": "kata.workflow.control_flow",
+        "description": "bounded control-flow paths reject unsafe shipping transitions"
+      },
+      {
+        "id": "kata.workflow.review",
+        "description": "review declarations and approval gates are checked"
+      },
+      {
+        "id": "kata.workflow.validation",
+        "description": "validation declarations and validation-before-closeout gates are checked"
+      },
+      {
+        "id": "kata.workflow.merge",
+        "description": "merge/shipping transitions are checked"
+      },
+      {
+        "id": "kata.workflow.human",
+        "description": "human request queue declarations are checked"
+      },
+      {
+        "id": "kata.workflow.vcs",
+        "description": "VCS identity and source provenance evidence are checked"
+      },
+      {
+        "id": "kata.workflow.dynamic_expansion",
+        "description": "dynamic fanout bounds and owned-path mutation policy are checked"
+      },
+      {
+        "id": "kata.workflow.evidence",
+        "description": "declared critical evidence is concrete rather than unknown"
+      },
+      {
+        "id": "kata.workflow.frontend_fields",
+        "description": "unsupported frontend fields are rejected with diagnostics"
+      },
+      {
+        "id": "kata.execution.typed_command_operation",
+        "description": "command stages lower to typed non-issuing operation contracts with authored source maps; every other construct is refused by name (execution_program::operation_lowering)"
+      },
+      {
+        "id": "kata.execution.typed_wait_operation",
+        "description": "a durable-sleep stage lowers to the typed non-issuing Wait operation carrying its authored wake target (execution_program::operation_lowering)"
+      },
+      {
+        "id": "kata.execution.typed_join_operation",
+        "description": "a synthetic parallel() barrier lowers to the typed non-issuing Join over exactly its dependencies' operation paths (execution_program::operation_lowering)"
+      },
+      {
+        "id": "kata.execution.typed_effect_operation",
+        "description": "a workspace_effect stage lowers to the typed non-issuing Effect executor naming both the effect kind and the authored workspace op (execution_program::operation_lowering)"
+      },
+      {
+        "id": "kata.execution.typed_select_operation",
+        "description": "each branch route lowers to one program-level typed non-issuing Select whose selector hashes the route's canonical content (execution_program::operation_lowering)"
+      },
+      {
+        "id": "kata.execution.typed_agent_operation",
+        "description": "an agent stage lowers to the typed non-issuing Agent executor carrying its authored ordered driver list (the panel verbatim, else the one agent label); an unbound `any` selector refuses rather than claiming an empty list (execution_program::operation_lowering)"
+      },
+      {
+        "id": "kata.execution.typed_expansion_operation",
+        "description": "each review loop lowers to one program-level typed non-issuing ExpandBounded over its body stages then its gate, carrying its iteration ceiling and its loop-policy hash (execution_program::operation_lowering)"
+      }
+    ],
+    "representatives": [
+      {
+        "id": "kata-work-item",
+        "fixture": "source_preflight:kata-work-item-cli-lowering",
+        "feature_ids": [
+          "kata.workflow.graph",
+          "kata.workflow.review",
+          "kata.workflow.validation",
+          "kata.workflow.human",
+          "kata.workflow.vcs"
+        ]
+      },
+      {
+        "id": "review-loop",
+        "fixture": "source_preflight:review-loop-smoke-cli-lowering",
+        "feature_ids": [
+          "kata.workflow.control_flow",
+          "kata.workflow.review"
+        ]
+      },
+      {
+        "id": "kata-loop",
+        "fixture": "source_preflight:kata-loop-lite-cli-lowering",
+        "feature_ids": [
+          "kata.workflow.graph",
+          "kata.workflow.control_flow",
+          "kata.workflow.review",
+          "kata.workflow.validation",
+          "kata.workflow.dynamic_expansion",
+          "kata.workflow.human"
+        ]
+      },
+      {
+        "id": "test-crate",
+        "fixture": "source_preflight:test-crate-cli-lowering",
+        "feature_ids": [
+          "kata.workflow.validation",
+          "kata.workflow.vcs"
+        ]
+      },
+      {
+        "id": "describe-and-suggest",
+        "fixture": "source_preflight:starlark-describe-and-suggest-cli-lowering",
+        "feature_ids": [
+          "kata.workflow.graph",
+          "kata.workflow.frontend_fields"
+        ]
+      },
+      {
+        "id": "kata-loop-lite",
+        "fixture": "source_preflight:kata-loop-lite-cli-lowering",
+        "feature_ids": [
+          "kata.workflow.graph",
+          "kata.workflow.control_flow",
+          "kata.workflow.review",
+          "kata.workflow.validation",
+          "kata.workflow.dynamic_expansion",
+          "kata.workflow.human"
+        ]
+      },
+      {
+        "id": "typed-command-operation",
+        "fixture": "source_preflight:kata-work-item-cli-lowering",
+        "feature_ids": [
+          "kata.execution.typed_command_operation"
+        ]
+      },
+      {
+        "id": "typed-wait-operation",
+        "fixture": "source_preflight:inline-durable-sleep-lowering",
+        "feature_ids": [
+          "kata.execution.typed_wait_operation"
+        ]
+      },
+      {
+        "id": "typed-join-operation",
+        "fixture": "source_preflight:parallel-smoke-cli-lowering",
+        "feature_ids": [
+          "kata.execution.typed_join_operation"
+        ]
+      },
+      {
+        "id": "typed-effect-operation",
+        "fixture": "source_preflight:workspace-effect-smoke-cli-lowering",
+        "feature_ids": [
+          "kata.execution.typed_effect_operation"
+        ]
+      },
+      {
+        "id": "typed-select-operation",
+        "fixture": "source_preflight:branch-routing-cli-lowering",
+        "feature_ids": [
+          "kata.execution.typed_select_operation"
+        ]
+      },
+      {
+        "id": "typed-agent-operation",
+        "fixture": "source_preflight:self-review-cli-lowering",
+        "feature_ids": [
+          "kata.execution.typed_agent_operation"
+        ]
+      },
+      {
+        "id": "typed-expansion-operation",
+        "fixture": "source_preflight:review-loop-smoke-cli-lowering",
+        "feature_ids": [
+          "kata.execution.typed_expansion_operation"
+        ]
+      }
+    ]
+  },
+  "accepted_preflight": [
+    {
+      "id": "review-validation-merge",
+      "features": [
+        "kata.workflow.graph",
+        "kata.workflow.review",
+        "kata.workflow.validation",
+        "kata.workflow.merge",
+        "kata.workflow.human",
+        "kata.workflow.vcs",
+        "kata.workflow.evidence"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "starlark-dynamic-owned-paths",
+      "features": [
+        "kata.workflow.graph",
+        "kata.workflow.review",
+        "kata.workflow.validation",
+        "kata.workflow.human",
+        "kata.workflow.vcs",
+        "kata.workflow.dynamic_expansion",
+        "kata.workflow.evidence",
+        "kata.workflow.frontend_fields"
+      ],
+      "frontend": "starlark"
+    }
+  ],
+  "source_preflight": [
+    {
+      "id": "self-review-cli-lowering",
+      "features": [
+        "kata.workflow.graph",
+        "kata.workflow.review",
+        "kata.workflow.vcs",
+        "kata.workflow.evidence",
+        "kata.execution.typed_agent_operation"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "starlark-describe-and-suggest-cli-lowering",
+      "features": [
+        "kata.workflow.graph",
+        "kata.workflow.vcs",
+        "kata.workflow.frontend_fields",
+        "kata.workflow.evidence"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "kata-work-item-cli-lowering",
+      "features": [
+        "kata.workflow.graph",
+        "kata.workflow.review",
+        "kata.workflow.validation",
+        "kata.workflow.human",
+        "kata.workflow.vcs",
+        "kata.workflow.evidence",
+        "kata.execution.typed_command_operation"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "review-loop-smoke-cli-lowering",
+      "features": [
+        "kata.workflow.graph",
+        "kata.workflow.control_flow",
+        "kata.workflow.review",
+        "kata.workflow.vcs",
+        "kata.workflow.evidence",
+        "kata.execution.typed_agent_operation",
+        "kata.execution.typed_expansion_operation"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "test-crate-cli-lowering",
+      "features": [
+        "kata.workflow.validation",
+        "kata.workflow.vcs",
+        "kata.workflow.evidence"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "kata-loop-lite-cli-lowering",
+      "features": [
+        "kata.workflow.graph",
+        "kata.workflow.control_flow",
+        "kata.workflow.review",
+        "kata.workflow.validation",
+        "kata.workflow.human",
+        "kata.workflow.dynamic_expansion",
+        "kata.workflow.vcs",
+        "kata.workflow.evidence",
+        "kata.workflow.frontend_fields"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "inline-durable-sleep-lowering",
+      "features": [
+        "kata.execution.typed_wait_operation"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "parallel-smoke-cli-lowering",
+      "features": [
+        "kata.workflow.graph",
+        "kata.execution.typed_join_operation",
+        "kata.execution.typed_command_operation"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "workspace-effect-smoke-cli-lowering",
+      "features": [
+        "kata.workflow.graph",
+        "kata.execution.typed_effect_operation",
+        "kata.execution.typed_command_operation"
+      ],
+      "frontend": "starlark"
+    },
+    {
+      "id": "branch-routing-cli-lowering",
+      "features": [
+        "kata.workflow.graph",
+        "kata.workflow.control_flow",
+        "kata.execution.typed_select_operation",
+        "kata.execution.typed_command_operation"
+      ],
+      "frontend": "starlark"
+    }
+  ],
+  "rejected_source_preflight": [
+    {
+      "id": "unsupported-frontend-fields-starlark",
+      "features": [
+        "kata.workflow.frontend_fields"
+      ],
+      "frontend": "starlark"
+    }
+  ],
+  "rejected_programs": [
+    {
+      "id": "invalid-graph-edge",
+      "features": [
+        "kata.workflow.graph"
+      ],
+      "description": "edge references a node absent from the checked stage map"
+    },
+    {
+      "id": "invalid-graph-cycle",
+      "features": [
+        "kata.workflow.control_flow"
+      ],
+      "description": "checked graph contains a cycle outside an explicit bounded loop region"
+    },
+    {
+      "id": "missing-evidence-declarations",
+      "features": [
+        "kata.workflow.evidence",
+        "kata.workflow.human"
+      ],
+      "description": "critical checked graph evidence is declared but absent"
+    },
+    {
+      "id": "invalid-validation-gate",
+      "features": [
+        "kata.workflow.validation"
+      ],
+      "description": "source-mutating path can ship after review without validation evidence"
+    },
+    {
+      "id": "invalid-review-gate",
+      "features": [
+        "kata.workflow.review"
+      ],
+      "description": "source-mutating path can ship after validation without review approval"
+    },
+    {
+      "id": "invalid-merge-gate",
+      "features": [
+        "kata.workflow.merge"
+      ],
+      "description": "blocked validation path tries to continue into a shipping merge edge"
+    },
+    {
+      "id": "unsafe-dynamic-expansion",
+      "features": [
+        "kata.workflow.dynamic_expansion"
+      ],
+      "description": "Starlark dynamic fanout has no finite bound and no owned-path mutation policy"
+    },
+    {
+      "id": "missing-vcs-evidence",
+      "features": [
+        "kata.workflow.vcs"
+      ],
+      "description": "checked IR has no stable program hash or workflow-class identity"
+    },
+    {
+      "id": "unsupported-frontend-fields",
+      "features": [],
+      "description": "unknown frontend fields must be reported as checked diagnostics"
+    }
+  ]
+}

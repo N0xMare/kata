@@ -1,0 +1,10 @@
+e1-run: seeded-pr cli execution 01M71T53JGR6NGY8KDZF22JF3N
+PASS terminal-completed
+PASS frozen-head-is-forge-head
+FAIL review-validates-and-scores: score-e1: FAIL seeded 2/3 (unmatched 2 of 4 findings)
+PASS remote-unchanged
+PASS no-target-pin-left
+PASS stages-read
+PASS turns-read
+PASS spend-read
+e1-run: 1 oracle(s) failed; seeded row: score-e1: FAIL seeded 2/3 (unmatched 2 of 4 findings)

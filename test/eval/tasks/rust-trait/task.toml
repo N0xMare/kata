@@ -1,0 +1,15 @@
+id = "rust-trait"
+title = "Implement Fold for MinMax so the identity and combine laws hold"
+required_tool = "rustc"
+max_cost_micro_usd = 3000000
+
+prompt = """
+lib.rs declares a Fold trait with an identity() and a combine() that must be
+associative, with identity neutral on both sides. The MinMax impl is stubbed with
+TODOs and its three #[test]s fail. Implement both methods so `rustc --test lib.rs`
+builds and all tests pass. Note that an identity of zero is WRONG for negative
+ranges. Do not edit the tests, and do not run git.
+"""
+
+[mock]
+strategy = "solve"

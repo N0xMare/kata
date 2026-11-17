@@ -1,0 +1,1 @@
+{"findings": [], "summary": "The change correctly treats an explicitly present source entry with value `undefined` as an override, and the regression test covers that masking behavior.", "verdict": "approve"}

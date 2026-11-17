@@ -1,0 +1,1 @@
+linekit-gate: 25 passed, 0 failed, 25 checks

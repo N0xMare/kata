@@ -1,0 +1,277 @@
+1794496416322	#connected
+1794496416323	HTTP/1.0 200 OK
+1794496416323	content-type: text/event-stream
+1794496416323	cache-control: no-cache
+1794496416323	date: Thu, 12 Nov 2026 15:13:36 GMT
+1794496416323	
+1794496416627	id: 1
+1794496416627	event: ledger
+1794496416627	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","new_status":{"kind":"pending"},"output":null}
+1794496416627	
+1794496416627	id: 2
+1794496416627	event: ledger
+1794496416627	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794496416627	
+1794496416634	id: 3
+1794496416634	event: ledger
+1794496416634	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","new_status":{"kind":"running","worker_id":"local-worker-0"},"output":null}
+1794496416634	
+1794496416734	event: progress
+1794496416734	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":18,"preview":"model_call_started","dropped":0,"at_ms":1794496416734}
+1794496416734	
+1794496421337	event: progress
+1794496421337	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":38,"preview":"model_call_completed","dropped":0,"at_ms":1794496421337}
+1794496421337	
+1794496421337	event: progress
+1794496421337	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":44,"preview":"tool_call: `exec`","dropped":0,"at_ms":1794496421337}
+1794496421337	
+1794496421347	event: progress
+1794496421347	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":58,"preview":"tool_call: `exec_command`","dropped":0,"at_ms":1794496421347}
+1794496421347	
+1794496421355	event: progress
+1794496421355	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":104,"preview":"tool_result: `[redacted-provider_payload-13]/code-1`","dropped":0,"at_ms":1794496421355}
+1794496421355	
+1794496421356	event: progress
+1794496421356	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":143,"preview":"tool_result: `[redacted-provider_payload-13]`","dropped":0,"at_ms":1794496421356}
+1794496421356	
+1794496421356	event: progress
+1794496421356	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":161,"preview":"model_call_started","dropped":0,"at_ms":1794496421356}
+1794496421356	
+1794496426659	event: progress
+1794496426659	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":181,"preview":"model_call_completed","dropped":0,"at_ms":1794496426659}
+1794496426659	
+1794496426659	event: progress
+1794496426659	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":187,"preview":"tool_call: `exec`","dropped":0,"at_ms":1794496426659}
+1794496426659	
+1794496426662	event: progress
+1794496426662	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":201,"preview":"tool_call: `exec_command`","dropped":0,"at_ms":1794496426662}
+1794496426662	
+1794496426671	event: progress
+1794496426671	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":247,"preview":"tool_result: `[redacted-provider_payload-14]/code-1`","dropped":0,"at_ms":1794496426671}
+1794496426671	
+1794496426673	event: progress
+1794496426673	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":286,"preview":"tool_result: `[redacted-provider_payload-14]`","dropped":0,"at_ms":1794496426672}
+1794496426673	
+1794496426673	event: progress
+1794496426673	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":304,"preview":"model_call_started","dropped":0,"at_ms":1794496426672}
+1794496426673	
+1794496430011	event: progress
+1794496430011	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":324,"preview":"model_call_completed","dropped":0,"at_ms":1794496430010}
+1794496430011	
+1794496430011	event: progress
+1794496430011	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":330,"preview":"tool_call: `exec`","dropped":0,"at_ms":1794496430010}
+1794496430011	
+1794496430014	event: progress
+1794496430014	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":344,"preview":"tool_call: `exec_command`","dropped":0,"at_ms":1794496430014}
+1794496430014	
+1794496430020	event: progress
+1794496430020	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":390,"preview":"tool_result: `[redacted-provider_payload-15]/code-1`","dropped":0,"at_ms":1794496430020}
+1794496430020	
+1794496430022	event: progress
+1794496430022	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":429,"preview":"tool_result: `[redacted-provider_payload-15]`","dropped":0,"at_ms":1794496430021}
+1794496430022	
+1794496430022	event: progress
+1794496430022	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":447,"preview":"model_call_started","dropped":0,"at_ms":1794496430021}
+1794496430022	
+1794496434143	event: progress
+1794496434143	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":451,"preview":"agent_message_chunk: `{\"`","dropped":0,"at_ms":1794496434143}
+1794496434143	
+1794496434200	event: progress
+1794496434200	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":831,"preview":"agent_message_chunk: ` to make it contain exactly implemented-change; tests/chec","dropped":0,"at_ms":1794496434200}
+1794496434201	
+1794496434201	event: progress
+1794496434201	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","byte_offset":851,"preview":"model_call_completed","dropped":0,"at_ms":1794496434200}
+1794496434201	
+1794496434286	id: 4
+1794496434286	event: ledger
+1794496434286	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7854JVB4T262GY8R1Y4TWYR","stage_name":"plan","new_status":{"kind":"completed","worker_id":"local-worker-0"},"output":{"agent":{"adapter":"nanocode_openai","model_reported":"gpt-6-luna","response_artifact_id":"3581bd1c07d699aa6ed61ea57a62832d34e8aa1d6d168a010700d35ee9cf5328","response_object_id":"ab62e6b5ea9f6c7214fa02509d926f72795bc4ed47bfc0b5f79fcb277a5d55f2","response_size_bytes":370,"session_evidence_artifact_id":"19d52c0463ad1e6a3c61b32f1b827ae55e9f00c36207ab4e26aec7471fcec093","session_evidence_object_id":"b5a0ac953ebbebe5c4e883ae79280fb89181c21f78fe932cbbf3870b63dae57b","session_evidence_size_bytes":1344,"stop_reason":null},"capture_exceeded":false,"content":"{\"files\":[\"src/app.txt\"],\"risks\":[],\"steps\":[\"Replace the current content of src/app.txt with the single line implemented-change.\",\"Run sh tests/check.sh and confirm the file contains exactly that line.\"],\"summary\":\"src/app.txt currently contains needs-change. The requested change is to make it contain exactly implemented-change; tests/check.sh checks for that line.\"}","executor_term":"1a62583b336bab0b157d54ba198a674d522fc593ce60f87b6220b69f48ba348f","exit_code":0,"kind":"capsule_result","result_artifact_id":"082865207e202b0d271546fa17297644a0cf3967e179c86ca15f5875b39c434c","result_entries":0,"result_member_bytes":0,"result_object_id":"3e8f305817c0c1025c640d665956f55aa5519661f28118639e109ca3bcffb5f4","result_size_bytes":33,"scratch_delta_artifact_id":null,"scratch_delta_entries":null,"scratch_delta_object_id":null,"scratch_delta_size_bytes":null,"stderr_artifact_id":"b096eefa8837d9e7b42ac7b3813713924047227548c1b18282c5f0a3d872a8d6","stderr_object_id":"b6b8f12b9d994a507a47cb94f4dc3925e32d597aff7787601eb7fd8242fb70dc","stderr_size_bytes":0,"stdout_artifact_id":"b096eefa8837d9e7b42ac7b3813713924047227548c1b18282c5f0a3d872a8d6","stdout_object_id":"b6b8f12b9d994a507a47cb94f4dc3925e32d597aff7787601eb7fd8242fb70dc","stdout_size_bytes":0,"stop_reason":null,"token_usage":{"cache_read":13568,"cache_savings_micro_usd":0,"cache_write":0,"cost":{"backend":"nanocode_openai","model":"gpt-6-luna","quality":"unavailable"},"input":14526,"output":531},"work_delta_artifact_id":"c1db298c79bf789f1921afc4d731d2989ce4a275e95c0dfe62db38d113b11407","work_delta_entries":0,"work_delta_object_id":"ec9481073d0fcce7b7700e1e9192e831cdc7890254f7f99e406b0bde535bdebb","work_delta_size_bytes":250}}
+1794496434286	
+1794496434353	id: 5
+1794496434353	event: ledger
+1794496434353	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M785543JGPW9TXBBTDPPS190","stage_name":"#apply/plan","new_status":{"kind":"pending"},"output":null}
+1794496434353	
+1794496434353	id: 6
+1794496434353	event: ledger
+1794496434353	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M785543JGPW9TXBBTDPPS190","stage_name":"#apply/plan","new_status":{"kind":"completed","worker_id":null},"output":{"work_apply":{"applied":false,"reason":"empty delta"}}}
+1794496434353	
+1794496434353	id: 7
+1794496434353	event: ledger
+1794496434354	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M785543VYRW5AQMZ3B34AA3K","stage_name":"#op/9","new_status":{"kind":"pending"},"output":null}
+1794496434354	
+1794496434354	id: 8
+1794496434354	event: ledger
+1794496434354	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","new_status":{"kind":"pending"},"output":null}
+1794496434354	
+1794496434354	id: 9
+1794496434354	event: ledger
+1794496434354	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794496434354	
+1794496434363	id: 10
+1794496434363	event: ledger
+1794496434363	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","new_status":{"kind":"running","worker_id":"local-worker-0"},"output":null}
+1794496434363	
+1794496434476	event: progress
+1794496434476	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":18,"preview":"model_call_started","dropped":0,"at_ms":1794496434476}
+1794496434476	
+1794496435508	event: progress
+1794496435508	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":21,"preview":"agent_message_chunk: `I`","dropped":0,"at_ms":1794496435508}
+1794496435508	
+1794496435759	event: progress
+1794496435759	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":97,"preview":"agent_message_chunk: ` the one`","dropped":0,"at_ms":1794496435759}
+1794496435759	
+1794496436010	event: progress
+1794496436010	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":142,"preview":"agent_message_chunk: ` check.`","dropped":0,"at_ms":1794496436010}
+1794496436010	
+1794496436768	event: progress
+1794496436769	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":162,"preview":"model_call_completed","dropped":0,"at_ms":1794496436768}
+1794496436769	
+1794496436769	event: progress
+1794496436769	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":168,"preview":"tool_call: `exec`","dropped":0,"at_ms":1794496436768}
+1794496436769	
+1794496436777	event: progress
+1794496436777	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":182,"preview":"tool_call: `exec_command`","dropped":0,"at_ms":1794496436777}
+1794496436777	
+1794496436780	event: progress
+1794496436780	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":228,"preview":"tool_result: `[redacted-provider_payload-16]/code-1`","dropped":0,"at_ms":1794496436780}
+1794496436780	
+1794496436781	event: progress
+1794496436781	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":267,"preview":"tool_result: `[redacted-provider_payload-16]`","dropped":0,"at_ms":1794496436781}
+1794496436781	
+1794496436781	event: progress
+1794496436781	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":285,"preview":"model_call_started","dropped":0,"at_ms":1794496436781}
+1794496436781	
+1794496439469	event: progress
+1794496439469	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":305,"preview":"model_call_completed","dropped":0,"at_ms":1794496439469}
+1794496439469	
+1794496439469	event: progress
+1794496439469	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":311,"preview":"tool_call: `exec`","dropped":0,"at_ms":1794496439469}
+1794496439491	
+1794496439491	event: progress
+1794496439491	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":325,"preview":"tool_call: `exec_command`","dropped":0,"at_ms":1794496439472}
+1794496439491	
+1794496439493	event: progress
+1794496439493	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":371,"preview":"tool_result: `[redacted-provider_payload-17]/code-1`","dropped":0,"at_ms":1794496439493}
+1794496439493	
+1794496439494	event: progress
+1794496439494	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":385,"preview":"tool_call: `exec_command`","dropped":0,"at_ms":1794496439494}
+1794496439494	
+1794496439503	event: progress
+1794496439503	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":431,"preview":"tool_result: `[redacted-provider_payload-17]/code-2`","dropped":0,"at_ms":1794496439503}
+1794496439503	
+1794496439504	event: progress
+1794496439504	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":470,"preview":"tool_result: `[redacted-provider_payload-17]`","dropped":0,"at_ms":1794496439504}
+1794496439504	
+1794496439504	event: progress
+1794496439504	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":488,"preview":"model_call_started","dropped":0,"at_ms":1794496439504}
+1794496439504	
+1794496440117	event: progress
+1794496440117	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":499,"preview":"agent_message_chunk: `Updated [`","dropped":0,"at_ms":1794496440117}
+1794496440117	
+1794496440368	event: progress
+1794496440368	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":536,"preview":"agent_message_chunk: `.txt)`","dropped":0,"at_ms":1794496440368}
+1794496440368	
+1794496440619	event: progress
+1794496440619	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":621,"preview":"agent_message_chunk: ` and I`","dropped":0,"at_ms":1794496440618}
+1794496440619	
+1794496440782	event: progress
+1794496440782	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":658,"preview":"agent_message_chunk: ` one line.`","dropped":0,"at_ms":1794496440781}
+1794496440782	
+1794496440782	event: progress
+1794496440782	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","byte_offset":678,"preview":"model_call_completed","dropped":0,"at_ms":1794496440781}
+1794496440782	
+1794496440852	id: 11
+1794496440852	event: ledger
+1794496440852	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M78554535HWVJ9YWMY8KJ00S","stage_name":"implement","new_status":{"kind":"completed","worker_id":"local-worker-0"},"output":{"agent":{"adapter":"nanocode_openai","model_reported":"gpt-6-luna","response_artifact_id":"207ccd3c711d8fd79127f57823f3b8d279e93343137c0f050994be8a5191ac18","response_object_id":"6c1f5b9623aa82cb036121bdcac4e28ce71076ec129ee8cc8001cca1505687ff","response_size_bytes":148,"session_evidence_artifact_id":"f8fca1aeb2da12f5c47bdeb9cf4617157b0b06946cd1a50547f446747610e7d7","session_evidence_object_id":"578f2faa1131e2db56b30cf76a90288e9411e1b95bb3ec879b7a82355b96f915","session_evidence_size_bytes":1121,"stop_reason":null},"capture_exceeded":false,"content":"Updated [src/app.txt](/work/src/app.txt) to contain exactly `implemented-change`. `sh tests/check.sh` passed, and I confirmed the file has one line.","executor_term":"1a62583b336bab0b157d54ba198a674d522fc593ce60f87b6220b69f48ba348f","exit_code":0,"kind":"capsule_result","result_artifact_id":"082865207e202b0d271546fa17297644a0cf3967e179c86ca15f5875b39c434c","result_entries":0,"result_member_bytes":0,"result_object_id":"3e8f305817c0c1025c640d665956f55aa5519661f28118639e109ca3bcffb5f4","result_size_bytes":33,"scratch_delta_artifact_id":null,"scratch_delta_entries":null,"scratch_delta_object_id":null,"scratch_delta_size_bytes":null,"stderr_artifact_id":"b096eefa8837d9e7b42ac7b3813713924047227548c1b18282c5f0a3d872a8d6","stderr_object_id":"b6b8f12b9d994a507a47cb94f4dc3925e32d597aff7787601eb7fd8242fb70dc","stderr_size_bytes":0,"stdout_artifact_id":"b096eefa8837d9e7b42ac7b3813713924047227548c1b18282c5f0a3d872a8d6","stdout_object_id":"b6b8f12b9d994a507a47cb94f4dc3925e32d597aff7787601eb7fd8242fb70dc","stdout_size_bytes":0,"stop_reason":null,"token_usage":{"cache_read":12928,"cache_savings_micro_usd":0,"cache_write":0,"cost":{"backend":"nanocode_openai","model":"gpt-6-luna","quality":"unavailable"},"input":7380,"output":219},"work_delta_artifact_id":"9a1d0caf7447404ef87074217bc8b66edd105f91ad814726132722b282b859bb","work_delta_entries":1,"work_delta_object_id":"8b14012be314735f74ea25996dc715be162a523fbe5b70a8cd08fa5b0c173b57","work_delta_size_bytes":428}}
+1794496440852	
+1794496440908	id: 12
+1794496440908	event: ledger
+1794496440908	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AGA0Z34JJZ32SYQBMJ0","stage_name":"#apply/implement","new_status":{"kind":"pending"},"output":null}
+1794496440908	
+1794496440908	id: 13
+1794496440908	event: ledger
+1794496440908	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AGA0Z34JJZ32SYQBMJ0","stage_name":"#apply/implement","new_status":{"kind":"completed","worker_id":null},"output":{"work_apply":{"applied":true,"candidate_commit":"538130d013a4cb0487956f4911ddf0150f8a2ece","head_artifact":"a92e89f1ddbc5b7a7150dc1032f2c0c435f9dcd69ecfa389e237aa72ff4b1208","head_seq":1,"tree_id":"611436de3314ffa53b5b8a43c72a70f5983ba07e"}}}
+1794496440908	
+1794496440920	id: 14
+1794496440920	event: ledger
+1794496440920	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AJGS7JX2XT6EVHPN7N8","stage_name":"test","new_status":{"kind":"pending"},"output":null}
+1794496440920	
+1794496440920	id: 15
+1794496440920	event: ledger
+1794496440920	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AJGS7JX2XT6EVHPN7N8","stage_name":"test","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794496440920	
+1794496440936	id: 16
+1794496440937	event: ledger
+1794496440937	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AJGS7JX2XT6EVHPN7N8","stage_name":"test","new_status":{"kind":"running","worker_id":"local-worker-0"},"output":null}
+1794496440937	
+1794496441155	id: 17
+1794496441155	event: ledger
+1794496441155	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AJGS7JX2XT6EVHPN7N8","stage_name":"test","new_status":{"kind":"completed","worker_id":"local-worker-0"},"output":{"agent":null,"capture_exceeded":false,"content":"{\"status\": \"passed\", \"exit_code\": 0, \"feedback\": \"\", \"criteria\": [{\"criterion_id\": \"tests-green\", \"status\": \"passed\", \"evidence\": [\"test.log\"]}]}\n","executor_term":"1a62583b336bab0b157d54ba198a674d522fc593ce60f87b6220b69f48ba348f","exit_code":0,"kind":"capsule_result","result_artifact_id":"ac00ca28558d18462b212008d7b4abfa0a2d2661f3cd7726234fa7945fa23a0d","result_entries":1,"result_member_bytes":0,"result_object_id":"a2e5c92985912e25d24a98f03da2c08cfb6280e6d85c968c2b3badd9ff22629a","result_size_bytes":183,"scratch_delta_artifact_id":null,"scratch_delta_entries":null,"scratch_delta_object_id":null,"scratch_delta_size_bytes":null,"stderr_artifact_id":"b096eefa8837d9e7b42ac7b3813713924047227548c1b18282c5f0a3d872a8d6","stderr_object_id":"b6b8f12b9d994a507a47cb94f4dc3925e32d597aff7787601eb7fd8242fb70dc","stderr_size_bytes":0,"stdout_artifact_id":"0486d2e49e1cf5ff916afe3e13850ddf0af9072fdbecad3f9e52846c043ad93c","stdout_object_id":"ffff910685aace6afcc019cd1aa98631171fd5d0c0416e4dd7d1b52220c99a12","stdout_size_bytes":146,"stop_reason":null,"token_usage":null,"work_delta_artifact_id":"dffc5867f4cdcd7600253ea404a67210b29dedf0a070643b0dd23b4122d1deeb","work_delta_entries":0,"work_delta_object_id":"5e66e601be7a2f2b92eda756bc7f373104528879545a9720a4d6c4877322082d","work_delta_size_bytes":250}}
+1794496441155	
+1794496441248	id: 18
+1794496441248	event: ledger
+1794496441248	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855ATAE8GWPKKPNWK4Y5BM","stage_name":"#apply/test","new_status":{"kind":"pending"},"output":null}
+1794496441248	
+1794496441248	id: 19
+1794496441248	event: ledger
+1794496441248	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855ATAE8GWPKKPNWK4Y5BM","stage_name":"#apply/test","new_status":{"kind":"completed","worker_id":null},"output":{"work_apply":{"applied":false,"reason":"empty delta"}}}
+1794496441248	
+1794496441248	id: 20
+1794496441248	event: ledger
+1794496441248	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M785543VYRW5AQMZ3B34AA3K","stage_name":"#op/9","new_status":{"kind":"completed","worker_id":null},"output":{"expansion":{"members":[{"iteration":0,"member":0,"occurrence":"0dc89aeed215222db9e1cb24bc106daef862b0695cc4bea5a45a924a082f3386","stage":"implement"},{"iteration":0,"member":1,"occurrence":"621e91b922631d9224bdbf77d78640c6016a27450087a1693763d375d1216484","stage":"test"}],"operation":"68b21dad064c300fea4381bfd9603dee8cef3e04945a9e0b64e580c57eed8d2e","path":"#op/9","resolution":{"iteration":0,"outcome":"approved"},"stage":"implement","verdicts":[{"feedback":"","iteration":0,"verdict":"passed"}]}}}
+1794496441248	
+1794496441248	id: 21
+1794496441248	event: ledger
+1794496441248	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AVGZ26AW28KEX9ECZ49","stage_name":"#op/8","new_status":{"kind":"pending"},"output":null}
+1794496441248	
+1794496441248	id: 22
+1794496441249	event: ledger
+1794496441249	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AVGZ26AW28KEX9ECZ49","stage_name":"#op/8","new_status":{"kind":"completed","worker_id":null},"output":{"select":{"condition_occurrence":"a0ed400381bcb014c77e1dac7eaa6acfdf53e9d672fa9577926c6c3453f6ddb5","condition_stage":"test","not_taken_targets":["park_unfinished"],"route":"e04f5c243bcf82d7240d1911c0a9dcd8e9ff40ba1bb2c9fb5ea1bcb6b768e6d0","taken":"passed","verdict":"passed","verdict_field":"status"}}}
+1794496441249	
+1794496441249	id: 23
+1794496441249	event: ledger
+1794496441249	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AWCHBD74DXJJBDB9TZQ","stage_name":"approve","new_status":{"kind":"awaiting_approval","worker_id":null,"reason":"The tests passed on the candidate (their output is /out/test.log of the `test` stage). Approve to commit it, land it on trunk and open a pull request; reject to fail the run with nothing committed."},"output":null}
+1794496441249	
+1794496442118	id: 24
+1794496442118	event: ledger
+1794496442118	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AWCHBD74DXJJBDB9TZQ","stage_name":"approve","new_status":{"kind":"dispatched","worker_id":"local-worker-1"},"output":null}
+1794496442118	
+1794496442138	id: 25
+1794496442138	event: ledger
+1794496442138	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AWCHBD74DXJJBDB9TZQ","stage_name":"approve","new_status":{"kind":"running","worker_id":"local-worker-1"},"output":null}
+1794496442138	
+1794496442291	id: 26
+1794496442291	event: ledger
+1794496442291	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855AWCHBD74DXJJBDB9TZQ","stage_name":"approve","new_status":{"kind":"completed","worker_id":"local-worker-1"},"output":{"agent":null,"capture_exceeded":false,"content":"{\"decision\": \"approved\"}\n","executor_term":"1a62583b336bab0b157d54ba198a674d522fc593ce60f87b6220b69f48ba348f","exit_code":0,"kind":"capsule_result","result_artifact_id":"082865207e202b0d271546fa17297644a0cf3967e179c86ca15f5875b39c434c","result_entries":0,"result_member_bytes":0,"result_object_id":"3e8f305817c0c1025c640d665956f55aa5519661f28118639e109ca3bcffb5f4","result_size_bytes":33,"scratch_delta_artifact_id":null,"scratch_delta_entries":null,"scratch_delta_object_id":null,"scratch_delta_size_bytes":null,"stderr_artifact_id":"b096eefa8837d9e7b42ac7b3813713924047227548c1b18282c5f0a3d872a8d6","stderr_object_id":"b6b8f12b9d994a507a47cb94f4dc3925e32d597aff7787601eb7fd8242fb70dc","stderr_size_bytes":0,"stdout_artifact_id":"2811249cc86fdb683824584d17bc88a316539226b3f3101658501d9456f18a54","stdout_object_id":"4e090a9ee286b179652a0f300d47e7abd5ad9514ea45058757351d936fd6dc66","stdout_size_bytes":25,"stop_reason":null,"token_usage":null,"work_delta_artifact_id":"dffc5867f4cdcd7600253ea404a67210b29dedf0a070643b0dd23b4122d1deeb","work_delta_entries":0,"work_delta_object_id":"5e66e601be7a2f2b92eda756bc7f373104528879545a9720a4d6c4877322082d","work_delta_size_bytes":250}}
+1794496442291	
+1794496442715	id: 27
+1794496442715	event: ledger
+1794496442715	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855BX7SRERYYDM3KT3NJC1","stage_name":"#apply/approve","new_status":{"kind":"pending"},"output":null}
+1794496442715	
+1794496442715	id: 28
+1794496442715	event: ledger
+1794496442716	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855BX7SRERYYDM3KT3NJC1","stage_name":"#apply/approve","new_status":{"kind":"completed","worker_id":null},"output":{"work_apply":{"applied":false,"reason":"empty delta"}}}
+1794496442716	
+1794496442716	id: 29
+1794496442716	event: ledger
+1794496442716	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855BYZ1GAJQFGBAQYPM97Z","stage_name":"commit","new_status":{"kind":"pending"},"output":null}
+1794496442716	
+1794496442716	id: 30
+1794496442716	event: ledger
+1794496442716	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855BYZ1GAJQFGBAQYPM97Z","stage_name":"commit","new_status":{"kind":"completed","worker_id":null},"output":{"content":"{\"commit_sha\":\"4d77f67186d6b3bc29eaa947ca77908e2f0475bd\",\"operation\":\"commit\",\"ref_name\":\"exec-01M7854JP9HYANGKBMP4ZA0XBH\"}","stage":"commit","stop_reason":"effect_applied"}}
+1794496442716	
+1794496442716	id: 31
+1794496442716	event: ledger
+1794496442716	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855C274573JWKKYQV512DJ","stage_name":"promote","new_status":{"kind":"pending"},"output":null}
+1794496442716	
+1794496442716	id: 32
+1794496442716	event: ledger
+1794496442716	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855C274573JWKKYQV512DJ","stage_name":"promote","new_status":{"kind":"completed","worker_id":null},"output":{"content":"{\"commit_sha\":\"4d77f67186d6b3bc29eaa947ca77908e2f0475bd\",\"operation\":\"promote\",\"ref_moved\":\"main\"}","stage":"promote","stop_reason":"effect_applied"}}
+1794496442716	
+1794496442716	id: 33
+1794496442716	event: ledger
+1794496442716	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855C60ED0ERMFQNMGVXS6G","stage_name":"export","new_status":{"kind":"pending"},"output":null}
+1794496442716	
+1794496442716	id: 34
+1794496442716	event: ledger
+1794496442716	data: {"execution_id":"01M7854JP9HYANGKBMP4ZA0XBH","assignment_id":"01M7855C60ED0ERMFQNMGVXS6G","stage_name":"export","new_status":{"kind":"completed","worker_id":null},"output":{"content":"{\"branch\":\"kata/01M7854JP9HYANGKBMP4ZA0XBH\",\"commit_sha\":\"4d77f67186d6b3bc29eaa947ca77908e2f0475bd\",\"operation\":\"forge_export\",\"pr_number\":7,\"pr_url\":\"https://forge.local/o/r/pull/7\",\"remote\":\"origin\"}","stage":"export","stop_reason":"effect_applied"}}
+1794496442716	

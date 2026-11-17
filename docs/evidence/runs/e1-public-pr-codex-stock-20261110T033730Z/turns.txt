@@ -1,0 +1,15 @@
+execution 01M71RGJ40MFV8EPQYTHBMFSN3 (completed)
+- find#0 state=completed accepted=1 adapter=codex_app_server model=gpt-6-luna effort=medium model_reported=gpt-6-luna stop_reason=None
+    usage frames: 4 (metered 4, reemitted 0, unmetered 0)
+    metered last sum: input_tokens=67601 cached_input_tokens=34432 cache_write_input_tokens=0 output_tokens=526
+    final thread total: input_tokens=67601 cached_input_tokens=34432 cache_write_input_tokens=0 output_tokens=526
+    turn answer: source=summary phase=final_answer items_view=summary
+    model rerouted: none
+    events_dropped: 0; other events: none
+- verify#0 state=completed accepted=1 adapter=codex_app_server model=gpt-6-luna effort=medium model_reported=gpt-6-luna stop_reason=None
+    usage frames: 2 (metered 2, reemitted 0, unmetered 0)
+    metered last sum: input_tokens=32063 cached_input_tokens=14720 cache_write_input_tokens=0 output_tokens=186
+    final thread total: input_tokens=32063 cached_input_tokens=14720 cache_write_input_tokens=0 output_tokens=186
+    turn answer: source=summary phase=final_answer items_view=summary
+    model rerouted: none
+    events_dropped: 0; other events: none

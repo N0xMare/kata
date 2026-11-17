@@ -1,0 +1,20 @@
+arm: forge: the local bare fsyncs what it acknowledges (core.fsync=all, core.fsyncMethod=fsync, a reference-transaction hook fsyncing each committed ref and its directory); the fake gh fsyncs gh.log after each call
+arm: control: sync(1) before the submit: the fixture, the provider and the booted node are on disk; the run's own writes are not flushed by the rig
+arm: execution 01M786SM8GW732P0SR51GBX1B1
+arm: control: [kata-fault-inject] crash point reached: operational.after_capsule_dispatched_before_send (KATA_FAULT_INJECT=operational.after_capsule_dispatched_before_send, action=stop); stopping process now (SIGSTOP)
+arm: control: the main (pid 69936), every thread's state ['T', 'T', 'T', 'T', 'T']
+arm: control: froze the main (pid 69936) before the kill; every thread's state ['T', 'T', 'T', 'T', 'T']
+arm: control: froze the worker (pid 70299) before the kill; every thread's state ['T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T']
+arm: control: frozen, before the kill: plan attempt state Some("dispatched"), raw failed `plan` transition Ok(None)
+the forge after the restart, before the main boots: kata/<exec> []; git fsck Ok(()); pull requests for kata/<exec> 0; at the kill []
+resumed execution 01M786SM8GW732P0SR51GBX1B1 on /home/[redacted-private_session-5]/e3-state/P1-host after the machine restarted
+kata run show status: failed
+raw failed `plan` transition: Some("{\"delivery\":{\"awaiting_approval_at_ms\":null,\"child_execution_id\":null,\"dispatched_at_ms\":1794498155008,\"finished_at_ms\":1794498176932,\"last_checkpoint\":null,\"stage_name\":\"plan\",\"started_at_ms\":null,\"worker_id\":\"local-worker-0\"},\"reason\":\"the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)\",\"terminal_charge\":{\"token_usage\":{\"cache_read\":0,\"cache_savings_micro_usd\":0,\"cache_write\":0,\"cost\":{\"backend\":\"nanocode_anthropic\",\"model\":\"claude-sonnet-5-5\",\"quality\":\"unavailable\"},\"input\":0,\"output\":0}},\"verdict\":\"proven_ambiguous\"}")
+after 10 s: plan claimed transitions 1, plan attempt rows 1
+spend: issued calls of the agent attempts that never completed 0 (unmetered_calls; started 0, completed 0, unclosed 0, open false); the case kills no model call, so 0
+transcript: plan progress frames 0 (zero model calls for the attempt)
+git: parked/01M786SM8GW732P0SR51GBX1B1 = Some("58cda51c39d377b8305c5b8caf0ab8e852e0bef2")
+assert_no_mutation: trunk unmoved, no kata/<exec> on the remote, the fake gh ran nothing, no commit/promote/export resolved
+assert_no_container_residue: no live container, no kata.* cgroup
+kata's known tokens (completed plan/implement attempts, raw accepting transitions; [input, cache_read, cache_write, output]): [0, 0, 0, 0]
+outcome: pass: settled proven-ambiguous, every oracle held

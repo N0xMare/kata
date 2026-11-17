@@ -1,0 +1,11 @@
+PASS terminal-completed
+PASS variant
+PASS commit-subject
+PASS parent-is-trunk
+PASS tip-not-empty
+PASS remote-branch
+PASS one-open-pr
+PASS clone-check
+PASS oracle-e2
+PASS kit-intact
+e2-oracles: 0 oracle(s) failed (10 oracles; observed: variant = "refine-addendum" refined = "no" )

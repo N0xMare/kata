@@ -1,0 +1,22 @@
+# Repo-level cargo settings: a bare `cargo …` in this tree builds the way the
+# justfile's recipes do, so a contributor or agent who skips `just` does not pay a
+# second build configuration (and a second fingerprint family in `target/`).
+#
+# The justfile exports `RUSTC_WRAPPER`/`CARGO_BUILD_JOBS` itself (see the
+# measurement above its `export RUSTC_WRAPPER` line); environment variables
+# outrank this file, so every recipe — and every operator override such as
+# `RUSTC_WRAPPER=$(which sccache) just …` — behaves exactly as before.
+[build]
+# No rustc wrapper. A per-user `~/.cargo/config.toml` that sets `rustc-wrapper`
+# (sccache) would otherwise apply to bare `cargo` here; sccache does not cache
+# incremental builds, and the justfile measured the pair 2.33x slower than no
+# wrapper with incremental on. An empty value is cargo's "no wrapper", the same
+# spelling as the justfile's `RUSTC_WRAPPER=`.
+rustc-wrapper = ""
+# The justfile's Linux compile fan-out. A per-user `jobs` (or cargo's nproc
+# default) oversubscribes LLVM-heavy crates on large hosts. `nix build` passes
+# `-j $NIX_BUILD_CORES`, which outranks this.
+jobs = 16
+# `incremental` is deliberately NOT set: the dev and test profiles are already
+# incremental by default, and `[build] incremental = true` would also make every
+# `cargo build --release` incremental — the README's release build included.

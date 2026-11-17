@@ -1,0 +1,63 @@
+[package]
+name = "kata-transport"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# Exposes `InProcessTransport`, the channel test double, the supervisor's
+# registrations of a worker that read no Hello (`register_worker`,
+# `register_worker_with_caps`, `register_worker_with_containment`), and the
+# test-only scheduler/heartbeat/supervisor accessors
+# (`select_worker_with_preference`, `is_registered`, `result_transport`) to
+# integration tests — including cross-crate callers (kata-api) that enable this
+# feature through their dev-dependency on kata-transport. Off in shipped builds.
+test-support = []
+
+[dependencies]
+blake3.workspace = true
+rand.workspace = true
+kata-types.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+dashmap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-opentelemetry.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+metrics.workspace = true
+smol_str.workspace = true
+ulid.workspace = true
+# `O_PATH` directory descriptors for `unix_socket`'s length-independent addressing
+# (the workspace pin already carries `fs`).
+rustix.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tempfile.workspace = true
+kata-test-utils.workspace = true
+# Six of the transport suites run bodies under `run_seeded`.
+kata-test-seeded.workspace = true
+# Self dev-dependency turns on `test-support` for this crate's own `tests/`.
+kata-transport = { path = ".", features = ["test-support"] }
+# `futures::join!` drives two futures to completion in `tests/supervisor_tests.rs`.
+futures.workspace = true
+# Fuzz-check: `arbitrary`-driven conformance harnesses for the wire.
+# `local_socket.rs::conformance` fuzzes the byte-level frame decoder
+# (`read_frame`); `types.rs::conformance` draws adversarial
+# WorkerControl / WorkerMessage VALUES and round-trips them through the
+# live serde_json wire codec. `commonware-codec` supplies the shared
+# `generate_value` arbitrary draw; `commonware-conformance` the
+# `conformance_tests!` harness + stable-hash corpus (`conformance.toml`).
+# Deterministic, fixed sample budgets so both ride the gate.
+arbitrary.workspace = true
+commonware-codec = { workspace = true, features = ["arbitrary"] }
+commonware-conformance.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,58 @@
+cell = "E2"
+case = "refine"
+harness = "nanocode-openai"
+surface = "cli"
+kata_sha = "34d5c77c8ff7b1e521f67b9d7ecb2bddd16e6790"
+kata_tree = "7e2bfed23cf57d76b31ca6afdaf0ce8ca04b0beb"
+nanocode_rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2"
+model = "gpt-6-luna"
+effort = "medium"
+credential_mode = "subscription"
+capsule_network = "offline"
+started_utc = "2026-11-10T02:57:59Z"
+wall_seconds = 166
+outcome = "pass"
+outcome_source = "oracles.txt: 18 of 18 PASS, kit-intact last"
+variant = "refine-cell"
+refined = "yes"
+tokens_recorded = { input = 112899, cache_read = 156160, cache_write = 0, output = 5625 }
+tokens_provider = "unavailable: a subscription login has no per-token view"
+unmetered_calls = 0
+cost_recorded = "unavailable"
+cost_provider = "unavailable: subscription"
+artifacts = [
+  { path = "approvals.txt", what = "kata approvals at the approval park" },
+  { path = "approve.txt", what = "e2-approve.sh's approval of this execution's one gate" },
+  { path = "capsule-path.txt", what = "the capsule PATH the kit oracles ran under" },
+  { path = "change-refine.star", what = "the refine pack refine-pack.py derived from the pinned change.star" },
+  { path = "check-refine.txt", what = "kata check of change-refine.star" },
+  { path = "clone-check.txt", what = "sh tests/check.sh in a fresh clone at the tip" },
+  { path = "clone-gate.txt", what = "the held-out gate run on a read-only extract of the tip" },
+  { path = "clone-path.txt", what = "where the oracle clone lives (outside the run directory)" },
+  { path = "e2-oracles.log", what = "the e2-oracles.sh transcript" },
+  { path = "ended_utc", what = "when the run ended (UTC)" },
+  { path = "exec", what = "the kata execution id" },
+  { path = "gate-unnamed.txt", what = "ledger.py --leakscan --tree over the tip's tree" },
+  { path = "kit-sha256.txt", what = "the kit snapshot's sha256 manifest (kit-intact)" },
+  { path = "observed.toml", what = "the record's observed fields (variant, refined), read through ledger.py's read-only handle" },
+  { path = "oracle-align.txt", what = "oracle-align.sh's 48 checks" },
+  { path = "oracle.txt", what = "oracle-e2.sh's checks on the tip" },
+  { path = "oracles.txt", what = "the kit's oracle lines, one PASS/FAIL per oracle" },
+  { path = "params-sha256.txt", what = "sha256 of the three params (the params file itself is never committed)" },
+  { path = "pr.json", what = "the open PR's base, head and number" },
+  { path = "refine-pack.txt", what = "refine-pack.py's derivation of change-refine.star" },
+  { path = "refinecheck.txt", what = "ledger.py refinecheck: gate-bound, gate-unseen, refined, final-gate" },
+  { path = "refined.txt", what = "ledger.py iterations' refined summary" },
+  { path = "remote-branch.txt", what = "the remote's refs/heads/kata/<exec>" },
+  { path = "reset.txt", what = "RUNBOOK §5: the PR closed unmerged, kata/<exec> deleted, the remote's heads after" },
+  { path = "spend.toml", what = "ledger.py record: tokens_recorded, unmetered_calls, cost_recorded" },
+  { path = "stages.txt", what = "ledger.py stages: every worker attempt's charge, read through a read-only handle" },
+  { path = "started_utc", what = "when the run started (UTC)" },
+  { path = "submit.json", what = "the submission's answer" },
+  { path = "test-iterations.txt", what = "ledger.py iterations: test#iter-N status" },
+  { path = "tip.txt", what = "the commit the run landed" },
+  { path = "trunk-before.txt", what = "the clone's main before the run (== trunk.rev)" },
+  { path = "turns.txt", what = "ledger.py turns: per-attempt session evidence (usage frames, turn answer, reroutes)" },
+  { path = "wait.json", what = "kata run wait's terminal answer" },
+  { path = "watch.txt", what = "kata watch's event stream" },
+]

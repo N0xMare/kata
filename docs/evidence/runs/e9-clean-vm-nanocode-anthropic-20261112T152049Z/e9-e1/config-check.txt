@@ -1,0 +1,31 @@
+[e9-e1] $ kata config check --config .kata/kata.toml
+config .kata/kata.toml parsed and validated OK
+  node.id       = e9-e1
+  node.data_dir = /home/[redacted-private_session-1]/e9-e1/.kata/data
+  api.bind      = 127.0.0.1:8400
+  api.auth      = disabled
+  workers.transports = 1 configured
+  workers.max_workers = 4
+  runtime.max_concurrent_dispatches = 256 (concurrent dispatch submissions; NOT running stages)
+    running stages are bounded per-execution by workflow(max_concurrency=N) in Starlark
+  agents = 4 defined
+    default -> codex (model: claude-sonnet-5-5) [default]
+    gate -> codex (model: claude-sonnet-5-5)
+    reviewer -> codex (model: claude-sonnet-5-5)
+    shell -> shell (model: <n/a>)
+    vcs.jj_repo = /home/[redacted-private_session-1]/e9-e1
+    vcs.jj_repo.exists = true
+    vcs.jj_repo.has_jj = false
+    warning: native jj provider will initialize vcs.jj_repo on first boot
+             if that path already holds a git repo, kata COLOCATES jj into it in place — writing .jj/ and importing the repo's HEAD and refs — and the first execution adds an untracked agents/ tree beside it.
+    note: kata writes .jj/ and agents/ and .kata/data/ inside vcs.jj_repo; `kata doctor` FAILS its `target_repo_ignore` row unless that repository ignores them
+  workflow stdlib roots = 8 configured
+    [exists] /home/[redacted-private_session-1]/e9-e1/.kata/workflows
+    [missing] /home/[redacted-private_session-1]/.kata/workflows
+    [missing] /home/[redacted-private_session-1]/kata/target/share/kata/workflows
+    [missing] /home/[redacted-private_session-1]/kata/target/share/kata/kata-factory
+    [missing] /home/[redacted-private_session-1]/kata/target/share/kata/examples
+    [exists] /home/[redacted-private_session-1]/kata/workflows/std
+    [exists] /home/[redacted-private_session-1]/kata/workflows/kata-factory
+    [exists] /home/[redacted-private_session-1]/kata/workflows/examples
+[e9-e1] rc=0

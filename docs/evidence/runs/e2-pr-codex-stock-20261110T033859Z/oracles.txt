@@ -1,0 +1,10 @@
+PASS terminal-completed
+PASS variant
+PASS commit-subject
+PASS parent-is-trunk
+PASS tip-not-empty
+PASS remote-branch
+PASS one-open-pr
+PASS clone-check
+PASS oracle-e2
+PASS kit-intact

@@ -1,0 +1,36 @@
+# Materialized as `.gitignore`.
+#
+# ONLY `kata-out/`, and only because the gold workflow's validate stage writes
+# its evidence log there. The suite itself is `sh tests/test_tail.sh` and writes
+# NOTHING — no build directory, no lockfile, no interpreter home — which is the
+# other half of why a shell subject was chosen over a compiled or interpreted
+# one.
+#
+# This entry is load-bearing twice:
+#   * the declared write closure (`produces_files = ["kata-out/check.log"]`)
+#     is judged at delta adoption, so every write the check makes must land
+#     inside it; `kata-out/` holds them all.
+#   * `require_promotable_workspace_for_promotion` computes dirtiness from
+#     `git status --porcelain` WITHOUT `--ignored`, so an un-ignored evidence log
+#     would refuse the promote AFTER a human had already approved it.
+/kata-out/
+
+# ── REQUIRED BY KATA, and its absence silently corrupts the trunk ──────
+#
+# kata materializes each execution's candidate workspace at
+# `<vcs.jj_repo>/agents/<execution-id>/` and keeps jj's own state in `.jj/`.
+# BOTH are INSIDE the repository kata is pointed at, so a repo that does not
+# ignore them sees them as ordinary untracked files.
+#
+# The failure is silent rather than loud: with these two entries missing, the
+# gold loop runs green end to end — validate passes, the human gate parks, the
+# approval goes through — and the promote then lands jj's internal index and the
+# whole candidate worktree, while `src/tally.sh` at the repo root is NEVER
+# CHANGED. The agent's actual fix does not land, and every surface reports
+# success.
+#
+# kata's own repository carries exactly these two entries, with a comment naming
+# this case — so this is a REQUIREMENT kata places on any repo it is pointed at,
+# and today nothing checks it. Registered as a `kata doctor` gap.
+.jj/
+/agents/

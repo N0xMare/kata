@@ -1,0 +1,13 @@
+id = "python-diagnose"
+title = "Diagnose and fix whatever makes the ledger tests fail"
+required_tool = "python3"
+max_cost_micro_usd = 3000000
+
+prompt = """
+`python3 test_ledger.py` fails and this prompt deliberately does NOT say why.
+Run it, read the failure, find the cause in ledger.py and fix it. Do not edit
+test_ledger.py, and do not run git.
+"""
+
+[mock]
+strategy = "solve"

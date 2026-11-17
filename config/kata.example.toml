@@ -1,0 +1,338 @@
+# ═══════════════════════════════════════════════════════════
+# kata example configuration
+#
+# This file is the canonical example config exercised by
+#   kata config check --config config/kata.example.toml
+# and by
+#   kata serve --config config/kata.example.toml
+#
+# Each field is described where it is set; the operator guide
+# (`docs/product/operator-guide.md`) covers the sections in context.
+#
+# Every section, and every table nested in one, refuses a key it does not
+# declare, naming where it sits, so a misspelling is a load error rather than a
+# silently-kept default. Only names you choose take any key: the `[agents]`
+# labels and an agent's `env` variable names. Workflows are not configured
+# here: they are Starlark packs discovered from the project, user and bundled
+# workflow roots.
+#
+# ── PREREQUISITES FOR BOOTING THIS FILE ────────────────────
+# `kata serve --config config/kata.example.toml` is refused
+# `node_environment_undeclared` as written: this file deliberately declares no
+# `[node] environment`, because the environment is a MACHINE fact — the Nix
+# store closure the node's capsules run inside — and an example cannot pick
+# one for your machine. `kata init` writes the key the same way: documented,
+# commented, and left for you. See the `[node]` section.
+#
+# `just gate` does NOT need one: its `footprint-check` step boots a shell-only
+# derivation of this file (`scripts/footprint-config.sh`) which declares the
+# environment over one pinned store path, and refuses to boot anything else.
+#
+# Booting needs no agent CLI on the host: under the `oci` route an agent
+# entry is a CAPSULE declaration — `adapter` names the embedded harness's kind
+# (`nanocode_openai` or `nanocode_anthropic`), which fixes the capsule's
+# launch; an entry takes no `argv`. An entry that declares no adapter is
+# refused `adapter_undeclared` (`adapter_unqualified` for a label that names
+# no kind) at `kata check`; `kata doctor
+# --config <path>` reports it on the `agent_backends` row before you spend a
+# boot finding out. An agent nobody declares is not a finding.
+#
+# This is a HAND-MAINTAINED example: `kata init` does not write a file like
+# this one — it writes a minimal `[agents.default]` declaration (the embedded
+# harness, `nanocode_openai`, by default) plus `[agents.shell]`, unconditionally.
+# ═══════════════════════════════════════════════════════════
+
+# ── Node identity ──────────────────────────────────────────
+[node]
+# Stable identifier for this node: any non-empty string.
+id   = "kata-main-01"
+# A leading `~/` is expanded to `$HOME/` at config load time, so
+# this resolves to e.g. `/home/alice/.kata/data` rather than a literal
+# `./~/.kata/data` directory under the cwd. `$VAR` references are NOT
+# expanded — keep config paths absolute or tilde-prefixed.
+data_dir = "~/.kata/data"
+
+# This node runs every stage as a capsule bound to ONE declared Nix
+# environment — the shipped `oci` profile is the only execution plane. The
+# environment is a machine fact an example cannot invent, so this file
+# declares none and `kata serve` on it is refused `node_environment_undeclared`
+# until you declare yours:
+# environment.label = "kata-agents"
+# environment.system = "x86_64-linux"
+# environment.nixpkgs_attribute = "nixpkgs#busybox"
+# environment.store_paths = ["/nix/store/…"]
+# environment.path_prepend = ["/nix/store/…/bin"]
+# environment.integrity_policy.verify = "nar_hash_only"
+# environment.integrity_policy.sigs_needed = 0
+# environment.integrity_policy.required_signers = []
+# environment.integrity_policy.allow_unsigned_content_addressed = true
+# environment.integrity_policy.verify_contents_at_declare = true
+#
+# A stage authored `net = "host"` reaches exactly the `host:port` authorities
+# `egress_allow` names — an absent list is `egress_undeclared` at check:
+# egress_allow = ["static.crates.io:443", "index.crates.io:443"]
+
+# Capsule ceilings — ABSENT declares none; kata never invents an operator
+# bound. When set, `kata check` under the shipped `oci` engine refuses any
+# stage whose RECORDED bound would exceed the declared one — the recorded
+# bound being what capsule assembly actually writes: the authored
+# `memory_mb` or the 512 MiB default for memory, 64 for `pids.max` — as
+# `capsule_budget_over_node_ceiling`.
+# capsule_memory_bytes_ceiling = 1610612736   # e.g. 1.5 GiB
+# capsule_process_count_ceiling = 512
+
+# ── Runtime tunables ───────────────────────────────────────
+# EVERY key in this section is optional: the section may be omitted entirely,
+# or may set one key and omit the rest. Omitted keys take their code default.
+[runtime]
+# Bounds concurrent fresh dispatch SUBMISSIONS (a semaphore
+# around the dispatcher's insert+dispatch critical section). It does NOT bound
+# how many stages run concurrently; the permit is released before the worker
+# starts the stage.
+# Observable as the `kata_dispatch_permits_available` gauge.
+max_concurrent_dispatches    = 256     # (default)
+# Active execution residency covers canonical checked-program + invocation
+# authority only, not runner graphs or total process RSS. Exhaustion refuses new
+# execution admission immediately; it never drops or silently queues authority.
+max_active_executions        = 1024    # hard maximum: 16384
+max_active_execution_bytes   = 536870912 # 512 MiB; hard maximum: 8 GiB
+# The MEMOISED-SPEND bound. A model-reuse hit
+# records that a turn was already PAID FOR; it never claims that re-asking would
+# produce the same output, and half of an agent's behaviour surface is REMOTE
+# (a provider's model updates and endpoint) and cannot be keyed. What cannot
+# be keyed is bounded in TIME instead: a `cache_policy = "model_reuse"` stage is
+# NOT SERVED from a source turn ACCEPTED longer ago than this, and runs its own
+# turn. The age is the source's own acceptance, so re-recording the reuse hint
+# never restarts it.
+#   <seconds>     an explicit bound
+#   0 or absent   the 7-day default (604800)
+#   "unbounded"   serve a source of any age
+# Any other value refuses the config at load. It bounds only what is SERVED —
+# nothing is deleted — and only the model-reuse regime: a `content_cache`
+# source of any age is still served, because its key commits to the bytes that
+# produced it, so its age carries no information.
+model_reuse_max_age_secs     = 604800  # 7 days (the default's value)
+
+# Worker pool
+# The main hosts no worker: every worker is a separate `kata-worker` process.
+# Default: `supervised_node` — `kata serve` starts one node beside itself on
+# `<data_dir>/node.sock` and starts it again when it ends. `local_socket` is a
+# socket for `kata-worker` daemons you start yourself. There is no cross-host
+# worker: the transport `type` is `supervised_node` or `local_socket`; the
+# removed `in_process` is refused by name, and any other type refuses the
+# config at load.
+[workers]
+# How long the main waits for a worker's transport to take a capsule frame. A
+# send still pending then, on a worker that holds no started attempt and whose
+# slot has not freed within that window, settles its attempt PROVEN AMBIGUOUS
+# (the write is not cancelled, so the frame may still arrive) and the main sends
+# a fenced stop; a send queued behind a running attempt keeps waiting. 0 is
+# refused at load.
+dispatch_deadline_ms  = 30000
+assignment_start_deadline_ms = 900000
+# Every worker heartbeats every half `heartbeat_interval_ms` (the main binds the
+# interval into each daemon's enrollment), and the main sweeps every interval. A
+# worker past interval + grace of OBSERVED silence is settled dead; a stall that
+# holds up the main's sweep counts as at most one interval of it. 0 is refused at
+# load, and so is a grace shorter than the interval.
+heartbeat_interval_ms = 10000
+heartbeat_grace_ms    = 30000
+max_workers           = 4
+[[workers.transports]]
+type = "supervised_node"
+
+# ── API server ─────────────────────────────────────────────
+[api]
+bind = "127.0.0.1:8400"
+
+# Auth policy. The example config is a **single-operator loopback default** so
+# `just api-health` / `just api-submit-ref` work out of the box
+# without operators having to mint a bearer token. The API does not
+# emit permissive CORS headers by default; CLI/SDK clients are unaffected
+# by browser CORS policy. If an operator-managed authenticated tunnel exposes the
+# loopback API, scoped tokens can be enabled with:
+#
+#   [api.auth]
+#   type = "signed_token"
+#   verifying_key_env = "API_VERIFYING_KEY"
+#
+# The variable must be named outside kata's reserved `KATA_` namespace: the main
+# refuses a `KATA_` name at load, as `kata service install` does when it copies
+# the variable into the installed main's environment snapshot.
+#
+# The daemon config ends with the public verifying key. Supply the private
+# signing key only to the operator mint command:
+#   kata api-token mint --scope operate --signing-key-file ~/.config/kata/api-signing-key
+#   kata api-token mint --scope approve --expires-in 30d   # reads KATA_API_SIGNING_KEY
+#
+# which enables scoped ed25519-signed bearer-token middleware. Each request
+# presents an operator-minted token; the API verifies it against the
+# configured public key and enforces the
+# token's scope per route group — `operate` (reads + submit/steer),
+# `approve` (human-gate mutations), `admin` (destructive). The workload
+# is issued an operate-only token, so it can never approve its own
+# gates. `type = "signed_token"` validates only loopback or explicit
+# loopback API binds; non-loopback exposure needs an operator-managed tunnel.
+[api.auth]
+type = "disabled"
+
+# ── Agent backends ─────────────────────────────────────────
+# Per-agent backend configuration. The `[agents.<name>]` key is the
+# agent name, and the name decides what the entry is: the reserved label `shell`
+# is the deterministic shell route, and every other entry is kata's embedded
+# harness. There is no `type` key — an entry that carries one refuses the config
+# at load (`agent_type_removed`); delete the line.
+#
+# Under the `oci` route a harness entry is a CAPSULE declaration: `adapter`
+# names the harness's provider — `nanocode_openai` (OpenAI's Responses API) or
+# `nanocode_anthropic` (Anthropic's Messages API) — whose agent loop runs in the
+# worker and whose capsule's init is the static `kata-toolhost`, so the entry
+# declares no `argv`. Any other `adapter` is refused `adapter_unqualified`.
+#
+# The installed main picks the `default` entry below. If
+# there is exactly one entry (under any name) it is used regardless;
+# with multiple entries, one must be named `default`.
+#
+# `default` binds the embedded harness, and this file AGREES with
+# `kata init` (`bin/kata/src/cli/init.rs`): a generated project's
+# `[agents.default]` is exactly this shape. `kata config check --config
+# <path>` prints the resolved `default -> <backend>` for whichever config you
+# actually boot, and says so plainly when a config has no model-backed agent
+# at all.
+#
+# Every entry declares the credential its model calls are served by:
+# `credential = { mode = "subscription", source = "kata_login" }` is kata's own
+# ChatGPT login (`kata login openai`); `mode = "api_key"` over `kata_login`
+# reads the key `kata login <provider> --api-key` stored, and over
+# `source = "env:<VAR>"` the worker's own environment. Under `kata service
+# install` that environment is the owner-only snapshot the install takes, so the
+# install copies <VAR> from the shell it runs in and refuses while <VAR> is unset
+# (a main with no `supervised_node` transport starts no node and copies none);
+# to rotate the key, stop the service, re-run `kata service install --config
+# <path> --apply` with the new value exported, and start it again.
+[agents.default]
+adapter = "nanocode_openai"
+credential = { mode = "subscription", source = "kata_login" }
+# The model the turn spec carries when a stage authors no `model =` hint.
+model = "gpt-6-luna"
+reasoning_effort = "medium"
+# THERE IS NO TIMEOUT KEY HERE, and there is no node-level cap either.
+# A stage's wall clock is its own `stage(timeout_ms = ..)`, hashed into the
+# checked program; a stage that declares none takes the 1 h authoring default
+# at load. A per-agent default could only ever DISAGREE with the bound the
+# program was admitted with.
+
+# The role agents shipped packs select BY NAME where they split work:
+# `reviewer` judges a change (a review or critique stage), `gate` decides a
+# loop or a route (the factory's controller GATE, `gate_agent = "gate"`). Each
+# is the same harness as `default`, and `kata init` writes both as the `default`
+# block; that is deliberate rather than redundant: `default` is what an
+# unqualified stage binds, a role entry is what a pack asks for by name, and
+# they are free to carry different models.
+[agents.reviewer]
+adapter = "nanocode_openai"
+credential = { mode = "subscription", source = "kata_login" }
+model = "gpt-6-luna"
+reasoning_effort = "medium"
+
+[agents.gate]
+adapter = "nanocode_openai"
+credential = { mode = "subscription", source = "kata_login" }
+model = "gpt-6-luna"
+# Optional reasoning-effort override, carried on the turn spec and delivered
+# through the harness's own channel. The model owns the valid level set (e.g.
+# low / medium / high); an invalid value fails at the model call. Omit to use
+# the model's default. The gate is the canonical use: run the one
+# decision/planning stage at a higher effort than the waves it routes.
+reasoning_effort = "medium"
+
+# PRICING: a `nanocode_openai` turn has NO billing backend in this build, so
+# its cost is `quality = "unavailable"` under every credential, and a
+# `cost_bound(..)` or `cost_budget("halt", ..)` over it is refused at check
+# (`cost_bound_unenforceable_unpriced_adapter`). A `nanocode_anthropic` turn
+# under `mode = "api_key"` is priced from kata's built-in Anthropic rows; a
+# model without a row is charged at a conservative frontier floor ($15/MTok
+# in, $75/MTok out, cache read AND write at the full input rate), an UPPER
+# BOUND labelled `quality = "estimated"` with a basis naming the model.
+#
+# To meter such a model for real, uncomment and fill in the provider's
+# published rates. Pricing is read from THIS file and is restart-required. Do
+# not guess. A turn's prompt-cache reads and writes are their own token
+# classes, billed only through the two multipliers, and a row must state both
+# (a row without either is refused at load, never defaulted to a rate that
+# bills that class nothing): Anthropic bills a 5-minute cache write at 1.25×
+# the input rate.
+# [[pricing.models]]
+# backend = "anthropic"
+# model = "claude-haiku-5-5"
+# input_rate_per_mtok = 0.00
+# output_rate_per_mtok = 0.00
+# cache_read_multiplier = 0.1
+# cache_write_multiplier = 1.25
+
+# Shell agent — runs `agent = "shell"` stages (e.g. the
+# kata-work-item workflow's `run_tests` stage which executes
+# `just gate`). The label is reserved and needs no declaration — `agent =
+# "shell"` stages run `sh` inside the node's environment — and the block is
+# written here only so the reserved spelling is visible. It takes no key: one
+# under it refuses the config at load (`shell_agent_block_keys`).
+#
+# A shell stage that needs longer than the default declares
+# `stage(timeout_ms = ..)`; one that declares nothing gets the 1 h
+# authoring default. There is no shell timeout key.
+[agents.shell]
+
+# ── VCS / execution workspaces ────────────────────────────
+[vcs]
+# `worktree_isolated = true` runs use the native jj execution-workspace provider,
+# the only one.
+# Repository root for the native jj provider. Relative paths resolve from this
+# file's directory; this example lives under `config/`, so `..` is the repo.
+jj_repo = ".."
+# The branch kata forks execution workspaces from and lands them onto. OPTIONAL,
+# and there is no default literal: leave it unset and kata asks THIS repository —
+# the remote's own `HEAD` (`refs/remotes/origin/HEAD`) first, then the one branch
+# kata did not create itself. Set it when the repository has several long-lived
+# branches and no remote default, because kata REFUSES rather than guessing:
+# forking an agent from the wrong base spends real budget before anything
+# notices. `kata doctor`'s `trunk_resolution` row tells you which case you are in.
+# trunk = "main"
+
+# ── Telemetry ──────────────────────────────────────────────
+# `enabled = false` installs nothing: no log subscriber, no metrics, no exporter.
+# `log_level` is the tracing filter; the `KATA_LOG` environment variable
+# overrides it. `log_json = true` writes structured JSON log lines.
+# `export` picks the one extra exporter beside the log subscriber:
+#   "stdout"      none (the default)
+#   "prometheus"  a pull-scrape `/metrics` listener on `metrics_bind`
+#   "otlp"        OTLP traces pushed over gRPC to `otlp_endpoint`
+#                 (e.g. "http://127.0.0.1:4317"; `just jaeger-up` starts a
+#                 local collector). An empty endpoint exports nothing.
+# `metrics_bind` is read only under "prometheus", `otlp_endpoint` only under
+# "otlp".
+# This example scrapes `/metrics` on loopback while runs are in flight.
+[telemetry]
+enabled       = true
+log_level     = "info"
+log_json      = false
+export        = "prometheus"
+metrics_bind  = "127.0.0.1:9400"
+otlp_endpoint = ""
+
+# The node's INSTALLED CONTAINMENT POLICY.
+#
+# `require_contained_model_stages = true` makes the main REFUSE, at compile, any
+# stage whose executor is an opaque model/agent call and whose derived
+# containment axis is `host_unconfined` — a stage declaring the reserved
+# `sandbox = "host"`. A stage that declared nothing is not one: an absent
+# `sandbox=` lowers to an explicit confined directive, so an unauthored model
+# stage is `Contained` by construction and this row cannot fire on it. The
+# refusal names the stage and the exact `sandbox_profile(...)` that fixes it.
+#
+# Default `true`: model/agent stages run contained. `shell` stages are
+# deliberately out of scope (their command is authored in the pack and visible
+# to a reviewer). A config that omits this section takes the default.
+#
+# Cold: a change here requires a node restart.
+[containment]
+require_contained_model_stages = true

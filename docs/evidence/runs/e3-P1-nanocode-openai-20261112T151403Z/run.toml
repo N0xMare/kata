@@ -1,0 +1,47 @@
+capsule_network = "offline"
+case = "P1"
+cell = "E3"
+cost_provider = "unavailable: subscription"
+cost_recorded = "unavailable"
+credential_mode = "subscription"
+effort = "medium"
+harness = "nanocode-openai"
+kata_sha = "4da3b2fe2aa434cfd68b267c1177354510c32c2f"
+kata_tree = "74133d703da4dd98910352faa569d87e8c06666f"
+model = "gpt-6-luna"
+nanocode_rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2"
+outcome = "pass"
+outcome_source = "oracle.txt: settled proven-ambiguous, every oracle held (expected proven-ambiguous)"
+settlement = "proven-ambiguous"
+started_utc = "2026-11-12T15:14:03Z"
+surface = "cli"
+tokens_provider = "unavailable: a subscription login has no per-token view"
+unknown_charges = 1
+unmetered_calls = 0
+wall_seconds = 13
+
+[[artifacts]]
+path = "oracle.txt"
+what = "every outside-kata read this cell's outcome rests on, in order"
+
+[[artifacts]]
+path = "sse-transcript.txt"
+what = "the client-side GET /api/v1/events transcript, one received-ms-stamped line per SSE line"
+
+[[artifacts]]
+path = "change.star"
+what = 'the pack this run submitted: workflows/std/change.star at kata_sha with progress_visibility = "summary" added to plan and implement, nothing else'
+
+[[artifacts]]
+path = "tree.txt"
+what = "git rev-parse HEAD, HEAD^{tree} and git status --porcelain of the tree the binaries were built from: kata_sha names exactly what ran only when the status is empty"
+
+[[artifacts]]
+path = "spend-ledger.toml"
+what = "ledger.py record over the kept node's database (a second, read-only handle): the known tokens, the unknown charges (unknown_charges: one per attempt kata could not meter) and kata's cost"
+
+[tokens_recorded]
+cache_read = 0
+cache_write = 0
+input = 0
+output = 0

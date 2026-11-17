@@ -1,0 +1,27 @@
+1794496445465	#connected
+1794496445466	HTTP/1.0 200 OK
+1794496445466	content-type: text/event-stream
+1794496445466	cache-control: no-cache
+1794496445466	date: Thu, 12 Nov 2026 15:14:05 GMT
+1794496445466	
+1794496445775	#disconnected
+1794496445775	#connected
+1794496445776	#disconnected
+1794496446978	#connected
+1794496446979	HTTP/1.0 200 OK
+1794496446979	content-type: text/event-stream
+1794496446979	cache-control: no-cache
+1794496446979	date: Thu, 12 Nov 2026 15:14:06 GMT
+1794496446979	
+1794496446979	id: 1
+1794496446979	event: ledger
+1794496446979	data: {"execution_id":"01M7855F50690BB7Y6RT1JDTSV","assignment_id":"01M7855FA61QXQVC1YJEAK8RXD","stage_name":"plan","new_status":{"kind":"pending"},"output":null}
+1794496446979	
+1794496446979	id: 2
+1794496446979	event: ledger
+1794496446979	data: {"execution_id":"01M7855F50690BB7Y6RT1JDTSV","assignment_id":"01M7855FA61QXQVC1YJEAK8RXD","stage_name":"plan","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794496446979	
+1794496446979	id: 3
+1794496446979	event: ledger
+1794496446979	data: {"execution_id":"01M7855F50690BB7Y6RT1JDTSV","assignment_id":"01M7855FA61QXQVC1YJEAK8RXD","stage_name":"plan","new_status":{"kind":"failed","worker_id":"local-worker-0","reason":"the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)"},"output":null,"terminal_charge":{"token_usage":{"input":0,"output":0,"cache_read":0,"cache_write":0,"cache_savings_micro_usd":0,"cost":{"quality":"unavailable","backend":"nanocode_openai","model":"gpt-6-luna"}}}}
+1794496446979	

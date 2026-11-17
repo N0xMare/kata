@@ -1,0 +1,116 @@
+# Youki containment-binary pin — the SINGLE source read by every surface that
+# makes a claim about the rootless-OCI prerequisite:
+#
+#   * `kata host apparmor-install` renders the exact-path AppArmor profile from
+#     these fields and installs it (as root);
+#   * `scripts/feasibility-probes.py` (`probe_youki`) takes its version floor here
+#     and refuses a binary that is not this path with these bytes; and
+#   * `kata doctor`'s `containment_runtime` / `containment_userns` /
+#     `containment_syscall_fence` rows read the same state, without root and
+#     without starting a container — from the pin embedded at BUILD time, so
+#     rebuild `kata` after re-pinning; and
+#   * the capsule reuse key's executor term
+#     (`crates/worker/src/executor_term.rs`) folds `sha256` from the same embedded
+#     pin.
+#
+# WHAT RE-PINNING MEANS. `store_path` is one exact, immutable Nix store path —
+# never a glob, and never traded for relaxing
+# `kernel.apparmor_restrict_unprivileged_userns`. An upgrade produces a DIFFERENT
+# store path, so the installed profile stops attaching, the now-unprofiled binary
+# transitions into the kernel's `unprivileged_userns` profile (which denies
+# `capability`), and the probe refuses. That refusal is the mechanism, not a
+# defect: re-pin every field below, rebuild `kata`, re-install with
+# `sudo kata host apparmor-install`, and re-run
+# `just feasibility-probes` until the youki row passes again. A new `sha256`
+# also moves the executor term: every capsule reuse key on every node misses
+# once, and `executor_term::tests::the_node_term_is_pinned_and_carries_no_version_string`
+# fails until its literal is re-pinned, naming the youki as the fact that moved.
+# Then RE-CAPTURE, from the new binary, every `youki kill` report that
+# `kata-worker`'s `interactive_capsule::tests` pins verbatim (five at this pin:
+# `KILL_SAVE_AFTER_SIGNAL`, `KILL_OPEN_AFTER_SIGNAL`, `KILL_OF_AN_EXITED_INIT`,
+# `KILL_WHOSE_LOAD_COULD_NOT_OPEN`, `KILL_OF_A_DELETED_CONTAINER`; each constant's
+# doc names its case and, where it had to be forced, how), and re-run
+# `only_a_kill_whose_save_failed_after_the_signal_counts_as_delivered`.
+# `InteractiveCapsuleHandle::signal` reads a non-zero `youki kill` as delivered only by
+# that text (`kill_failed_after_its_signal_step`), and the cell passes on the OLD
+# reports whatever the new binary prints: a pin whose kill reports moved would
+# report a delivered signal as not delivered, and every polite capsule close as an
+# ambiguous teardown, under a green suite.
+#
+# WHY THIS PIN IS NOT `nixpkgs#youki`. Measured at the pinned nixpkgs revision: that
+# derivation passes `cargoBuildFlags = [ "-p" "youki" "--features" "systemd" ]`,
+# the `youki` binary crate declares NO default features, and it takes
+# `libcontainer` with `default-features = false` — so `libcontainer/libseccomp`
+# is OFF. `libcontainer`'s init gates every seccomp call behind
+# `#[cfg(feature = "libseccomp")]` and the `cfg(not(...))` arm only warns, so a
+# `config.json` carrying `linux.seccomp` runs with NO filter and NO refusal
+# (measured: `Seccomp_filters: 0` inside a container whose bundle carried every
+# deny-list entry). `nix/youki.nix` is the same upstream release built with that feature
+# added; `youki --version` then carries a `libseccomp:` line, which
+# `kata_worker::oci_runtime::certify_youki` REQUIRES.
+#
+# WHY THIS PIN CARRIES TWO PATCHES (re-pinned 2026-10-30). First, youki 0.7.0 loses the
+# container init's SIGCHLD when the init exits before `handle_foreground` blocks
+# signals (`commands/run.rs`: `container.start()` first, `thread_block()` after;
+# SIGCHLD's default disposition discards it), so `youki run` waits forever on a
+# zombie. MEASURED with the regression cell
+# `oci_runtime_live::fast_exiting_containers_never_strand_the_runtime_client_live`:
+# 4 of 300 `true` containers stranded under the unpatched `ar8227j9…` pin. The
+# store path below is the same release built with
+# `nix/youki-0.7.0-foreground-prereap.patch`, which reaps once right after the mask.
+# Upstream's commit c06504aa7e on main (youki-dev/youki#3639, unreleased as of
+# 2026-09-23) CONTAINS this fix inside a larger foreground-PTY change. DROP THE PATCH
+# when re-pinning to a release that contains that commit; upstream reports a
+# signalled init as 128+signal where this backport keeps the bare signal, which
+# changes only the exit code a signal-killed stage reports (nothing in kata decodes
+# it — see `nix/youki.nix`).
+#
+# Second, youki 0.7.0's `State::save` truncates `state.json` and rewrites it in
+# place, and `Container::start` releases the init before it saves `running`, so a
+# concurrent `youki kill` / `state` / `list` / `delete` can read a 0-byte document
+# and fail. MEASURED with `scripts/youki-state-tear-probe.sh` (and the cell
+# `oci_runtime_live::a_state_save_is_never_read_torn_live`, which runs it): TORN on
+# every run of the previous `gs3ykqgl…` pin, INTACT on this one, which is also built
+# with `nix/youki-0.7.0-atomic-state-save.patch` (temporary file, fsync, rename).
+# 0.7.0 upstream has no equivalent; keep the patch until a release saves atomically.
+#
+# WHY THE STORE PATH MOVED ON 2026-11-11 WHILE `sha256` DID NOT. `nix/youki.nix` now
+# runs the derivation's check phase one test at a time (`dontUseCargoParallelTests`):
+# 0.7.0's suite forks from a test thread while `rootpath::tests` holds std's ENV_LOCK
+# in `set_var`, and the forked child then sleeps forever on the lock reading `TMPDIR`
+# — a `kata host setup` that never finishes (1 of 3 fresh hosts). A check-phase
+# setting is an input of the derivation, so the store path moved; the installed
+# binary's bytes did not (same `sha256`, so the executor term, the reuse keys and the
+# pinned `youki kill` reports are untouched). The AppArmor profile names the path,
+# so a host still re-installs it with `sudo kata host apparmor-install`.
+
+[youki]
+# How the store path below was realized, as the exact command to re-realize it,
+# run FROM THE KATA CHECKOUT.
+#
+# A command rather than a `nixpkgs#…` attribute because the pin does not come
+# from a nixpkgs attribute: `nix profile install nixpkgs#youki` installs a
+# runtime that IGNORES `linux.seccomp` (see the header), so quoting an attribute
+# in a remediation message would tell an operator to install the wrong binary.
+#
+# `-o .kata/youki-root` and NOT `--no-link`: the result symlink is an INDIRECT GC
+# ROOT, and without one the pinned bytes are garbage at the next `nix store gc`.
+# A pin naming a collected path is the `binary_absent` refusal arriving for a
+# runtime nobody uninstalled. `.kata/` is already gitignored, so the root is
+# operator-local state and never tracked. `readlink .kata/youki-root` prints the
+# store path this file's `store_path` must name; `nix profile install -f
+# nix/youki.nix` is the equivalent if an operator would rather root it in a
+# profile than in the checkout.
+realised_by = "nix build -o .kata/youki-root -f nix/youki.nix"
+# Reported version. `probe_youki` enforces this as its floor.
+version = "0.7.0"
+# The exact executable AppArmor evaluates and kata will exec. Absolute, resolved.
+store_path = "/nix/store/dwi0lfqpz41vv8sap08c2ykdga1970nl-youki-seccomp-0.7.0/bin/youki"
+# sha256 of that file's bytes, as `sha256sum` prints it.
+sha256 = "599108f43913c42f383e9a32d44a54bcf2e0fcd8ae7cee647a04bf759e502f8b"
+# The AppArmor profile name the renderer emits and installs as
+# /etc/apparmor.d/<profile_name>. The loaded-profile list is keyed by this NAME;
+# the name-to-path binding lives in the rendered text alone.
+profile_name = "youki"
+# When these fields were last established on a host.
+pinned_on = "2026-11-11"

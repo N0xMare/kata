@@ -1,0 +1,268 @@
+{
+  "ociVersion": "1.0.2",
+  "root": {
+    "path": "rootfs",
+    "readonly": true
+  },
+  "mounts": [
+    {
+      "destination": "/nix/store/qddzvnv6b0805nkvbqddbswddcfhx814-busybox-static-x86_64-unknown-linux-musl-1.37.0",
+      "type": "none",
+      "source": "/nix/store/qddzvnv6b0805nkvbqddbswddcfhx814-busybox-static-x86_64-unknown-linux-musl-1.37.0",
+      "options": [
+        "rbind",
+        "ro",
+        "nosuid",
+        "nodev",
+        "rprivate"
+      ]
+    },
+    {
+      "destination": "/work",
+      "type": "none",
+      "source": "/var/lib/kata/attempts/fixture/root/work",
+      "options": [
+        "rbind",
+        "rw",
+        "nosuid",
+        "nodev",
+        "rprivate"
+      ]
+    },
+    {
+      "destination": "/out",
+      "type": "none",
+      "source": "/var/lib/kata/attempts/fixture/root/out",
+      "options": [
+        "rbind",
+        "rw",
+        "nosuid",
+        "nodev",
+        "noexec",
+        "rprivate"
+      ]
+    },
+    {
+      "destination": "/tmp",
+      "type": "tmpfs",
+      "source": "tmpfs",
+      "options": [
+        "nosuid",
+        "nodev",
+        "mode=1777",
+        "size=67108864"
+      ]
+    },
+    {
+      "destination": "/proc",
+      "type": "proc",
+      "source": "proc"
+    },
+    {
+      "destination": "/dev",
+      "type": "tmpfs",
+      "source": "tmpfs",
+      "options": [
+        "nosuid",
+        "strictatime",
+        "mode=755",
+        "size=65536k"
+      ]
+    },
+    {
+      "destination": "/dev/pts",
+      "type": "devpts",
+      "source": "devpts",
+      "options": [
+        "nosuid",
+        "noexec",
+        "newinstance",
+        "ptmxmode=0666",
+        "mode=0620"
+      ]
+    },
+    {
+      "destination": "/dev/shm",
+      "type": "tmpfs",
+      "source": "shm",
+      "options": [
+        "nosuid",
+        "noexec",
+        "nodev",
+        "mode=1777",
+        "size=65536k"
+      ]
+    }
+  ],
+  "process": {
+    "terminal": false,
+    "user": {
+      "uid": 0,
+      "gid": 0
+    },
+    "args": [
+      "/nix/store/qddzvnv6b0805nkvbqddbswddcfhx814-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin/busybox",
+      "true"
+    ],
+    "env": [
+      "PATH=/nix/store/qddzvnv6b0805nkvbqddbswddcfhx814-busybox-static-x86_64-unknown-linux-musl-1.37.0/bin:/bin"
+    ],
+    "cwd": "/work",
+    "capabilities": {
+      "bounding": [],
+      "effective": [],
+      "inheritable": [],
+      "permitted": [],
+      "ambient": []
+    },
+    "rlimits": [
+      {
+        "type": "RLIMIT_NOFILE",
+        "hard": 1024,
+        "soft": 1024
+      }
+    ],
+    "noNewPrivileges": true
+  },
+  "hostname": "kata",
+  "annotations": {},
+  "linux": {
+    "uidMappings": [
+      {
+        "hostID": 1000,
+        "containerID": 0,
+        "size": 1
+      }
+    ],
+    "gidMappings": [
+      {
+        "hostID": 1000,
+        "containerID": 0,
+        "size": 1
+      }
+    ],
+    "resources": {
+      "memory": {
+        "limit": 536870912,
+        "swap": 536870912
+      },
+      "pids": {
+        "limit": 64
+      }
+    },
+    "cgroupsPath": "/kata.test/kata.provider.youki.1/kata.oci.kata-fixture/container",
+    "namespaces": [
+      {
+        "type": "user"
+      },
+      {
+        "type": "pid"
+      },
+      {
+        "type": "mount"
+      },
+      {
+        "type": "uts"
+      },
+      {
+        "type": "ipc"
+      },
+      {
+        "type": "cgroup"
+      },
+      {
+        "type": "network"
+      }
+    ],
+    "seccomp": {
+      "defaultAction": "SCMP_ACT_ALLOW",
+      "architectures": [
+        "SCMP_ARCH_X86_64",
+        "SCMP_ARCH_X32"
+      ],
+      "syscalls": [
+        {
+          "names": [
+            "clone"
+          ],
+          "action": "SCMP_ACT_ERRNO",
+          "errnoRet": 1,
+          "args": [
+            {
+              "index": 0,
+              "value": 268435456,
+              "valueTwo": 268435456,
+              "op": "SCMP_CMP_MASKED_EQ"
+            }
+          ]
+        },
+        {
+          "names": [
+            "ptrace",
+            "pivot_root",
+            "chroot",
+            "mount",
+            "umount2",
+            "swapon",
+            "swapoff",
+            "reboot",
+            "init_module",
+            "delete_module",
+            "kexec_load",
+            "add_key",
+            "request_key",
+            "keyctl",
+            "unshare",
+            "perf_event_open",
+            "setns",
+            "process_vm_readv",
+            "process_vm_writev",
+            "finit_module",
+            "kexec_file_load",
+            "bpf",
+            "userfaultfd",
+            "io_uring_setup",
+            "io_uring_enter",
+            "io_uring_register",
+            "open_tree",
+            "move_mount",
+            "fsopen",
+            "fsconfig",
+            "fsmount",
+            "fspick",
+            "mount_setattr"
+          ],
+          "action": "SCMP_ACT_ERRNO",
+          "errnoRet": 1
+        },
+        {
+          "names": [
+            "clone3"
+          ],
+          "action": "SCMP_ACT_ERRNO",
+          "errnoRet": 38
+        }
+      ]
+    },
+    "rootfsPropagation": "private",
+    "maskedPaths": [
+      "/proc/acpi",
+      "/proc/asound",
+      "/proc/kcore",
+      "/proc/keys",
+      "/proc/latency_stats",
+      "/proc/timer_list",
+      "/proc/timer_stats",
+      "/proc/sched_debug",
+      "/sys/firmware",
+      "/proc/scsi"
+    ],
+    "readonlyPaths": [
+      "/proc/bus",
+      "/proc/fs",
+      "/proc/irq",
+      "/proc/sys",
+      "/proc/sysrq-trigger"
+    ]
+  }
+}

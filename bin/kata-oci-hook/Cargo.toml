@@ -1,0 +1,28 @@
+[package]
+name = "kata-oci-hook"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "kata's OCI createContainer hooks: `loopback-up` and the listener-fd handoff an Egress capsule's bundle carries. Runs inside the container's network namespace at create time, beside a kata-provider-* process. Not a release artifact on its own."
+
+[[bin]]
+name = "kata-oci-hook"
+path = "src/main.rs"
+
+# The closure is `rustix` and nothing else, for the same reason the providers'
+# closures are thin: this process runs where kata cannot see it, on argv a
+# bundle kata rendered gave it, and every facility it needs — a TCP listener on
+# the guest loopback, an `O_PATH` open of the handoff socket's directory (so the
+# connect's address is `/proc/self/fd/<fd>/handoff.sock`, whatever the data
+# directory's length), one `sendmsg` with `SCM_RIGHTS`, one acknowledged byte —
+# is a syscall the safe fs/net surface already names. No `kata-worker`, no
+# `kata-types`: the hook's contract is its argv and the wire it speaks is one
+# descriptor plus one byte, and linking kata would only grow the bytes running
+# inside the containment boundary.
+[dependencies]
+rustix = { workspace = true, features = ["fs", "net"] }
+
+[lints]
+workspace = true

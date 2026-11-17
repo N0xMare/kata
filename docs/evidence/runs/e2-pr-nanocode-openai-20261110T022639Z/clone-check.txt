@@ -1,0 +1,87 @@
+ok   t_cli: no command is a usage error
+ok   t_cli: an unknown command is a usage error
+ok   t_cli: an unknown option is a usage error
+ok   t_cli: --help prints the usage on stdout
+ok   t_cli: --version prints the version
+ok   t_cli: --list names every lib/cmd_*.sh
+ok   t_conventions: count -h prints its usage on stdout
+ok   t_conventions: count rejects an unknown option
+ok   t_conventions: count refuses a missing file
+ok   t_conventions: count refuses a directory
+ok   t_conventions: count ends a final line that lacked a newline
+ok   t_conventions: count reads a FILE operand
+ok   t_conventions: count reads - as standard input
+ok   t_conventions: number -h prints its usage on stdout
+ok   t_conventions: number rejects an unknown option
+ok   t_conventions: number refuses a missing file
+ok   t_conventions: number refuses a directory
+ok   t_conventions: number ends a final line that lacked a newline
+ok   t_conventions: number reads a FILE operand
+ok   t_conventions: number reads - as standard input
+ok   t_conventions: squeeze -h prints its usage on stdout
+ok   t_conventions: squeeze rejects an unknown option
+ok   t_conventions: squeeze refuses a missing file
+ok   t_conventions: squeeze refuses a directory
+ok   t_conventions: squeeze ends a final line that lacked a newline
+ok   t_conventions: squeeze reads a FILE operand
+ok   t_conventions: squeeze reads - as standard input
+ok   t_conventions: trim -h prints its usage on stdout
+ok   t_conventions: trim rejects an unknown option
+ok   t_conventions: trim refuses a missing file
+ok   t_conventions: trim refuses a directory
+ok   t_conventions: trim ends a final line that lacked a newline
+ok   t_conventions: trim reads a FILE operand
+ok   t_conventions: trim reads - as standard input
+ok   t_conventions: wrap -h prints its usage on stdout
+ok   t_conventions: wrap rejects an unknown option
+ok   t_conventions: wrap refuses a missing file
+ok   t_conventions: wrap refuses a directory
+ok   t_conventions: wrap ends a final line that lacked a newline
+ok   t_conventions: wrap reads a FILE operand
+ok   t_conventions: wrap reads - as standard input
+ok   t_count: no input counts 0
+ok   t_count: counts lines
+ok   t_count: counts a final line without a newline
+ok   t_count: counts empty lines
+ok   t_count: counts across files
+ok   t_number: numbers lines with a tab
+ok   t_number: numbers empty lines and a final line without newline
+ok   t_number: -s sets the separator
+ok   t_number: -sSEP is accepted
+ok   t_number: numbers run on across files
+ok   t_number: -s without an argument is a usage error
+ok   t_number: no input prints nothing
+ok   t_squeeze: collapses a run of empty lines
+ok   t_squeeze: blank-only lines count as blank
+ok   t_squeeze: keeps one blank line at either end
+ok   t_squeeze: leaves text without blank lines alone
+ok   t_trim: strips leading and trailing blanks
+ok   t_trim: keeps inner blanks
+ok   t_trim: blank lines become empty lines
+ok   t_trim: no input prints nothing
+ok   t_wrap: A1 greedily wraps words
+ok   t_wrap: A2 exact width fits
+ok   t_wrap: A3 over width starts a line
+ok   t_wrap: A4 overlong word remains unbroken
+ok   t_wrap: A5 joins whitespace separated words
+ok   t_wrap: A6 separates paragraphs once
+ok   t_wrap: A7 handles missing final newline
+ok   t_wrap: A8 empty input
+ok   t_wrap: A9 blank input
+ok   t_wrap: A10 default width wraps 30 words
+ok   t_wrap: A11 accepts attached width
+ok   t_wrap: A12 combines files as one stream
+ok   t_wrap: A13 rejects width '0'
+ok   t_wrap: A13 usage follows invalid width 0
+ok   t_wrap: A13 rejects width '07'
+ok   t_wrap: A13 usage follows invalid width 07
+ok   t_wrap: A13 rejects width '-3'
+ok   t_wrap: A13 usage follows invalid width -3
+ok   t_wrap: A13 rejects width 'abc'
+ok   t_wrap: A13 usage follows invalid width abc
+ok   t_wrap: A13 rejects width '5x'
+ok   t_wrap: A13 usage follows invalid width 5x
+ok   t_wrap: A13 rejects width ''
+ok   t_wrap: A13 usage follows invalid width 
+ok   t_wrap: A14 reports missing width argument
+linekit tests: 86 passed, 0 failed, 7 suites

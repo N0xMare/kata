@@ -1,0 +1,42 @@
+[package]
+name = "kata-worker-bin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Dedicated kata worker daemon binary — minimal deps for worker-only hosts."
+
+# The package is `kata-worker-bin` to avoid colliding with the
+# `kata-worker` *library* crate at `crates/worker/`; the artefact
+# it produces is still `kata-worker` thanks to the explicit
+# `[[bin]] name` below.
+#
+# `[lib]` exists solely so integration tests under `tests/` can
+# reach `pidfile` via `kata_worker_bin::…`; the binary itself
+# imports from the same lib so the two cannot drift.
+[lib]
+name = "kata_worker_bin"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kata-worker"
+path = "src/main.rs"
+
+[dependencies]
+kata-worker = { path = "../../crates/worker" }
+# `main` first runs this binary as a Code Mode interpreter process when it was
+# started as one: the daemon re-executes itself for each Code Mode worker.
+kata-code-mode-host.workspace = true
+kata-types.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+dotenvy.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+# `tests/pidfile_tests/code_mode_interpreter.rs` drives the binary's interpreter frames by hand.
+serde_json.workspace = true
+
+[lints]
+workspace = true

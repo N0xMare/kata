@@ -1,0 +1,12 @@
+id = "rust-reverse"
+title = "Implement reverse(&str) so its unit test passes"
+required_tool = "rustc"
+max_cost_micro_usd = 3000000
+
+prompt = """
+Implement reverse(s: &str) -> String in lib.rs so that its #[test] passes: it
+returns the input with its characters in reverse order. Do not edit the test.
+"""
+
+[mock]
+strategy = "solve"

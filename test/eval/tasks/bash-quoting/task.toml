@@ -1,0 +1,13 @@
+id = "bash-quoting"
+title = "Make count.sh handle filenames containing spaces"
+required_tool = "bash"
+max_cost_micro_usd = 3000000
+
+prompt = """
+count.sh must print "<name>: <line count>" for every .txt file in the given
+directory, sorted by name, and it must work when a filename contains SPACES. It
+currently does not. Fix count.sh. Do not run git.
+"""
+
+[mock]
+strategy = "solve"

@@ -1,0 +1,2 @@
+# Local-only pinned Python tooling used by repository checks.
+ruff==0.15.20

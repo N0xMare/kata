@@ -1,0 +1,31 @@
+[package]
+name = "kata-provider-protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "The versioned LOCAL external-execution-provider wire contract: the 4-byte-BE + JSON frame codec, the two independent version numbers, and the provider certificate a supervisor admits or refuses."
+
+# ABSOLUTE LEAF, and the emptiness of this section is the contract.
+#
+# An external provider is a process kata does NOT link. The only thing
+# it and kata may share is the WIRE, so this crate holds the wire and nothing
+# else: serde, serde_json, thiserror. It must never gain `kata-types`,
+# `kata-worker`, `kata-agent*` or `kata-core` — a provider that had to link
+# kata's type system to speak the protocol would make "kata does not link it" a
+# claim about direction only, and the whole point of a versioned local protocol
+# is that a third party can implement it in any language from the frame
+# definitions this crate documents.
+#
+# `crates/worker/tests/provider_supervisor.rs` reads this manifest and FAILS on
+# any internal dependency, and reads the OCI provider's and FAILS on any internal
+# dependency other than this crate, so the rule above is a test rather than a
+# comment.
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

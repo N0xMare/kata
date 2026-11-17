@@ -1,0 +1,7 @@
+# e2-oracles.sh: the record's OBSERVED fields, read through ledger.py's read-only handle
+variant = "refine-cell"
+refined = "yes"
+# iterations = 2
+# final_test = "passed"
+# refine_cause = suite+gate (iteration 0's feedback)
+# iter0_gate_fails = C1-command-header C2-manifest C3-suite-footer

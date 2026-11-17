@@ -1,0 +1,13 @@
+id = "rust-sum"
+title = "Fix the off-by-one in sum_to_n so its unit test passes"
+required_tool = "rustc"
+max_cost_micro_usd = 3000000
+
+prompt = """
+lib.rs has an off-by-one bug: sum_to_n(n) should return the inclusive sum
+1+2+...+n but excludes n. Fix the function so its #[test] passes. Do not edit
+the test.
+"""
+
+[mock]
+strategy = "solve"

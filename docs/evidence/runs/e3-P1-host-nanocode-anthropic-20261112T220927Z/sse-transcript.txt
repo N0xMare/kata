@@ -1,0 +1,24 @@
+1794521370075	#connected
+1794521370075	HTTP/1.0 200 OK
+1794521370075	content-type: text/event-stream
+1794521370075	cache-control: no-cache
+1794521370075	date: Thu, 12 Nov 2026 22:09:30 GMT
+1794521370075	
+1794521392989	#connected
+1794521392990	HTTP/1.0 200 OK
+1794521392990	content-type: text/event-stream
+1794521392990	cache-control: no-cache
+1794521392990	date: Thu, 12 Nov 2026 22:09:52 GMT
+1794521392990	
+1794521392990	id: 1
+1794521392990	event: ledger
+1794521392990	data: {"execution_id":"01M78WY3GYCB6E4YZBNXK6JBJ3","assignment_id":"01M78WY3RE8CD3B9R0CP7DZ1BP","stage_name":"plan","new_status":{"kind":"pending"},"output":null}
+1794521392990	
+1794521392990	id: 2
+1794521392990	event: ledger
+1794521392990	data: {"execution_id":"01M78WY3GYCB6E4YZBNXK6JBJ3","assignment_id":"01M78WY3RE8CD3B9R0CP7DZ1BP","stage_name":"plan","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794521392990	
+1794521392990	id: 3
+1794521392990	event: ledger
+1794521392990	data: {"execution_id":"01M78WY3GYCB6E4YZBNXK6JBJ3","assignment_id":"01M78WY3RE8CD3B9R0CP7DZ1BP","stage_name":"plan","new_status":{"kind":"failed","worker_id":"local-worker-0","reason":"the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)"},"output":null,"terminal_charge":{"token_usage":{"input":0,"output":0,"cache_read":0,"cache_write":0,"cache_savings_micro_usd":0,"cost":{"quality":"unavailable","backend":"nanocode_anthropic","model":"claude-sonnet-5-5"}}}}
+1794521392990	

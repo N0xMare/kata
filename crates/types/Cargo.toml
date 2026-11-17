@@ -1,0 +1,58 @@
+[package]
+name = "kata-types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared types for the kata runtime."
+
+[lints]
+workspace = true
+
+[features]
+# Exposes `test_support` (shared serde round-trip helpers) to the
+# integration tests. Off in shipped builds; the self dev-dependency below turns
+# it on for this crate's own `tests/`.
+test-support = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ulid.workspace = true
+chrono.workspace = true
+smol_str.workspace = true
+hex.workspace = true
+# VALUE-CONSTRAINT contracts: the structured-output validator enforces a
+# string `pattern` constraint by compiling + matching it with the `regex` crate.
+regex.workspace = true
+toml.workspace = true
+serde_path_to_error.workspace = true
+# strum derives (EnumString / Display / IntoStaticStr) spell the small wire-tag
+# enums' as_str / FromStr / Display mappings. `features = ["derive"]` pulls in
+# strum_macros.
+strum = { workspace = true, features = ["derive"] }
+blake3.workspace = true
+# `CapsuleWorkView::covers` compiles the declared `reads=`/`produces_files=`
+# closure patterns — the same matcher `output_closure` and the read-closure
+# resolver use, over manifest paths rather than a filesystem.
+glob.workspace = true
+base64.workspace = true
+
+[dev-dependencies]
+# Tests that need a real directory tree (config paths) create one and throw
+# it away.
+tempfile.workspace = true
+# Self dev-dependency turns on `test-support` for this crate's own `tests/`,
+# making `kata_types::test_support` reachable from the integration tests.
+kata-types = { path = ".", features = ["test-support"] }
+ciborium.workspace = true
+criterion.workspace = true
+
+# The agent-output schema validate/retry hot
+# path — `validate_agent_run_output_content`, the pure gate the runner runs on
+# every structured-output stage result to decide whether to accept or fire a
+# `validate_retries` retry. Run via `just bench-crate types`; never in `just gate`.
+[[bench]]
+name = "validate_retry"
+harness = false

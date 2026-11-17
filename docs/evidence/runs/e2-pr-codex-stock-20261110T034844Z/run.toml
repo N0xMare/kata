@@ -1,0 +1,50 @@
+cell = "E2"
+case = "pr"
+harness = "codex-stock"
+surface = "cli"
+kata_sha = "34d5c77c8ff7b1e521f67b9d7ecb2bddd16e6790"
+kata_tree = "7e2bfed23cf57d76b31ca6afdaf0ce8ca04b0beb"
+vendor_version = "codex-cli 0.165.0"
+model = "gpt-6-luna"
+effort = "medium"
+credential_mode = "subscription"
+capsule_network = "vendor-egress-only"
+started_utc = "2026-11-10T03:48:44Z"
+wall_seconds = 89
+outcome = "pass"
+outcome_source = "oracles.txt: 10 of 10 PASS, kit-intact last"
+variant = "refine-addendum"
+refined = "no"
+tokens_recorded = { input = 36208, cache_read = 154752, cache_write = 0, output = 3543 }
+tokens_provider = "unavailable: a subscription login has no per-token view"
+unmetered_calls = 0
+cost_recorded = "unavailable"
+cost_provider = "unavailable: subscription"
+artifacts = [
+  { path = "approvals.txt", what = "kata approvals at the approval park" },
+  { path = "approve.txt", what = "e2-approve.sh's approval of this execution's one gate" },
+  { path = "capsule-path.txt", what = "the capsule PATH the kit oracles ran under" },
+  { path = "clone-check.txt", what = "sh tests/check.sh in a fresh clone at the tip" },
+  { path = "clone-path.txt", what = "where the oracle clone lives (outside the run directory)" },
+  { path = "e2-oracles.log", what = "the e2-oracles.sh transcript" },
+  { path = "ended_utc", what = "when the run ended (UTC)" },
+  { path = "exec", what = "the kata execution id" },
+  { path = "kit-sha256.txt", what = "the kit snapshot's sha256 manifest (kit-intact)" },
+  { path = "observed.toml", what = "the record's observed fields (variant, refined), read through ledger.py's read-only handle" },
+  { path = "oracle.txt", what = "oracle-e2.sh's checks on the tip" },
+  { path = "oracles.txt", what = "the kit's oracle lines, one PASS/FAIL per oracle" },
+  { path = "pr.json", what = "the open PR's base, head and number" },
+  { path = "refined.txt", what = "ledger.py iterations' refined summary" },
+  { path = "remote-branch.txt", what = "the remote's refs/heads/kata/<exec>" },
+  { path = "reset.txt", what = "RUNBOOK §5: the PR closed unmerged, kata/<exec> deleted, the remote's heads after" },
+  { path = "spend.toml", what = "ledger.py record: tokens_recorded, unmetered_calls, cost_recorded" },
+  { path = "stages.txt", what = "ledger.py stages: every worker attempt's charge, read through a read-only handle" },
+  { path = "started_utc", what = "when the run started (UTC)" },
+  { path = "submit.json", what = "the submission's answer" },
+  { path = "test-iterations.txt", what = "ledger.py iterations: test#iter-N status" },
+  { path = "tip.txt", what = "the commit the run landed" },
+  { path = "trunk-before.txt", what = "the clone's main before the run (== trunk.rev)" },
+  { path = "turns.txt", what = "ledger.py turns: per-attempt session evidence (usage frames, turn answer, reroutes)" },
+  { path = "wait.json", what = "kata run wait's terminal answer" },
+  { path = "watch.txt", what = "kata watch's event stream" },
+]

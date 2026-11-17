@@ -1,0 +1,1762 @@
+{
+  "version": 1,
+  "builtins": [
+    {
+      "name": "branch",
+      "family": "graph",
+      "summary": "Declare a `branch` control-flow route over a variant-producing condition stage, kata's typed verdict-routing primitive.",
+      "details": "`branch(on=decide, verdict_field=\"choice\", arms={\"first\": first_stage, \"second\": [a, b]})`\n\nAt runtime, after the `on=` condition stage completes, the runner reads the\nexternally-tagged variant discriminant from the stage's validated `parsed`\noutput (`parsed[verdict_field]`, a `{\"<tag>\": payload}` object whose single\nkey is the tag) and routes to the matching arm: the taken arm's targets run\n(their `depends_on` on the condition stage is now satisfied) and every\nother arm's targets are marked `Skipped` (never dispatched).\n\n`on=` is a single `stage(..)` reference (the condition stage); it MUST\ndeclare `produces=contract(..)` whose field named `verdict_field` is a\n`variant(..)`. `arms` is a dict from each variant tag to a single\n`stage(..)` reference or a list of them (the targets gated by that tag).\nEach arm target is wired to `depends_on` the condition stage.\n\nThe arms' tag set MUST EXACTLY equal the variant's tag set — a load-time\nexhaustiveness type-check (at `workflow()` drain) FAILS THE COMPILE with a\nclear both-sides error otherwise (listing missing/extra tags). This is the\ntyped-branch guarantee: a verdict-producing stage routes only to declared\narms. `branch()` also rejects (clean Starlark errors) an unknown\n`verdict_field`, empty arms, an empty arm target list, and an arm target\nthat isn't a declared stage.\n\nReturns the condition stage `StageRef` (the branch's anchor node) so the\nbranch composes at module scope.",
+      "params": [
+        {
+          "name": "on",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "verdict_field",
+          "type": "str",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "arms",
+          "type": "dict",
+          "required": true,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "branch_if",
+      "family": "graph",
+      "summary": "Declare a boolean two-way `branch_if` over a BOOLEAN-SHAPED 2-value STRING enum.",
+      "details": "`branch_if(on=check, field=\"ok\", then=proceed, otherwise=abort)`\n\nThe condition stage's `field` MUST be a 2-value string `enum(..)` whose\nvalues are a recognized boolean pair — `enum(\"true\", \"false\")` or\n`enum(\"yes\", \"no\")`, in ANY authored order. Binding is BY VALUE, never by\nauthored position: `then` routes the TRUTHY value (`\"true\"` / `\"yes\"`)\nand `otherwise` the FALSY one (`\"false\"` / `\"no\"`), so reordering the\nenum can never invert the control flow. It resolves the concrete values\nfrom the condition stage's `produces=` contract at author time and lowers\nto the SAME `register_branch` as\n`branch(arms={truthy: then, falsy: otherwise})` — a byte-identical\n`BranchRoute` IR.\n\nAny OTHER 2-value enum is refused — an arbitrary pair has no truthy side\nto bind, so use `when(equals=..)` (explicit value → `then`) instead;\n`route()` covers N arms. A raw JSON `bool` is NOT admitted (the runtime\nroutes on a string tag) — model the boolean as `enum(\"true\", \"false\")`.\nA `variant(..)` field is rejected (use `when()`/`route()`).",
+      "params": [
+        {
+          "name": "on",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "field",
+          "type": "str",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "then",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "otherwise",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "channel",
+      "family": "graph",
+      "summary": "Declare an external input channel.",
+      "details": "`channel(\"ops-notes\", expose_as = \"ops_notes\", kind = \"advisory\",\n         schema = \"text\", max_items = 8)`\n\nUses the normalized `external_input_channels.channels[]` shape\n(`crate::parser::RawExternalInputChannel`). `id` is the stable id\n(required). `stage=` (empty → unset) scopes the channel to one stage;\nomitted is global. `expose_as=` (empty → defaults to `id`) is the prompt\nnamespace alias under `external_inputs.<expose_as>`. `kind=` (empty → the\nshared default `\"advisory\"`) and `schema=` (empty → the shared default\n`\"text\"`) are advisory metadata. `max_items=` (`-1` → the shared default 16)\nis the per-channel append bound. `description=` / `default_value=` (empty\n→ unset) are doc/seed metadata. Alias-reservation and identifier invariants\nare enforced by the shared `validate_extensions`. Pass to\n`workflow(external_input_channels=[..])`.",
+      "params": [
+        {
+          "name": "id",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "stage",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "expose_as",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "kind",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "schema",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "max_items",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "description",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "default_value",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.channel"
+    },
+    {
+      "name": "contract",
+      "family": "contract",
+      "summary": "Construct a named object contract from an ordered `fields` dict of `field()` values.",
+      "details": "`contract(\"Plan\", {\"summary\": field(\"string\"), \"steps\": field(list_of(\"string\"))})`\n\nFields are read in the dict's insertion order (JSON object key order in\nthe generated schema is not significant for validation). The generated\nschema is the constrained JSON-Schema object the agent-run validator\naccepts; any validator bound a contract would violate (nesting depth,\nfield/variant count, name/tag shape, enum membership) is rejected here,\nat construction.",
+      "params": [
+        {
+          "name": "name",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "fields",
+          "type": "dict",
+          "required": true,
+          "kind": "positional_only"
+        }
+      ],
+      "returns": "kata.contract"
+    },
+    {
+      "name": "cost_bound",
+      "family": "graph",
+      "summary": "Build a cost walk-away [`kata_types::bound::Bound`].",
+      "details": "`cost_bound(5.0)` / `cost_bound(usd = 5.0)`\n\nReturns a frozen `bound` value carrying a `Cost { micro_usd }` bound.\n`usd` is the cost budget in US dollars (`f64`, the same ergonomic unit\n`cost_budget(limit_usd=..)` uses) and MUST be `> 0`; it converts to the\nmicro-USD integer unit `kata_types::budget::BudgetPolicy` uses\n(`1 USD == 1_000_000` micro-USD), so e.g. `cost_bound(1.5)` records\n`1_500_000` micro-USD. Pass the result in\n`workflow(bounds = [cost_bound(..), ..])` or `loop(bounds = [..])`.\nOpt-in: no dollar limit applies unless one is authored.\n\nThe runner enforces this as a hard walk-away against the scope's\naccumulated usage, including the configured estimate fallback when a\nbackend reports no monetary cost, and fails closed on a record whose cost\nis unknown. A workflow trip writes a durable cost-bound halt, skips\ndownstream work (a stage that finishes afterwards releases nothing), and\nremains halted after resume; a loop trip exhausts the\nloop under its `on_exhaustion`. CHECK refuses an agent stage the bound\ncovers whose spend kata cannot price: one on an adapter kata holds no\nprice for (`cost_bound_unenforceable_unpriced_adapter`). This differs from\n`cost_budget(mode=.., limit_usd=..)`, which supports warn/halt modes and\nstage- or workflow-scoped policy; `cost_bound` always walks away.",
+      "params": [
+        {
+          "name": "usd",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "positional_or_named"
+        }
+      ],
+      "returns": "kata.bound"
+    },
+    {
+      "name": "cost_budget",
+      "family": "graph",
+      "summary": "Build a cost-budget dict.",
+      "details": "`cost_budget(mode=\"warn\", limit_usd=5.0)`\n\nA native builtin: it returns the SAME `{\"mode\": .., \"limit_usd\": ..}` dict the\nnative `workflow(cost_budget=..)` / `stage(cost_budget=..)` kwargs already\nconsume (`decode_cost_budget` → `parser::normalize_budget_value`). `mode`\nis one of `\"unlimited\"` / `\"warn\"` / `\"halt\"`; `limit_usd` is required for\n`warn` / `halt` and omitted (the `Unlimited` default) otherwise. The\nvalidation here is an early authoring check; the shared normalizer is\nthe final authority on the lowered budget.",
+      "params": [
+        {
+          "name": "mode",
+          "type": "str",
+          "required": false,
+          "default": "\"unlimited\"",
+          "kind": "positional_or_named"
+        },
+        {
+          "name": "limit_usd",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "positional_or_named"
+        }
+      ],
+      "returns": "typing.Any"
+    },
+    {
+      "name": "enum",
+      "family": "contract",
+      "summary": "Declare a bare-string enumeration: `enum(\"draft\", \"review\", \"done\")`.",
+      "details": "Lowers to `{\"type\":\"string\",\"enum\":[..]}`. At least one variant is\nrequired.",
+      "params": [
+        {
+          "name": "variants",
+          "type": "str",
+          "required": false,
+          "kind": "args"
+        }
+      ],
+      "returns": "kata.enum"
+    },
+    {
+      "name": "field",
+      "family": "contract",
+      "summary": "Declare a single contract field.",
+      "details": "`ty` may be a primitive spelling string (`\"string\"`, `\"number\"`,\n`\"integer\"`, `\"bool\"`, `\"null\"`), or a marker from `enum()`,\n`list_of()`, `variant()`, or a nested `contract()`.\n\n`required` defaults to `True`; set `required=False` to omit the field\nfrom the object's `required` list. `doc` becomes the JSON-Schema\n`description` on the field's node.\n\nIn a `produces=` contract, a `null` on a `required=False` field is the\nfield being ABSENT: it is removed from the parsed output before\nvalidation, on every stage that declares the contract (agent and shell\nalike), so `stages.<id>.parsed` never carries it. On a `required=True`\nfield, `null` is a value like any other, checked against the field's\ntype. A `workflow(params=)` field has no such reading: a supplied `null`\nis checked against the field's type whether or not it is required.\n\n# Invocation-param kwargs\n\nWhen a `field(..)` is used as a `workflow(params={name: field(..)})`\nvalue it may also carry:\n* `default=<value>` — the value used when the param is not supplied. A\n  defaulted param is optional; spelling `required=True` ALONGSIDE\n  `default=` is a contradiction rejected at author time. The default is\n  validated against the field's declared type when the param is decoded.\n* `secret=True` — the value is a secret: operator projections and the\n  execution record never carry it, a refusal never echoes it, and the\n  authoritative invocation blob keeps the real value. A secret param must\n  be supplied at every invocation and must not carry a `default=` (a\n  plaintext secret must never live in pack source); spelling\n  `required=False` alongside it is likewise a contradiction rejected at\n  author time.\n\nBoth rejections turn on an EXPLICIT `required=`. `field(ty, default=..)`\nand `field(ty, secret=True)` — which carry `required` only by its `True`\ndefault — are the ordinary spellings and are accepted unchanged.\n\nBoth kwargs are ONLY meaningful on a param field; a `contract(..)` field\nthat sets either is rejected by `contract(..)`.",
+      "params": [
+        {
+          "name": "ty",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "required",
+          "type": "bool",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "doc",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "default",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "secret",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.field"
+    },
+    {
+      "name": "human_request",
+      "family": "graph",
+      "summary": "Declare an operator request, advisory by default and optionally blocking.",
+      "details": "`human_request(\"scope-q\", question = \"ship v1 or v2?\",\n               default_assumption = \"v1\", priority = \"high\")`\n\nUses the normalized `human_request_queue.requests[]` shape\n(`crate::parser::RawHumanRequest`). `id`, `question`, and\n`default_assumption` are required, non-empty. `stage=` (empty → unset)\nscopes the request to one stage. `priority=` ∈ {`\"low\"`, `\"medium\"`,\n`\"high\"`} (default `\"medium\"`) — validated here against the typed serde\nspellings.\n`context=` (empty → unset) is optional steering context.\n\n`timeout_ms=` (default `-1` → unset) is an optional\nself-heal deadline for a blocking park. When set and exceeded with no\noperator answer, the input-await sweep resumes the parked stage with\n`default_assumption` as the effective answer. Only meaningful with\n`blocking=True`; must be a positive millisecond count.\n\n`blocking=` (default `False`) opts the request into a\ndurable block-until-answered park. A blocking request requires a non-empty\n`stage=` scope: that stage PARKS (via the same `AwaitingApproval`\napproval-gate machinery) until the request is answered, then resumes with\nthe answer rendered into `{{ human_requests... }}`. Advisory (`False`)\nrequests never park; the default assumption is active.\nPass to `workflow(human_requests=[..])`.",
+      "params": [
+        {
+          "name": "id",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "question",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "default_assumption",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "stage",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "priority",
+          "type": "str",
+          "required": false,
+          "default": "\"medium\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "context",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "blocking",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        },
+        {
+          "name": "timeout_ms",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.human_request"
+    },
+    {
+      "name": "integer",
+      "family": "contract",
+      "summary": "Declare an `integer` leaf with optional inclusive range bounds (VALUE CONSTRAINTS). Like [`number`], but the value must be a JSON integer.",
+      "details": "`integer(min = 1, max = 5)` lowers to\n`{\"type\":\"integer\",\"minimum\":1,\"maximum\":5}`.",
+      "params": [
+        {
+          "name": "min",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "max",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.primitive"
+    },
+    {
+      "name": "json_skeleton",
+      "family": "contract",
+      "summary": "Render an illustrative, pretty-printed JSON SKELETON string for a `contract(..)` value — the single-source prompt example.",
+      "details": "`json_skeleton(contract(\"Plan\", {\"summary\": field(\"string\"), \"steps\": field(list_of(\"string\"))}))`\nreturns the pretty JSON text\n```json\n{\n  \"summary\": \"<string>\",\n  \"steps\": [\n    \"<string>\"\n  ]\n}\n```\nKeys are emitted in DECLARATION order. The text is PURELY ILLUSTRATIVE\n(placeholders such as `\"<string>\"` are never fed to the closed\nstructured-output validator), so it is safe to inline into a prompt.\nPair it with `json_only(..)` to build the \"respond with exactly one JSON\nobject\" preamble from the SAME `produces=contract(..)` schema, killing the\nhand-restated JSON block.",
+      "params": [
+        {
+          "name": "contract",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "positional_only"
+        }
+      ],
+      "returns": "str"
+    },
+    {
+      "name": "list_of",
+      "family": "contract",
+      "summary": "Declare a homogeneous list: `list_of(\"string\")` or `list_of(contract(..))`.",
+      "details": "Lowers to an `array` node with `maxItems` defaulted to the validator's\nceiling of 128.",
+      "params": [
+        {
+          "name": "element",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "positional_only"
+        }
+      ],
+      "returns": "kata.list_of"
+    },
+    {
+      "name": "loop",
+      "family": "graph",
+      "summary": "Declare a worker/reviewer review loop over two registered stages, kata's unified iteration primitive.",
+      "details": "`loop(body = worker, gate = reviewer, max_iterations = 3, on_exhaustion = \"fail\")`\n\nThe loop lowers onto kata's `ReviewLoop` runtime (gate-as-stage): the\n`body`'s EXIT stage is the worker stage that produces\nthe work under review, `gate` is the reviewer stage that evaluates it and\nreturns a `verdict`.\n\n# Body sub-DAG\n\n`body` may be a SINGLE `stage(..)` reference (a single-stage loop) OR a\nMULTI-STAGE body sub-DAG: a `sequence(..)` handle or\nan explicit ordered list of stages `[a, b, c]`. A multi-stage body is\nre-run IN FULL each iteration (the entire ordered sub-DAG re-dispatches\nwith per-stage `#iter-N` naming), and the body's EXIT (last) stage is the\nworker whose output the gate reads. The `gate` is always a single stage\nand must `depends_on` the body's exit stage. So a\n`plan→implement→review→validate` chain can be the loop body.\n\nThe `gate` stage MUST list the `body` stage in its `depends_on` (write\n`depends_on=[body]` on the gate, or chain them with `sequence`); the loop\nerrors clearly otherwise, mirroring the `ReviewLoop` validation rule that\nthe reviewer depend on the worker. `max_iterations` (default 3, must be\n>= 1) caps the iterations; `on_exhaustion` ∈ {\"escalate\",\"accept\",\"fail\"}\n(default \"fail\") chooses the action when the budget is exhausted without an\n`approve` verdict — `fail` fails the body's worker and skips every stage\nthat depends on the gate. A gate's `block` verdict, when no route on the\ngate routes it, fails the worker with the gate's feedback and skips the\ngate's dependents the same way. Returns the `gate` `StageRef` (the loop's\nexit node) so the loop composes as a node in a larger graph.\n\n# Loop-scope walk-away bounds\n\n`bounds=[time_bound(60000), cost_bound(5.0), token_bound(200000)]` declares\ncomposable walk-away guards scoped to *this* loop: a wall-clock ceiling\n(`time_bound(ms)`), a cost ceiling (`cost_bound(usd)`) and/or a token\nceiling (`token_bound(tokens)`). At most one bound per kind is allowed\n(two `time_bound`s is a clear loop()-time error), and bounds are stored\nin canonical order (`Time`, `Cost`, `Tokens`) so author order never\nchanges the definition hash. The iteration ceiling is already\n`max_iterations` (the iteration-bound special case), so loop `bounds=`\naccept only `Time` / `Cost` / `Tokens`. They lower 1:1 onto\n`ReviewLoop::bounds` and surface on the `ExecutionProgram`\n(`kata build <pack> --format json`). An omitted `bounds=` leaves the list\nempty: every bound is opt-in. `time_bound` is the portable walk-away — kata\nreads the clock itself, so it holds over every adapter and credential —\nwhile CHECK refuses a `cost_bound` over an agent member or gate whose\nadapter kata cannot price, exactly as under a workflow bound\n(`cost_bound_unenforceable_unpriced_adapter`).\n\n**Loop bounds are ENFORCED, as a per-loop WALK-AWAY.** When a\nper-loop time, cost or token bound trips mid-run — a token bound also\nwhen a member's token count is unknown — the loop STOPS iterating, is\nmarked EXHAUSTED, and routes through the loop's declared `on_exhaustion`\n(`on_max`) policy — the same terminal the `max_iterations` ceiling uses,\nwith one difference under `accept`: a bound trips before the tripping\niteration's gate classifies, so no report judged the candidate the loop\nended on and a route on the gate routes nothing\n(`ExpansionRecord::is_unjudged_accept_exhaustion`). A walk-away of the\nRUN (a workflow bound, a halting `cost_budget`, a metering halt) stops a\npending loop the same way at its next member: it dispatches nothing more\nand resolves `Exhausted` under `on_exhaustion`, and under every\n`on_exhaustion` nothing behind the loop then runs (the dependents of its\ngate and of every member, and its route arms, are skipped). A loop that\nresolves after the run walked away any other way — its gate's verdict, its\nown bound, `max_iterations`, a member's death — releases nothing either.\nThe per-loop budget/clock is DURABLE across a crash: the expansion derive\nre-accumulates the running spend and tokens, when each member is accepted, from\nEVERY charge record that member's attempts made — its accepted completion, a\nstructured-output retry's rejected completion, a failed, cancelled or orphaned\nattempt's terminal charge, and a member topology's every root and child attempt\n— and anchors the clock on the earliest member occurrence, so an authored bound\ncannot silently extend across a resume. A loop cost bound trips closed on a\nrecord of unknown cost and a loop token bound on an unknown count, as the\nworkflow scope does. Enforcement lives in\n`crate::loops::loop_bounds_trip`, evaluated by `kata_workflow::runner::expansion`.",
+      "params": [
+        {
+          "name": "body",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "gate",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "max_iterations",
+          "type": "int",
+          "required": false,
+          "default": "3",
+          "kind": "named_only"
+        },
+        {
+          "name": "on_exhaustion",
+          "type": "str",
+          "required": false,
+          "default": "\"fail\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "bounds",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "gate_verdict",
+          "type": "dict",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "rollover_after_iterations",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "memory_selector",
+      "family": "graph",
+      "summary": "Declare a native-memory context selector.",
+      "details": "`memory_selector(\"recent-decisions\", expose_as = \"decisions\",\n                 kinds = [\"decision\"], statuses = [\"active\"])`\n\nUses the normalized `memory_selectors.selectors[]` shape\n(`crate::parser::RawMemorySelector`), lowered to\n[`kata_types`-adjacent `crate::policy::MemorySelector`]. `id` is the stable\nselector id (required, non-empty). `stage=` (empty → unset) scopes the\nselector to one consumer stage; omitted selectors are global. `expose_as=`\n(empty → defaults to `id`) is the prompt namespace alias. `kinds=` filters\nmemory object kinds; `statuses=` (empty → the shared default `[\"active\"]`)\nfilters statuses. `max_objects=` (`-1` → the shared default 64) caps results.\n`required=` (default `True`) marks the selector mandatory. `query=` /\n`purpose=` (empty → unset) are an optional deterministic text query and a\ndoc string. Kind/status spellings and other invariants are enforced by the\nshared `validate_extensions`. Pass the result to\n`workflow(memory_selectors=[..])`.",
+      "params": [
+        {
+          "name": "id",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "stage",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "expose_as",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "kinds",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "statuses",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "max_objects",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "required",
+          "type": "bool",
+          "required": false,
+          "default": "True",
+          "kind": "named_only"
+        },
+        {
+          "name": "query",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "purpose",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.memory_selector"
+    },
+    {
+      "name": "memory_snapshot",
+      "family": "graph",
+      "summary": "Declare a TYPED MEMORY SNAPSHOT stage — the authored `kata memory snapshot` read as a workflow node.",
+      "details": "`memory_snapshot()` / `memory_snapshot(kind=\"finding\", status=\"active\",\ndepends_on=[prior])`\n\nRegisters a graph NODE (returning a [`StageRef`], exactly like\n`stage()` / `sleep()`) so it composes as a workflow node. The node\nlowers onto the checked-IR marker `ExecutionProgramStage::memory_snapshot`;\non dispatch the runner diverts on that marker and\nresolves the stage MAIN-SIDE against the node's memory store\n(`SqliteNativeMemoryStore::snapshot`), folding the snapshot through the\nsame durable accepted-completion path a worker result would take. No\nprocess, capsule, worker, sandbox, or loopback API is involved, so the\nread survives an engine restart exactly like any other resolved stage.\n\n`kind` and `status` are optional closed-set filters: when given, each\nmust be one of the [`MemoryObjectKind`]/[`MemoryObjectStatus`]\nspellings — an unknown value is a clear load-time error naming the\naccepted set. `id` (an explicit stable id, else `stage_<N>` from\ndeclaration order) and `depends_on` (upstream dependencies, in author\norder) are optional. Returns a `StageRef`.\n\nThe stage's output is the snapshot envelope\n`{schema_version, generated_at_ms, revision_head, object_count, objects}`,\ndelivered through `parsed` — downstream\n`{{ stages.<id>.parsed.objects }}` reads the same shape\n`kata memory snapshot` prints.",
+      "params": [
+        {
+          "name": "id",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "kind",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "status",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "depends_on",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "memory_writeback",
+      "family": "graph",
+      "summary": "Declare a native-memory writeback channel.",
+      "details": "`memory_writeback(\"findings\", field = \"findings\", kinds = [\"finding\"],\n                  statuses = [\"active\"], max_objects = 8)`\n\nUses the normalized `memory_writebacks.writebacks[]` shape\n(`crate::parser::RawMemoryWriteback`). `id` is the stable id (required).\n`stage=` (empty → unset) authorizes one producer stage; omitted is global.\n`field=` (empty → the shared default `\"memory_writebacks\"`) is the output\nfield carrying the memory drafts. `kinds=` / `statuses=` (empty → the shared\ndefault `[\"active\"]`) bound the allowed kinds/statuses. `max_objects=`\n(`-1` → the shared default 16) caps rows; `required=` (default `False`)\nblocks terminal reconciliation on missing rows. `purpose=` (empty → unset)\nis a doc string.\n\n`scope=` (empty → write own scope) declares the memory *tier* a stage may\nwrite into. Only the tier — `\"global\"`, `\"project\"`, or\n`\"workflow\"` — is authorable; the concrete project/workflow keys are\nruntime context, never authored. Empty or `\"workflow\"` writes the\nworkflow's own scope. **Declaring `\"project\"` or `\"global\"` is the\nexplicit opt-in to write ABOVE own scope**: the declared tier is carried\nand validated; no runtime write-up gate reads it. Any other value is\nrejected.\n\nSpelling/identifier invariants are enforced by the shared\n`validate_extensions`. Pass to `workflow(memory_writebacks=[..])`.",
+      "params": [
+        {
+          "name": "id",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "stage",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "field",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "kinds",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "statuses",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "max_objects",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "required",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        },
+        {
+          "name": "purpose",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "scope",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.memory_writeback"
+    },
+    {
+      "name": "number",
+      "family": "contract",
+      "summary": "Declare a `number` (JSON floating-point) leaf with optional inclusive range bounds (VALUE CONSTRAINTS).",
+      "details": "`number(min = 0, max = 100)` lowers to\n`{\"type\":\"number\",\"minimum\":0,\"maximum\":100}` and is ENFORCED against a\nstage's emitted value: a number outside `[min, max]` is rejected at\nstructured-output validation. `min`/`max` accept an int or float; omit a\nbound to leave that side unbounded. When both are given, `min <= max` is\nchecked at author time.",
+      "params": [
+        {
+          "name": "min",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "max",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.primitive"
+    },
+    {
+      "name": "parallel",
+      "family": "graph",
+      "summary": "Declare a static fan-out + JOIN over concurrent branches, kata's authoring abstraction over the runtime's implicit concurrency.",
+      "details": "`parallel(stage_a, stage_b, ..)` takes two or more already-registered\nbranch handles (each a `stage(..)` reference or a sub-graph TAIL, e.g. a\n`sequence(..)` / `loop(..)` exit) and:\n\n* adds NO edge among the branches — they share no `depends_on`, so the\n  runner (which already dispatches every stage with no unmet `depends_on`\n  concurrently, bounded by the workflow `max_concurrency` throttle) fans\n  them out to run at once;\n* mints a synthetic deterministic shell-no-op JOIN stage that\n  `depends_on` ALL the branch exits, and returns it.\n\nThe returned handle is the JOIN, so `sequence(parallel(a, b), c)` makes\n`c` depend on the join, which depends on both `a` and `b` — `c` therefore\nwaits for EVERY branch to complete (a true fan-in). The join is a pure\n`agent=\"shell\"` no-op with the default (`Disabled`) cache policy and no\ndata contract / topology / sandbox, so it never perturbs the determinism\nboundary and lowers byte-identically to a minimal authored shell stage.\n\nRequires at least 2 branches (a 0- or 1-branch `parallel()` is a no-op\nauthoring error); rejects an unknown branch id or a branch repeated\nwithin one call, with a clean Starlark error.",
+      "params": [
+        {
+          "name": "nodes",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "args"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "review_quorum",
+      "family": "graph",
+      "summary": "Declare a review quorum for a review-shaped stage topology.",
+      "details": "`review_quorum(2)` / `review_quorum(1, block_on_any_finding = False)`\n\nMaps 1:1 onto [`kata_types::workflow::ReviewQuorumPolicy`]: `required` is\nthe minimum approving reviewer count; `block_on_any_finding` (default\n`True`) blocks on any serious finding even when the count passes;\n`count_optional_reviewers` (default `False`) lets advisory reviewer\napprovals satisfy `required`; `block_on_optional_findings` (default\n`False`) lets advisory blocker verdicts fail the quorum. Returns a\n`review_quorum` value for `topology(review_quorum=..)`.",
+      "params": [
+        {
+          "name": "required",
+          "type": "int",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "block_on_any_finding",
+          "type": "bool",
+          "required": false,
+          "default": "True",
+          "kind": "named_only"
+        },
+        {
+          "name": "count_optional_reviewers",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        },
+        {
+          "name": "block_on_optional_findings",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.review_quorum"
+    },
+    {
+      "name": "role",
+      "family": "graph",
+      "summary": "Declare one agent role inside a stage topology.",
+      "details": "`role(\"root\")` / `role(\"package_writer\", agent = \"worker\", required = False)`\n\nMaps 1:1 onto [`kata_types::workflow::AgentRolePolicy`]: `role` is the\nrole label inside the stage; `agent` (empty → unset) pins the workflow\nagent label the runtime spawns this role with; `required` (default\n`True`) marks whether the topology needs the role to be valid. Returns a\n`role` value for use in `topology(root=.., workers=[..], reviewers=[..])`.\nThe emitted helper shape deserializes into `AgentRolePolicy`.",
+      "params": [
+        {
+          "name": "role",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "agent",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "required",
+          "type": "bool",
+          "required": false,
+          "default": "True",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.role"
+    },
+    {
+      "name": "route",
+      "family": "graph",
+      "summary": "Declare a typed `route` over an enum/variant discriminant — the ergonomic multi-arm router.",
+      "details": "`route(on=decide, field=\"choice\", arms={\"a\": stage_a, \"b\": [x, y]})`\n\nMechanically identical to `branch(on=, verdict_field=field, arms=)` — it\nlowers through the SAME `register_branch`, producing a byte-identical\n`BranchRoute` IR — and exists as the clear name for routing on a typed\n`enum(..)` OR `variant(..)` verdict. The arms' tag set MUST exactly equal\nthe discriminant's tag set (the load-time exhaustiveness check), and arms\nmust be disjoint (no rejoins). A raw JSON `bool`/`string` field is NOT\nroutable — model a boolean as a 2-value `enum(\"a\", \"b\")`.",
+      "params": [
+        {
+          "name": "on",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "field",
+          "type": "str",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "arms",
+          "type": "dict",
+          "required": true,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "sandbox_profile",
+      "family": "graph",
+      "summary": "Declare a sandbox profile.",
+      "details": "`sandbox_profile(net = \"offline\", workspace = \"rw\")`\n\nMaps onto [`kata_types::sandbox::SandboxProfile`]. Every profile is the\n`oci` containment provider — there is no `exec=` — and every kwarg is\noptional, so `sandbox_profile()` IS the default a stage that authors\nno `sandbox=` at all is lowered to, shell and model stage alike: a\nstage reaches the node's `[node] egress_allow` only by authoring\n`net = \"host\"`.\n\n* `net` — `\"offline\"` (default) or `\"host\"`: the egress the STAGE\n  authors. `\"host\"` reaches the node's `[node] egress_allow`;\n  `\"offline\"` reaches none of it — for a shell stage and an agent stage\n  alike, the one rule `capsule_rules::capsule_network_for` mints. An\n  agent's model calls leave from the worker, never from its capsule.\n* `workspace` — the view of the execution's own tree: `\"ro\"` (default),\n  `\"rw\"`, or `\"scratch\"` (no execution tree: `/work` is the canonical\n  empty tree, writable while the stage runs, and its delta is recorded\n  as `scratch_delta_*` evidence, never applied). `\"ro\"` is\n  enforced at delta ADOPTION, not by the mount: the capsule's `/work` is\n  writable while the stage runs, and a stage that leaves a change there\n  (to a tracked path, or to an untracked path `.gitignore` does not\n  ignore) fails as `work_delta_out_of_scope` with nothing applied. An\n  untracked ignored path (a build's `target/`) is discarded, not refused.\n* `requires` lists the PROGRAM NAMES the stage needs on the node\n  environment's `PATH` (`[\"cargo\", \"just\"]`), judged at CHECK.\n* `image` is `{\"reference\": .., \"cpus\": .., \"memory_mb\": ..}`; only\n  `memory_mb` is honoured — it authors the capsule's recorded memory\n  bound.\n* `locked` (default `False`).\n\nAccepted by this call and REFUSED at CHECK, because the capsule route\ncannot honour them: `secrets` (a name → `\"env:NAME\"` / `\"file:/path\"`\nmap; `profile_secrets_unsupported_under_oci`), `toolchain` and `rootfs`\n(content-address requirements, below;\n`per_stage_toolchain_unsupported_under_oci`), and `image.reference` /\n`image.cpus` (`per_stage_image_unsupported_under_oci`).\n\nPass the result to `workflow(sandbox_profiles = {name: sandbox_profile(..)})`\nto register a named profile, or to `stage(sandbox = sandbox_profile(..))`\nto declare an inline one-off. The emitted JSON routes through\n`sandbox_profile_from_json`.\n\n# The unconfined posture is NOT a profile\n\n`stage(sandbox = \"host\")` is the one spelling of \"run this stage with\nfull ambient host authority\". It is reserved: a\n`sandbox_profiles` entry named `host` is refused, and no kwarg here can\nproduce it.\n\n# No backend or mount keyword\n\nThe signature is the whole surface: any other keyword is refused by the\ncall itself, naming it. There is no backend keyword (a profile is always\nthe `oci` containment provider; `stage(sandbox = \"host\")` is the one\nunconfined form), no filesystem-policy keyword (the default workspace\nview is derived; `workspace=` spells the view an author chooses, and an\nabsolute host path may not enter a pack).\n\n# `toolchain` — a REQUIREMENT, never a path\n\n`toolchain = \"store:<64 hex>\"` declares the toolchain this profile's\nstages must run against, as the content address\na by-hash toolchain store returns (REFUSED at CHECK under the one engine,\n`per_stage_toolchain_unsupported_under_oci`). A content address, not a\nlocation, is what keeps such a requirement portable across hosts —\nwhich is why a filesystem path is REFUSED here rather than\nmerely discouraged (`kata_types::sandbox::ToolchainRequirement` cannot\nhold one). Omitted (the default) means the stage runs against its node\nenvironment's tools.\n\n# `rootfs` — the same shape, one layer down\n\n`rootfs = \"store:<64 hex>\"` declares the ROOT FILESYSTEM this profile's\nstages run against: the userland itself, addressed by content exactly as\na toolchain is. `toolchain=` names a declared\ncompiler at the head of `PATH` and leaves the `/bin/sh` that interprets\nthe stage, and the `cat`/`printf` its line uses, ambient; a `rootfs=`\nputs those in the address too.\n\nThe value is a `store:<hex>` and never a NAME (a name may map to\ndifferent bytes on two nodes — a stale cache hit at root scale), and never\na path (a pack may not name a machine's facts).\n\n**REFUSED, never inert.** A profile declaring BOTH `rootfs=` and\n`toolchain=` is refused at pack load (an addressed root already contains\nthe toolchain); either one alone is refused at CHECK\n(`per_stage_toolchain_unsupported_under_oci`), because a capsule's tools\nare its node environment's. A declaration that silently did nothing is\nwhat this surface may not have.",
+      "params": [
+        {
+          "name": "net",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "workspace",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "secrets",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "locked",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        },
+        {
+          "name": "image",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "toolchain",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "rootfs",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "requires",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.sandbox_profile"
+    },
+    {
+      "name": "schedule",
+      "family": "graph",
+      "summary": "Declare an ENGINE-LEVEL DURABLE SCHEDULE / cron.",
+      "details": "`schedule(id=\"deps\", submit=\"deps-bump\", cron=\"0 2 * * *\")` — the\n\"nightly, bump deps and open a candidate\" shape.\n`schedule(id=\"poll\", submit=\"poll\", every_ms=3600000)` — hourly.\n\nA module-scope\n`schedule(...)` in a library pack registers its validated\n[`ScheduleSpec`](crate::schedule::ScheduleSpec) into the per-evaluation\nregistry (see [`crate::dsl::builder::register_schedule`]); the evaluator\nattaches the drained specs to the\n[`CheckedWorkflowDefinition`](crate::parser) and surfaces them on the\n[`WorkflowCompiledArtifact`](crate::preflight::WorkflowCompiledArtifact).\nAt boot the node scans its workflow library and reconciles every declared\nschedule into `operational.db`'s durable schedule tables through\n`kata_workflow::schedule::ScheduleFace` — resolving and compiling the\n`submit=` target and PINNING it — then spawns the\n`kata_workflow::schedule::ScheduleEngine` sweep over that same\ntable, so a declared schedule fires (and survives restart) end-to-end.\n\nA schedule durably submits workflow `submit=` when its trigger comes due.\nRe-reconciling an unchanged declaration on a later boot PRESERVES its durable\nnext-fire cursor (idempotent).\n\n`submit=` is resolved, compiled, and PINNED AT INSTALL, and the fire submits\nexactly those pinned bytes — the fire path has no pack name to resolve and no\ncompiler to invoke (runtime code never consults a newly compiled\nreplacement to decide an existing run). So:\n\n* Editing the target pack does not change what an installed schedule fires; it\n  takes effect at the next boot reconciliation, as an explicit logged rebind.\n* A target that stops compiling — or is renamed away — leaves the schedule\n  firing its existing pin, with a WARN, instead of losing the occurrence.\n* A declared schedule whose target does not resolve at install arms nothing:\n  there is no program to pin.\n\nOne fire is ONE transaction: the due claim, the cursor advance, and the\nsubmitted execution commit together or not at all. A failed submit leaves the\ncursor parked and the next sweep retries the same occurrence.\n\nExactly ONE of `every_ms=` (a fixed interval in ms, `> 0`) or `cron=` (a\n5-field `min hour day-of-month month day-of-week` expression, UTC) must\nbe given. The cron expression is PARSED + VALIDATED here at authoring\ntime, so a malformed schedule is a load-time (fail-closed) error, never a\nsweep-time surprise. `on_missed=` picks the missed-while-down policy:\n`\"fire_once_on_boot\"` (default — coalesce a missed run into one catch-up\non the next boot) or `\"skip\"` (drop the missed run). Returns a frozen\n`schedule` value.",
+      "params": [
+        {
+          "name": "id",
+          "type": "str",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "submit",
+          "type": "str",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "every_ms",
+          "type": "int",
+          "required": false,
+          "default": "0",
+          "kind": "named_only"
+        },
+        {
+          "name": "cron",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "on_missed",
+          "type": "str",
+          "required": false,
+          "default": "\"fire_once_on_boot\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "params",
+          "type": "dict",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.schedule"
+    },
+    {
+      "name": "sequence",
+      "family": "graph",
+      "summary": "Wire registered stages into a linear sequence.",
+      "details": "`sequence(a, b, c)` adds the dependency edges `a → b → c` by appending\neach predecessor to its successor's `depends_on`, and returns the tail\n`StageRef` (`c`) so the sequence composes as a node in `workflow(root=..)`,\na further `sequence(..)`, or a `loop(..)`.\n\nThe edge rule is the *union* of authored and sequenced edges,\ndeduplicated: an edge `sequence` would add that the successor already\ndeclares via `depends_on=[..]` is a no-op, so mixing explicit\n`depends_on` with `sequence()` never double-adds a dependency. Each\nargument must be a `StageRef` (the value `stage(..)` / a nested\n`sequence(..)` / `loop(..)` returns) or a stage-id string.",
+      "params": [
+        {
+          "name": "nodes",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "args"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "sleep",
+      "family": "graph",
+      "summary": "Declare a DURABLE SLEEP stage.",
+      "details": "`sleep(for_ms=60000, depends_on=[prior])` /\n`sleep(until_ms=1735689600000, depends_on=[prior])`\n\n`sleep(..)` registers a\ngraph NODE (returning a [`StageRef`], exactly like `stage()` /\n`subworkflow()`) so it composes as a workflow node — e.g. a sleep BETWEEN\ntwo stages: `nap = sleep(for_ms=.., depends_on=[a]); b =\nstage(.., depends_on=[nap])`. The node lowers onto the checked-IR marker\n`ExecutionProgramStage::durable_sleep`; the runner resolves that marker\nMAIN-SIDE: it claims a main attempt parked on a durable timer at the\nsleep's deadline instead of dispatching anything.\n\nThe deadline is a durable column on the authority chain, and the\ndispatcher's due-wait sweep\n(`kata_workflow::dispatcher::Dispatcher::sweep_due_waits`)\ncompletes the attempt once it is due — so a sleep survives an engine\nrestart, never a process-local timer, and the graph resumes at the\ndownstream stage.\n\nExactly ONE of `for_ms` (relative — wake `for_ms` after the park instant)\nor `until_ms` (absolute — wake at a fixed Unix-ms deadline) must be given\nand be `> 0`; both, neither, or a non-positive value is a clear load-time\nerror. `id` (an explicit stable id, else `stage_<N>` from declaration\norder) and `depends_on` (upstream dependencies, in author order) are\noptional. A sleep node may not be a workflow `root` (rejected at\n`workflow()`). Returns a `StageRef`.",
+      "params": [
+        {
+          "name": "for_ms",
+          "type": "int",
+          "required": false,
+          "default": "0",
+          "kind": "named_only"
+        },
+        {
+          "name": "until_ms",
+          "type": "int",
+          "required": false,
+          "default": "0",
+          "kind": "named_only"
+        },
+        {
+          "name": "id",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "depends_on",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "stage",
+      "family": "graph",
+      "summary": "Register a linear workflow stage.",
+      "details": "`stage(prompt=\"Implement\", agent=\"worker\", depends_on=[prior],\n       produces=contract(\"Plan\", {..}), consumes=contract(\"Brief\", {..}))`\n\nThe stage's stable id is the explicit `id=` argument, or `stage_<N>`\nderived from declaration order when omitted. `agent` maps to the\n`AgentSelector` (empty → `Any`). `depends_on` is a list of `StageRef`s\n(or stage-id strings) declaring upstream dependencies in author order.\nReturns a `StageRef` for use in later `depends_on` and `workflow(root)`.\n\n`produces=` and `consumes=` each take a `contract(..)`\nvalue. The `produces` contract's generated schema is lowered onto the\nstage's checked `output_schema` (folding into the stage `contract_hash`),\nwhich the runner validates the agent's answer against; on an adapter\nwhose protocol carries one, the same schema is also sent to the model as\na strict structured-output schema (an aid; kata's validation decides).\nThe `consumes` contract is type-checked at load time:\n`workflow()` rejects any stage whose `consumes=` schema does not match the\n`produces=` schema of one of its `depends_on` upstreams.\n\n# Flat field surface\n\n`stage()` also accepts the FLAT (scalar / simple-value) field surface.\nEach is optional and takes the normalized-value default when omitted.\nEvery field\nroutes through the shared `parser::normalize_stage_*` helper, centralizing\nspelling, validation, and rejection:\n\n* `run=` — shell-command alias for `prompt`. Exactly one of `prompt=` /\n  `run=` must be given (both → a clear Starlark error), so the DSL never\n  silently chooses between two authored prompts.\n* `model_hint=` (empty → unset), `timeout_ms=` (`0` → unset, which the\n  frontend then resolves to the AUTHORING default\n  [`kata_types::workflow::DEFAULT_STAGE_TIMEOUT_MS`] — a declared\n  positive value wins outright, and the checked stage always carries a\n  wall-time bound), `allowed_tools=`, `required_capabilities=`.\n* `outputs={name: \"type-label\"}` — the flat declared-output surface,\n  lowered to `StageOutput` in stable name order. This is independent of\n  the typed `produces=` contract\n  on the same stage, which alone drives the checked `output_schema`.\n* `cache_policy=` (`\"disabled\"`/`\"model_reuse\"`/`\"content_cache\"`),\n  `validate_retries=` (default 2), `validate_feedback_template=`.\n* `approval=` / `approval_reason=`.\n* `cost_budget={mode, limit_usd}` — the per-stage budget in the shared\n  normalized JSON shape.\n* `progress_visibility=` (`\"off\"`/`\"summary\"`/`\"full\"`).\n\n# Structured constructors\n\nTwo are STAGE kwargs, declared on the signature below and fully lowered:\n\n* `topology=` — a `topology(..)` value (per-stage execution shape).\n* `sandbox=` — a profile NAME registered in\n  `workflow(sandbox_profiles={..})`, or an inline `sandbox_profile(..)`.\n\nThe remaining structured families are declared on `workflow()`, not\nhere, because they are workflow-scoped: `memory_selector(..)` /\n`memory_writeback(..)` (→ `workflow(memory_selectors=`,\n`memory_writebacks=`), `validation_criterion(..)`\n(→ `workflow(validation_criteria=`), `channel(..)`\n(→ `workflow(external_input_channels=`), and `human_request(..)`\n(→ `workflow(human_requests=`). Each of those names IS a registered\nbuiltin — it is the `stage(..)` call that does not take it. Passing one\nto `stage()` is an unknown-keyword diagnostic naming the nearest\naccepted `stage()` keyword.",
+      "params": [
+        {
+          "name": "prompt",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "run",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "agent",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "id",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "depends_on",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "produces",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "consumes",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "model_hint",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "timeout_ms",
+          "type": "int",
+          "required": false,
+          "default": "0",
+          "kind": "named_only"
+        },
+        {
+          "name": "output_bytes",
+          "type": "int",
+          "required": false,
+          "default": "0",
+          "kind": "named_only"
+        },
+        {
+          "name": "work_delta_bytes",
+          "type": "int",
+          "required": false,
+          "default": "0",
+          "kind": "named_only"
+        },
+        {
+          "name": "work_delta_entries",
+          "type": "int",
+          "required": false,
+          "default": "0",
+          "kind": "named_only"
+        },
+        {
+          "name": "allowed_tools",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "required_capabilities",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "reads",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "produces_files",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "outputs",
+          "type": "dict",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "execution_requirements",
+          "type": "dict",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "cache_policy",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "validate_retries",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "validate_feedback_template",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "approval",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        },
+        {
+          "name": "approval_reason",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "cost_budget",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "progress_visibility",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "exit_policy",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "topology",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "sandbox",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "op",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "label",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "title",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "body",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "unknown_kwargs",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "kwargs"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "string",
+      "family": "contract",
+      "summary": "Declare a `string` leaf with optional VALUE CONSTRAINTS: a regex `pattern` and `min_length`/`max_length` bounds.",
+      "details": "`string(pattern = \"^[a-z]+$\", min_length = 1, max_length = 32)` lowers to\n`{\"type\":\"string\",\"pattern\":\"^[a-z]+$\",\"minLength\":1,\"maxLength\":32}` and\nis ENFORCED against a stage's emitted value: a string that does not match\nthe pattern, or whose length is out of bounds, is rejected at\nstructured-output validation. The pattern uses the Rust `regex` crate\nsyntax (JSON-Schema `pattern` semantics: an unanchored search, so anchor\nwith `^`/`$` for a full match) and is checked for compilability at author\ntime. Omit a bound (or pass `pattern = \"\"`) to leave that constraint\nunset.",
+      "params": [
+        {
+          "name": "pattern",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "min_length",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "max_length",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.primitive"
+    },
+    {
+      "name": "subworkflow",
+      "family": "graph",
+      "summary": "Declare a SUBWORKFLOW stage — a stage whose \"work\" is a CHILD workflow execution.",
+      "details": "`subworkflow(pack=\"lib.child\", depends_on=[prior])`\n\nInstead of dispatching to a worker, the runner spawns a child workflow\nexecution for `pack` (its own `ExecutionId` + workspace), parks the parent\nin `AwaitingChildCompletion` until the child terminates, then completes the\nparent with the child's output envelope injected as this stage's output.\n\nThis builtin AUTHORS the marker only: it lowers to a\n[`StageDefinition`](kata_types::workflow::StageDefinition) carrying\n`subworkflow=Some(..)`, which the compiler carries onto the checked-IR\n`ExecutionProgramStage::subworkflow`.\n\nA subworkflow stage is not an agent call — it carries no\n`prompt`/`agent`/`produces` (its contract is \"spawn `pack` and wait\").\n`pack` is REQUIRED and must be non-empty; `id` (an explicit stable id, else\n`stage_<N>` from declaration order) and `depends_on` (upstream\ndependencies, in author order) are optional. Returns a `StageRef` for use\nin later `depends_on` / `workflow(root)`, exactly like `stage()`.",
+      "params": [
+        {
+          "name": "pack",
+          "type": "str",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "id",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "depends_on",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "produces",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "consumes",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "params",
+          "type": "dict",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "time_bound",
+      "family": "graph",
+      "summary": "Build a wall-clock walk-away [`kata_types::bound::Bound`].",
+      "details": "`time_bound(60000)` / `time_bound(ms = 60000)`\n\nReturns a frozen `bound` value carrying a `Time { ms }` bound. `ms` is the\nwall-clock budget in milliseconds and MUST be `> 0` (validated here with a\nclear error). Pass the result in `workflow(bounds = [time_bound(..), ..])`\nor `loop(bounds = [..])`. Opt-in, like every bound, and the portable one:\nkata reads the clock itself, so no adapter or credential refuses it.\n\nThe runner enforces this as a hard walk-away over elapsed wall time: a\nworkflow bound anchored to the execution's original start and measured at\nthe instant kata recorded each stage terminal — so a resumed run measures\nthe stages it already ran exactly as the live run did — whose trip\nwrites a durable time-bound halt, skips downstream work (a stage that\nfinishes afterwards releases nothing), and remains halted after resume; a loop bound anchored to the loop's earliest member\noccurrence, whose trip exhausts the loop under its `on_exhaustion`. The\nbound is also visible in `kata build <pack> --format json`.",
+      "params": [
+        {
+          "name": "ms",
+          "type": "int",
+          "required": true,
+          "kind": "positional_or_named"
+        }
+      ],
+      "returns": "kata.bound"
+    },
+    {
+      "name": "token_bound",
+      "family": "graph",
+      "summary": "Build a token walk-away [`kata_types::bound::Bound`].",
+      "details": "`token_bound(200000)` / `token_bound(tokens = 200000)`\n\nReturns a frozen `bound` value carrying a `Tokens { tokens }` bound, which\nMUST be `> 0`. Pass the result in `workflow(bounds = [token_bound(..), ..])`\nor `loop(bounds = [..])`. Opt-in: no token limit applies unless one is\nauthored.\n\nIt counts the tokens the scope's stages RECORDED, every class kata records\n— `input + output + cache_read + cache_write`, which the adapters keep\ndisjoint, so the sum is the vendor's own total of tokens processed\n(reasoning counts as output) — off each billed completion (a\nstructured-output retry's rejected one, a loop member's and a topology\nmember's included), each failed, cancelled or orphaned terminal's charge,\nand an invoked child's summary. The runner enforces it as a hard\nwalk-away at stage-terminal granularity, exactly like `cost_bound`: the\nstage whose tokens push the total past the limit keeps its own outcome, a\ndurable token-bound halt is recorded, downstream work is skipped, stages\nalready running finish on their own and release nothing, and a pending\nloop dispatches no further member. A stage whose token count is unknown (a turn that reported none, a\nlost one) halts the run closed.",
+      "params": [
+        {
+          "name": "tokens",
+          "type": "int",
+          "required": true,
+          "kind": "positional_or_named"
+        }
+      ],
+      "returns": "kata.bound"
+    },
+    {
+      "name": "topology",
+      "family": "graph",
+      "summary": "Declare a stage topology.",
+      "details": "`topology(\"root_with_parallel_workers\", root = role(\"root\"),\n          workers = [role(\"a\"), role(\"b\")], max_concurrency = 2)`\n\nMaps 1:1 onto [`kata_types::workflow::StageTopology`]. `kind` is the\nstable topology label. `root` is a single `role(..)`; `workers` /\n`reviewers` are lists of `role(..)`. `max_concurrency` / `fanout_limit`\nare optional caps (`None` when unset). `dynamic_fanout` (default `False`)\nselects child invocations from the root's completed output.\n`mutation_policy` ∈ {`\"advisory\"`, `\"owned_paths\"`} (default\n`\"advisory\"`) — validated against the typed serde spellings.\n`review_quorum` is an optional `review_quorum(..)` value. The emitted\nhelper JSON deserializes into `StageTopology` through\n`topology_from_json`.\n\nA topology whose run walks away (a workflow bound, a halting\n`cost_budget`, a metering halt) while it is pending dispatches nothing at\nits next dispatch point — its root, or its declared or requested children\n— waits for the members it already started, and FAILS naming the\nwalk-away row; its stage's dependents are skipped, and as a `loop(..)`\nmember its failure aborts the loop.",
+      "params": [
+        {
+          "name": "kind",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "root",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "workers",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "reviewers",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "max_concurrency",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "fanout_limit",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "dynamic_fanout",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        },
+        {
+          "name": "mutation_policy",
+          "type": "str",
+          "required": false,
+          "default": "\"advisory\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "review_quorum",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.topology"
+    },
+    {
+      "name": "validation_criterion",
+      "family": "graph",
+      "summary": "Declare a validation criterion.",
+      "details": "`validation_criterion(\"tests-pass\", description = \"all tests green\",\n                      commands = [\"just test\"], stage = \"verify\")`\n\nUses the normalized `validation_criteria.criteria[]` shape\n(`crate::parser::RawValidationCriterion`). `id` and `description` are\nrequired, non-empty. `stage=` (empty → unset) binds the criterion to a\nproof stage. `commands=` / `evidence=` (empty → omitted) list the proof\ncommands and evidence labels. `required=` (default `True`) marks the\ncriterion mandatory. Non-empty-entry invariants are enforced by the shared\n`validate_extensions`. Pass to `workflow(validation_criteria=[..])`.",
+      "params": [
+        {
+          "name": "id",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "description",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "stage",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "commands",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "evidence",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "required",
+          "type": "bool",
+          "required": false,
+          "default": "True",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.validation_criterion"
+    },
+    {
+      "name": "variant",
+      "family": "contract",
+      "summary": "Declare a discriminated union from a dict of `tag -> payload type`.",
+      "details": "`variant({\"text\": contract(\"Text\", {..}), \"noop\": contract(\"Noop\", {})})`\n\nEach arm tag maps to any field type; use a nested `contract` for a\nstructured payload, or `contract(\"X\", {})` for a payload-less arm.\nLowers to `{\"type\":\"variant\",\"variants\":{..}}`.",
+      "params": [
+        {
+          "name": "arms",
+          "type": "dict",
+          "required": true,
+          "kind": "positional_only"
+        }
+      ],
+      "returns": "kata.variant"
+    },
+    {
+      "name": "when",
+      "family": "graph",
+      "summary": "Declare a two-way `when` predicate over a 2-value discriminant.",
+      "details": "`when(on=decide, field=\"verdict\", equals=\"approve\", then=ship, otherwise=hold)`\n\nRoutes the `equals` value to `then` and the OTHER value to `otherwise`\n(REQUIRED). The condition stage's `field` MUST be a 2-value discriminant (a\n2-arm `variant(..)` or a 2-value `enum(..)`); `equals` must name one of its\nvalues. The sugar resolves the concrete tags from the condition stage's\n`produces=` contract at author time and lowers to the SAME `register_branch`\n`branch(arms={equals: then, other: otherwise})` — a byte-identical\n`BranchRoute` IR. A raw JSON `bool` is NOT admitted (the runtime routes on a\nstring tag) — model a boolean as a 2-value `enum(\"a\", \"b\")`. For an N-arm\ndiscriminant use `route()`.\n\n(The value kwarg is `equals=`, not `is=`: `is` is a Starlark reserved\nkeyword and cannot name a parameter.)",
+      "params": [
+        {
+          "name": "on",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "field",
+          "type": "str",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "equals",
+          "type": "str",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "then",
+          "type": "typing.Any",
+          "required": true,
+          "kind": "named_only"
+        },
+        {
+          "name": "otherwise",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.stage"
+    },
+    {
+      "name": "workflow",
+      "family": "graph",
+      "summary": "Assemble the registered stages into a workflow and drain the builder.",
+      "details": "`workflow(\"my-workflow\", root=[a, b])`\n\n`root` is a single `StageRef` or a list of `StageRef`s in order;\nit records the entry stages (the DAG itself is expressed via each stage's\n`depends_on`). `description` is optional metadata. Returns a `Workflow`\nwhose presence as the module result tells the evaluator to lower the\ndrained graph directly to a checked workflow.\n\n# Workflow-wide flat fields\n\n`cost_budget={mode, limit_usd}` is the workflow-wide budget in the same\nnormalized JSON shape `stage(cost_budget=..)` accepts, routed through\n`parser::normalize_budget_value`. `worktree_isolated=` (default `False`)\nlowers onto `WorkflowDefinition::worktree_isolated`. Both take their\ndefaults when unset. An isolated workflow's templates read the target its\nrun froze as `{{ target.<key> }}` (`head`, `branch`, `compare`, `pr`,\n`changed_files`, `diff`, …); in a shell stage's `run=`, a key a third party\nchooses must end its expression with `| shquote`, outside any shell quote\nor heredoc (`template_untrusted_in_run`). In a prompt, frame such a key\nthrough `| untrusted`, which starts every line of it with `> `, so the\ntext begins no line of the prompt.\n\n# Workflow-level orchestration extensions\n\n`workflow()` also threads the native orchestration-extension surface:\n\n* `memory_selectors=[memory_selector(..)]` /\n  `memory_writebacks=[memory_writeback(..)]` — native-memory context +\n  writeback declarations, with optional `max_memory_selectors=` /\n  `max_memory_writebacks=` caps (`-1` → the shared defaults).\n* `validation_criteria=[validation_criterion(..)]` — the validation\n  boundary (no cap).\n* `external_input_channels=[channel(..)]` — declared side-channel inputs,\n  with an optional `max_external_input_channels=` cap.\n* `human_requests=[human_request(..)]` — operator requests, advisory by\n  default and optionally blocking, with an optional\n  `max_human_requests=` cap.\n* `workflow_pattern=workflow_pattern(..)` — the authoring pattern + escape\n  hatch (a single value).\n\nEach list builds the normalized section JSON, which lowering\nroutes through `parser::normalize_extensions_from_json` and\n`validate_extensions` to produce canonical `WorkflowExtensions`. A\n`workflow()` that declares none leaves the extensions at\n`WorkflowExtensions::empty()`.\n\n# Invocation params\n\n`params={\"task\": field(string(max_length = 65536)), \"focus\": field(\"string\",\ndefault = \"\")}` declares the typed values a run is invoked with (`kata run\n--param task=...`). Every face resolves them through one resolver: unknown\nkeys refused, types checked, defaults filled, `secret=True` params required\nand never defaulted. The resolved set is bound into the admission digest. A\nflat `{\"task\": \"string\"}` declares a required param.\n\nEvery stage's `prompt=`/`run=` template reads them as `{{ params.<name> }}`:\nthe supplied value or the default, `none` for an optional param nobody\nsupplied. Pipe a value into a shell command through `shquote`\n(`{{ params.task | shquote }}`), which renders one POSIX single-quoted word.\nThe check refuses a `params.<name>` the workflow does not declare\n(`param_unknown_in_template`) and any template that could render a secret\nparam (`param_secret_in_template`): by name, or — when a secret is declared\n— through the bare namespace, a subscript, an alias or a loop.\n\n# Workflow-scope walk-away bounds\n\n`bounds=[time_bound(60000), cost_bound(5.0), token_bound(200000)]` declares\ncomposable walk-away guards over the whole workflow: a wall-clock ceiling\n(`time_bound(ms)`), a cost ceiling (`cost_bound(usd)`) and/or a token\nceiling (`token_bound(tokens)`). Every bound is opt-in: an omitted\n`bounds=` sets none. `time_bound` is the portable walk-away — kata reads\nthe clock itself, so it holds over every adapter and credential — while\nCHECK refuses a `cost_bound` over an agent stage whose adapter kata\ncannot price (`cost_bound_unenforceable_unpriced_adapter`). At most one bound per\nkind is allowed (two `time_bound`s is a clear drain-time error), and\nbounds are stored in canonical order (`Time`, `Cost`, `Tokens`) so author\norder never changes the definition hash. They lower 1:1 onto\n`WorkflowDefinition::bounds` and surface on the `ExecutionProgram`\n(`kata build <pack> --format json`). An omitted `bounds=` leaves the list\nempty and the definition hash unchanged.\n\nThe runner enforces every bound as a hard workflow walk-away. Cost compares\naccumulated workflow usage (including the configured estimate fallback)\nagainst the micro-USD limit; tokens compares the tokens the run's stages\nrecorded, every class counted, against the token limit, and halts closed\non a stage whose token count is unknown. Time is anchored to the\nexecution's original start and compares total elapsed wall time. A trip\nrecords a durable typed bound-halt row, skips downstream work, stops a\npending `loop(..)` from dispatching any further member (it resolves\n`Exhausted` under its `on_exhaustion`, and nothing behind its gate runs),\nand remains halted across resume. The run walks away once, whatever\nstopped it — a bound, a halting `cost_budget`, a metering halt: its first\ntrip writes the one walk-away row, no later trip writes another, and every\nstage that terminates after it — one already running, a loop or topology\nthat resolves — releases nothing (its dependents are skipped). No stage\nstarts after it either: one the run would dispatch next is skipped with\nits dependents, whatever it runs, and a plain stage's queued\nstructured-output retry or fallback panel member is not dispatched (the\nstage fails); a `loop(..)` or `topology(..)` stage still claims and stops\nat its first dispatch point. A pending\n`topology(..)` stage, static or a dynamic fan-out, stops too, at its next\ndispatch point (its root, or its declared or requested children): it\ndispatches nothing more, waits for the members it already started, and\nfails naming the walk-away row — a topology settles only once every member\nran.\nThe workflow-scope fold charges every billed frame at its own fold, once:\neach completion (a structured-output retry's rejected one included), every\nattempt's failed, cancelled or orphaned terminal and an invoked child's\nsummary — a `loop(..)` member's and a `topology(..)` root's and child's\nalike, a child charged under its topology stage.",
+      "params": [
+        {
+          "name": "name",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "positional_only"
+        },
+        {
+          "name": "root",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "description",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "cost_budget",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "worktree_isolated",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        },
+        {
+          "name": "sandbox_profiles",
+          "type": "dict",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "memory_selectors",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "max_memory_selectors",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "memory_writebacks",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "max_memory_writebacks",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "validation_criteria",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "external_input_channels",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "max_external_input_channels",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "human_requests",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "max_human_requests",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "workflow_pattern",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "bounds",
+          "type": "list | tuple",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "max_concurrency",
+          "type": "int",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "version",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "tags",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        },
+        {
+          "name": "params",
+          "type": "dict",
+          "required": false,
+          "kind": "named_only"
+        },
+        {
+          "name": "unknown_kwargs",
+          "type": "typing.Any",
+          "required": false,
+          "kind": "kwargs"
+        }
+      ],
+      "returns": "kata.workflow"
+    },
+    {
+      "name": "workflow_pattern",
+      "family": "graph",
+      "summary": "Declare the workflow authoring pattern + escape hatch.",
+      "details": "`workflow_pattern(\"autonomous_loop\", risk_tier = \"normal\",\n                  capabilities = [\"fs\", \"net\"])`\n\nUses the normalized `workflow_pattern` section shape\n(`crate::parser::RawWorkflowPattern`). `name` is the stable pattern label\n(required, non-empty). `risk_tier=` (empty → unset) is an advisory tier.\n`escape_hatch=` (default `False`) opts into a warning-first deviation;\n`escape_reason=` (empty → unset) records why. `capabilities=` (empty →\nomitted) lists declared capabilities. Pass to\n`workflow(workflow_pattern=..)` (a single value, not a list).",
+      "params": [
+        {
+          "name": "name",
+          "type": "str",
+          "required": true,
+          "kind": "positional_only"
+        },
+        {
+          "name": "risk_tier",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "escape_hatch",
+          "type": "bool",
+          "required": false,
+          "default": "False",
+          "kind": "named_only"
+        },
+        {
+          "name": "escape_reason",
+          "type": "str",
+          "required": false,
+          "default": "\"\"",
+          "kind": "named_only"
+        },
+        {
+          "name": "capabilities",
+          "type": "list[str] | tuple[str, ...]",
+          "required": false,
+          "default": "[]",
+          "kind": "named_only"
+        }
+      ],
+      "returns": "kata.workflow_pattern"
+    }
+  ],
+  "grammar": {
+    "contract": {
+      "produces_shape": "produces=contract(\"Name\", {\"field\": field(\"string\")})",
+      "consumes_shape": "consumes=contract(\"Name\", {\"field\": field(\"string\")})",
+      "output_schema": "A stage's `produces=` contract is lowered onto its checked `output_schema` (folding into the stage `contract_hash`). A `consumes=` contract is type-checked at load time against the `produces=` schema of a `depends_on` upstream.",
+      "schema_subset": [
+        "object: contract(name, {field: field(ty)})",
+        "string / number / integer / bool / null primitives",
+        "enum(a, b, ..) → {\"type\":\"string\",\"enum\":[..]}",
+        "list_of(elem) → {\"type\":\"array\",\"items\":<elem>,\"maxItems\":128}",
+        "variant({tag: ty}) → {\"type\":\"variant\",\"variants\":{..}}",
+        "number(min=,max=) / integer(min=,max=) inclusive range bounds",
+        "string(pattern=,min_length=,max_length=) value constraints"
+      ]
+    },
+    "verdict": {
+      "gate_verdict_shape": "gate_verdict={\"field\": \"<verdict field>\", \"approve\": [..], \"refine\": [..], \"block\": [..]}",
+      "roles": [
+        {
+          "key": "approve",
+          "meaning": "terminal tags that ACCEPT the loop result and exit successfully"
+        },
+        {
+          "key": "refine",
+          "meaning": "terminal tags that send the loop back for another refine iteration"
+        },
+        {
+          "key": "block",
+          "meaning": "terminal tags that REJECT the loop result (abort / escalate)"
+        }
+      ],
+      "field_key": "field"
+    }
+  },
+  "enum_domains": [
+    {
+      "name": "cache_policy",
+      "values": [
+        "disabled",
+        "model_reuse",
+        "content_cache"
+      ]
+    },
+    {
+      "name": "cost_budget_mode",
+      "values": [
+        "unlimited",
+        "warn",
+        "halt"
+      ]
+    },
+    {
+      "name": "execution_requirements_containment",
+      "values": [
+        "in_process",
+        "contained",
+        "host_unconfined"
+      ]
+    },
+    {
+      "name": "execution_requirements_determinism",
+      "values": [
+        "deterministic",
+        "nondeterministic"
+      ]
+    },
+    {
+      "name": "execution_requirements_network",
+      "values": [
+        "offline",
+        "unrestricted"
+      ]
+    },
+    {
+      "name": "exit_policy",
+      "values": [
+        "content",
+        "zero_success"
+      ]
+    },
+    {
+      "name": "human_request_priority",
+      "values": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    {
+      "name": "memory_object_kind",
+      "values": [
+        "objective",
+        "task",
+        "scenario",
+        "validation_criterion",
+        "decision",
+        "finding",
+        "claim",
+        "artifact",
+        "candidate",
+        "risk",
+        "memory_link",
+        "summary"
+      ]
+    },
+    {
+      "name": "memory_object_status",
+      "values": [
+        "proposed",
+        "active",
+        "superseded",
+        "resolved",
+        "rejected",
+        "parked"
+      ]
+    },
+    {
+      "name": "memory_writeback_scope",
+      "values": [
+        "global",
+        "project",
+        "workflow"
+      ]
+    },
+    {
+      "name": "on_exhaustion",
+      "values": [
+        "escalate",
+        "accept",
+        "fail"
+      ]
+    },
+    {
+      "name": "progress_visibility",
+      "values": [
+        "off",
+        "summary",
+        "full"
+      ]
+    },
+    {
+      "name": "sandbox_profile_net",
+      "values": [
+        "host",
+        "offline"
+      ]
+    },
+    {
+      "name": "sandbox_profile_workspace",
+      "values": [
+        "ro",
+        "rw",
+        "scratch"
+      ]
+    },
+    {
+      "name": "schedule_on_missed",
+      "values": [
+        "fire_once_on_boot",
+        "skip"
+      ]
+    },
+    {
+      "name": "stage_op",
+      "values": [
+        "park",
+        "promote",
+        "commit",
+        "forge_export"
+      ]
+    },
+    {
+      "name": "topology_mutation_policy",
+      "values": [
+        "advisory",
+        "owned_paths"
+      ]
+    }
+  ],
+  "limits": {
+    "max_schema_depth": 4,
+    "max_schema_properties": 32,
+    "max_schema_required": 32,
+    "max_array_items": 128,
+    "max_string_length": 65536,
+    "max_enum_variants": 64,
+    "max_allowed_tools": 64,
+    "max_tool_name_len": 256
+  }
+}

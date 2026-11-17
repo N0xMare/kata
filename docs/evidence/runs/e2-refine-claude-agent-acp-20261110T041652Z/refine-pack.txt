@@ -1,0 +1,1 @@
+refine-pack: wrote /home/[redacted-private_session-1]/kata-evidence/counted-34d5c77c8ff7/e2-refine-claude-agent-acp/change-refine.star (11558 bytes, sha256 072846ceb3dd3c27be00b3abe28b3d7054101abd1832b2945c9a5505976d9467) from /home/[redacted-private_session-1]/dev/harnussy/kata/workflows/std/change.star (sha256 d12b3111dce8152041aa40cafe0e522d9c9d4977b0d8d179a9a7b9106cd20d14)

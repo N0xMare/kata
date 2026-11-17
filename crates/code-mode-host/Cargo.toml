@@ -1,0 +1,39 @@
+[package]
+name = "kata-code-mode-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Runs the embedded harness's Code Mode interpreter in a confined child process of the process that hosts the worker, behind the vendored engine's worker seam."
+
+[dependencies]
+# The vendored Code Mode engine: its worker seam (`set_worker_backend`), which
+# this crate fills with a supervisor of an interpreter process, and the worker
+# thread that process runs (`EmbeddedHost`, no backend installed there).
+nanocode-code-mode-engine.workspace = true
+# The frames are JSON: `raw_value` and `rc` carry a cell's stored values
+# (`Arc<RawValue>`) as the engine holds them.
+serde = { workspace = true, features = ["rc"] }
+serde_json = { workspace = true, features = ["raw_value"] }
+# The interpreter's hardening (parent-death signal, rlimits, dumpable,
+# no-new-privs) and its reads and writes of the socket on descriptor 0, all
+# safe calls; libc for the two calls rustix has no safe form of, `close(2)` on
+# an inherited descriptor and `seccomp(2)`, and for the syscall numbers its
+# filter lists.
+rustix = { workspace = true, features = ["thread"] }
+libc.workspace = true
+# kata's own seccomp compiler (`sandbox_seccomp::allow_list_program`), which
+# compiles the interpreter's syscall filter.
+kata-types.workspace = true
+# `syscall_filter_digest`, the filter's part of the executor term.
+blake3.workspace = true
+# The interpreter process waits on its engine worker's events and on its
+# parent's frames at once: a current-thread runtime with no I/O or time driver.
+tokio = { workspace = true, features = ["rt", "sync", "macros"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "macros", "time"] }
+
+[lints]
+workspace = true

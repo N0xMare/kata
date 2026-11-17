@@ -1,0 +1,13 @@
+id = "bash-add"
+title = "Fix the broken add() shell function so its test passes"
+required_tool = "bash"
+max_cost_micro_usd = 2000000
+
+prompt = """
+In lib.sh, the shell function `add` must echo the integer sum of its two
+arguments, but it currently echoes 0. Fix lib.sh so `bash test.sh` passes.
+Do not edit the tests.
+"""
+
+[mock]
+strategy = "solve"

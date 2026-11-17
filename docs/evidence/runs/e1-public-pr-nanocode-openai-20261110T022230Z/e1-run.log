@@ -1,0 +1,11 @@
+notice: uncommitted edits in /home/[redacted-private_session-1]/ke/e1p-nanocode-openai are not part of this run; it forks the committed target=pr:2653 head=8ae2a29e2b39bfb5cd7def1850200712575a2417 compare=develop@fa5e81c25687fdf275dbee030060357b9fb1aa0e
+e1-run: public-pr cli execution 01M71M77DJ1H1MKV0G76HQYYAY
+PASS terminal-completed
+PASS frozen-head-is-forge-head
+PASS review-validates-and-scores
+PASS remote-unchanged
+PASS no-target-pin-left
+PASS stages-read
+PASS turns-read
+PASS spend-read
+e1-run: 0 oracle(s) failed; seeded row: score-e1: ok seeded 0/0 (unmatched 0 of 0 findings)

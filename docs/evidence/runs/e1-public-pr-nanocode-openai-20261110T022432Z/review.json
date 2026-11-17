@@ -1,0 +1,1 @@
+{"findings": [], "summary": "The change correctly treats an explicitly present source entry as authoritative even when its value is undefined, so a global option source masks the local source as intended. Object.hasOwn is supported by the declared Node.js >=22.12.0 runtime. No findings.", "verdict": "approve"}

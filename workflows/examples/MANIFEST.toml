@@ -1,0 +1,96 @@
+# Curated example-pack library manifest.
+#
+# One [[example]] per workflow under workflows/examples/. This is the machine
+# index of the learning surface. The gate cross-checks it against the .star
+# files on disk (crates/workflow/tests/examples_corpus.rs), so every file listed
+# here exists and every file on disk is listed here.
+#
+# Fields: name (workflow() name) and file (basename under workflows/examples/).
+# Keep in sync when adding/removing an example — the gate FAILS when a `file`
+# row and the .star files on disk disagree. The category and description of each
+# example live in workflows/examples/README.md.
+#
+# `kata init` writes its three embedded starter workflows AND seeds this curated
+# starter subset — the `[[starters]]` rows at the bottom of this file. The key
+# is `starters`, PLURAL: `ExampleManifest` in bin/kata/src/cli/init.rs
+# declares `starters: Vec<ExampleStarter>` with no `#[serde(rename)]`, so a
+# `[[starter]]` row is valid TOML that parses, drifts past every sync check, and
+# seeds NOTHING. Every starter must be one of the [[example]] rows above.
+# `seed_example_starters_reads_the_plural_starters_key` and
+# `the_shipped_example_manifest_declares_a_starter_subset` (bin/kata/src/cli/init.rs)
+# pin the plural key and that at least one shipped row seeds. The subset
+# rule holds only by construction: a starter that seeds is a `.star` file in this
+# directory, and examples_corpus.rs requires every such file to be an [[example]]
+# row. A starter row naming an absent file is skipped silently, and no test
+# refuses it.
+
+[[example]]
+name = "hello-workflow"
+file = "hello-workflow.star"
+
+[[example]]
+name = "code-review-loop"
+file = "code-review-loop.star"
+
+[[example]]
+name = "gate-fix-loop"
+file = "gate-fix-loop.star"
+
+[[example]]
+name = "software-factory-slice"
+file = "software-factory-slice.star"
+
+[[example]]
+name = "parallel-tickets"
+file = "parallel-tickets.star"
+
+[[example]]
+name = "fanout-merge"
+file = "fanout-merge.star"
+
+[[example]]
+name = "repo-migration-sweep"
+file = "repo-migration-sweep.star"
+
+[[example]]
+name = "branch-routing"
+file = "branch-routing.star"
+
+[[example]]
+name = "human-gate-approval"
+file = "human-gate-approval.star"
+
+[[example]]
+name = "durable-wait-signal"
+file = "durable-wait-signal.star"
+
+[[example]]
+name = "durable-wait-timeout"
+file = "durable-wait-timeout.star"
+
+[[example]]
+name = "cost-walkaway"
+file = "cost-walkaway.star"
+
+[[example]]
+name = "hermetic-build"
+file = "hermetic-build.star"
+
+[[example]]
+name = "gold-loop"
+file = "gold-loop.star"
+
+# ── The `kata init` starter subset (key is `starters`, PLURAL — see header) ──
+#
+# All three are model-free (`agent = "shell"` / approval-only), so a freshly
+# `kata init`ed project stays exercisable end to end with zero model budget:
+# one minimal, one loop, one human-in-the-loop.
+
+[[starters]]
+file = "hello-workflow.star"
+
+[[starters]]
+file = "gate-fix-loop.star"
+
+[[starters]]
+file = "human-gate-approval.star"

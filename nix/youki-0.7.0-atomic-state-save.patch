@@ -1,0 +1,66 @@
+--- a/crates/libcontainer/src/container/state.rs
++++ b/crates/libcontainer/src/container/state.rs
+@@ -162,21 +162,36 @@
+     #[instrument(level = "trace")]
+     pub fn save(&self, container_root: &Path) -> Result<()> {
+         let state_file_path = Self::file_path(container_root);
++        // Write the document to a temporary file in the same directory, sync it,
++        // and rename it over state.json. rename(2) replaces the name atomically, so
++        // a concurrent `load` (`youki kill`, `state`, `list`, `delete`) opens either
++        // the previous document or this one, never a truncated or partial file, and
++        // a writer killed mid-save leaves the previous document in place. The pid
++        // keeps two processes saving the same container off one temporary file.
++        //
++        // NOT provided: ordering between concurrent writers (the last rename wins),
++        // separation of writers that share a pid across pid namespaces, durability
++        // of the rename itself (the directory is not synced), and removal of a
++        // temporary file left by a writer killed before its rename (it lives in the
++        // container directory, which `delete` removes).
++        let tmp_file_path = container_root.join(format!(
++            "{}.{}.tmp",
++            Self::STATE_FILE_PATH,
++            std::process::id()
++        ));
+         let file = fs::OpenOptions::new()
+-            .read(true)
+             .write(true)
+-            .append(false)
+             .create(true)
+             .truncate(true)
+-            .open(&state_file_path)
++            .open(&tmp_file_path)
+             .map_err(|err| {
+                 tracing::error!(
+-                    state_file_path = ?state_file_path,
++                    state_file_path = ?tmp_file_path,
+                     err = %err,
+                     "failed to open container state file",
+                 );
+                 StateError::OpenStateFile {
+-                    state_file_path: state_file_path.to_owned(),
++                    state_file_path: tmp_file_path.to_owned(),
+                     source: err,
+                 }
+             })?;
+@@ -203,6 +218,21 @@
+                 source: err,
+             }
+         })?;
++        writer
++            .get_ref()
++            .sync_all()
++            .and_then(|()| fs::rename(&tmp_file_path, &state_file_path))
++            .map_err(|err| {
++                tracing::error!(
++                    ?state_file_path,
++                    %err,
++                    "failed to write container state file",
++                );
++                StateError::WriteStateFile {
++                    state_file_path: state_file_path.to_owned(),
++                    source: err,
++                }
++            })?;
+ 
+         Ok(())
+     }

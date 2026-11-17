@@ -1,0 +1,21 @@
+{
+  "name": "rendered-prompt golden — exact minijinja output for stages.* and review.* namespaces (inline)",
+  "workflow_starlark": "implement = stage(id = \"implement\", agent = \"default\", prompt = \"Do the task.{% if review.iteration > 0 %} Address feedback: {{ review.feedback }}{% endif %}\")\nreview = stage(id = \"review\", agent = \"default\", depends_on = [\"implement\"], prompt = \"Review this output: {{ stages.implement.content }}\", outputs = {\"verdict\": \"string\", \"feedback\": \"string\"})\nloop(body = implement, gate = review, max_iterations = 3, on_exhaustion = \"fail\")\nworkflow(\"rendered-prompt-golden\", root = [implement])\n",
+  "workflow_filename": "rendered-prompt-golden.star",
+  "recorded_outputs": {
+    "implement": { "content": "attempt one" },
+    "review": { "parsed": { "verdict": "refine", "feedback": "handle the empty case" } },
+    "implement#iter-1": { "content": "attempt two" },
+    "review#iter-1": { "parsed": { "verdict": "approve", "feedback": "good" } }
+  },
+  "expect": {
+    "loop_iterations": { "implement": 2 },
+    "loop_resolution": { "implement": "approved" },
+    "rendered_prompts": {
+      "implement": "Do the task.",
+      "implement#iter-1": "Do the task. Address feedback: handle the empty case",
+      "review": "Review this output: attempt one",
+      "review#iter-1": "Review this output: attempt two"
+    }
+  }
+}

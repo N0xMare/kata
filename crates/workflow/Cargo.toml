@@ -1,0 +1,107 @@
+[package]
+name = "kata-workflow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# Exposes the runner's `inject_parsed_if_declared_for_test` wrapper and the
+# execution-lifecycle face's fixture/fault seams to this crate's integration
+# tests. Off in shipped builds; the self dev-dependency below turns it on for
+# `tests/`. It PROPAGATES to kata-core because the face's seams delegate to
+# `OperationalDb`'s `test-support`-gated accessors — without the propagation a
+# downstream crate enabling only this feature would not compile. The
+# `kata-types` arm reaches `clear_node_installation`, the node-less-CHECK test
+# door. The `kata-vcs` arm reaches `kata_vcs::test_support`, the trunk target
+# the tests' directly-driven providers fork from. The `kata-program` arm reaches
+# the fixture-agent installers the rigs declare their agents through
+# (`kata_program::test_harness::install_rig_agents`).
+# `dep:kata-test-utils` — the `oci`-plane scripted worker's queue IS the
+# `MockResponse` enum, so test_harness names it under the feature.
+# `dep:tempfile` — the scripted worker's spawn signature names the node
+# `Arc<TempDir>` the pump holds for its life, so dependent suites need the type.
+test-support = [
+    "kata-program/test-support",
+    "kata-core/test-support",
+    "kata-transport/test-support",
+    "kata-types/test-support",
+    "kata-vcs/test-support",
+    "dep:kata-test-utils",
+    "dep:tempfile",
+]
+
+[dependencies]
+kata-types.workspace = true
+kata-program.workspace = true
+kata-core = { path = "../core" }
+kata-effects-contract.workspace = true
+kata-vcs = { path = "../vcs" }
+kata-transport = { path = "../transport" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+metrics.workspace = true
+# The live `target.*` / `workspace.*` template namespaces are minijinja objects
+# (`target_reads`, `workspace_reads`) the runner hands kata-program's render.
+minijinja.workspace = true
+parking_lot.workspace = true
+smol_str.workspace = true
+ulid.workspace = true
+# A delivered event's timestamp is a `chrono::DateTime<Utc>` built from the
+# transition frame's `recorded_at_ms`.
+chrono.workspace = true
+blake3.workspace = true
+kata-test-utils = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+kata-test-utils.workspace = true
+# `deterministic` and `stage_stalled_tests` run bodies under `run_seeded`.
+kata-test-seeded.workspace = true
+kata-worker = { path = "../worker", features = ["test-support"] }
+kata-agent = { path = "../agent" }
+tempfile.workspace = true
+# Self dev-dependency turns on `test-support` for this crate's own `tests/`.
+kata-workflow = { path = ".", features = ["test-support"] }
+# `oci_stage_live` implements the worker's async-trait seams for its rigs.
+async-trait.workspace = true
+# `oci_stage_live` builds the worker's production adapter registry, which runs
+# nanocode's Code Mode cells in this binary re-executed as their interpreter
+# process (`kata_code_mode_host::interpreter_entry!`).
+kata-code-mode-host.workspace = true
+# Unit and integration tests read `operational.db` through a second, raw
+# handle rather than kata's own reader.
+rusqlite.workspace = true
+# budget_metrics_tests uses DebuggingRecorder to inspect gauge emissions.
+metrics-util.workspace = true
+# `model_reuse_oci` captures the runner's reuse-miss log line to pin its miss tag.
+tracing-subscriber.workspace = true
+# `dag_tests` builds its graphs over `IndexMap`, the type the DAG API takes.
+indexmap.workspace = true
+# `library_tests` drives kata-program's whitelisted loader through starlark's
+# `FileLoader` trait.
+starlark.workspace = true
+# Parametrized `#[case]` rows for the workflow-DSL config
+# rejection table (`workflow_dsl_tests.rs`).
+rstest.workspace = true
+# Criterion benches for two of the three workspace hot paths the
+# `just bench-check` regression gate watches — per-dispatch prompt rendering
+# (`benches/dispatch.rs`) and the orchestrator replay-fold that reconstructs DAG
+# state from recorded stage completions (`benches/replay_fold.rs`).
+# The third hot path (agent-output schema validate/retry) benches in kata-types.
+criterion.workspace = true
+
+[[bench]]
+name = "dispatch"
+harness = false
+
+[[bench]]
+name = "replay_fold"
+harness = false
+
+[lints]
+workspace = true

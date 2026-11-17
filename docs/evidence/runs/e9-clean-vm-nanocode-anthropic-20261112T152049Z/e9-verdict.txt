@@ -1,0 +1,6 @@
+pass: install 4 of 4 sections rc 0; boot check ok; E1 7 of 7 non-recall oracles PASS, the review validates (structure, paths); seeded recall 3/3 recorded, not judged
+install sections.tsv: Requirements rc 0; Install from source rc 0; Quickstart rc 0; Checks rc 0
+boot-check.txt: ok
+ev/oracles.txt: 7 of 7 non-recall oracles PASS
+ev/score.json: structure and paths valid; seeded_found 3/3 (recorded, not judged)
+rule (declared before the run, RUNBOOK §8.4, README E9): every install section rc 0, the boot check, the seven non-recall oracles and the review's structure and paths; seeded recall is recorded only

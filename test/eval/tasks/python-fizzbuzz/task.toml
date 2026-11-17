@@ -1,0 +1,14 @@
+id = "python-fizzbuzz"
+title = "Implement fizzbuzz(n) so its test passes"
+required_tool = "python3"
+max_cost_micro_usd = 2000000
+
+prompt = """
+Implement the function fizzbuzz(n) in fizzbuzz.py so that test_fizzbuzz.py
+passes. It returns a list of length n where each element (1-indexed) is 'Fizz'
+if divisible by 3, 'Buzz' if by 5, 'FizzBuzz' if by both, else the number as a
+string. Do not edit the test.
+"""
+
+[mock]
+strategy = "solve"

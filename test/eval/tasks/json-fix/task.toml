@@ -1,0 +1,13 @@
+id = "json-fix"
+title = "Repair the malformed config.json so it parses"
+required_tool = "python3"
+max_cost_micro_usd = 1500000
+
+prompt = """
+config.json is not valid JSON (it has a trailing comma). Repair it so it parses
+as JSON, preserving the intended keys: name='kata', a semver version string, and
+a features list containing 'a' and 'b'.
+"""
+
+[mock]
+strategy = "solve"

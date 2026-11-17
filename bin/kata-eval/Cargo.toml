@@ -1,0 +1,37 @@
+[package]
+name = "kata-eval"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "kata proof harness: the golden coding-task eval tier. The deterministic tier (mock backend, honesty meta-check, cap logic, report render) rides `just eval`; the LIVE tier (`just eval-live`) drives the golden set through a real model backend on an installed main under a hard $20/run metered cap."
+
+[lints]
+workspace = true
+
+# LEAF-ish harness crate. The library core (task loading, cap enforcement,
+# validator invocation, report rendering, mock solver) is a pure
+# serde/std/filesystem leaf — no kata runtime crates. The compile-check that
+# every task's `workflow.star` is a valid kata workflow lives in a DEV test and
+# is the ONLY dependency on kata-program (dev-only), so the shipped harness
+# never pulls the authoring toolchain, let alone the runtime closure.
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+clap.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+kata-program = { path = "../../crates/program" }
+# The protected-property ledger's checker reads the crash-boundary REGISTRY
+# (`kata_core::fault_inject::OPERATIONAL_CRASH_BOUNDARIES`) rather than a transcription
+# of it.
+kata-core = { path = "../../crates/core" }
+syn.workspace = true
+
+[[bin]]
+name = "kata-eval"
+path = "src/main.rs"

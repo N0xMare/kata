@@ -1,0 +1,23 @@
+arm: forge: the local bare fsyncs what it acknowledges (core.fsync=all, core.fsyncMethod=fsync, a reference-transaction hook fsyncing each committed ref and its directory); the fake gh fsyncs gh.log after each call
+arm: control: sync(1) before the submit: the fixture, the provider and the booted node are on disk; the run's own writes are not flushed by the rig
+arm: execution 01M78WZ9PHYYFSBQFFA2Y2FC6V
+arm: control: froze the main (pid 1748) before the kill; every thread's state ['T', 'T', 'T', 'T', 'T']
+arm: control: froze the worker (pid 2110) before the kill; every thread's state ['T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T']
+arm: control: frozen, before the kill: implement 01M78WZGSDC2K556F19QFNPPHA: started 1, completed 0, open true
+arm: kernel (recorded, not judged): the worker (pid 2110) at the kill: 1 established socket(s): ["0      0      10.0.2.15:46932 [redacted-private_session-1]:443   users:((\"kata-worker\",pid=2110,fd=30)) | cubic rto:218 rtt:17.558/8.779 mss:1460 pmtu:1500 rcvmss:536 advmss:1460 cwnd:10 bytes_acked:1 segs_out:2 segs_in:1 send 6652238bps lastsnd:19 lastrcv:19 lastack:19 pacing_rate 13195120bps delivered:1 app_limited rcv_space:14600 rcv_ssthresh:64076 minrtt:17.558 snd_wnd:65535"]
+control (post hoc, the arm transcript): implement 01M78WZGSDC2K556F19QFNPPHA: started 1, completed 0, open true
+the forge after the restart, before the main boots: kata/<exec> []; git fsck Ok(()); pull requests for kata/<exec> 0; at the kill []
+resumed execution 01M78WZ9PHYYFSBQFFA2Y2FC6V on /home/[redacted-private_session-2]/e3-state/P2-host after the machine restarted
+kata run show status: failed
+raw failed `implement` transition: Some("{\"delivery\":{\"awaiting_approval_at_ms\":null,\"child_execution_id\":null,\"dispatched_at_ms\":1794521416497,\"finished_at_ms\":1794521437757,\"last_checkpoint\":0,\"stage_name\":\"implement\",\"started_at_ms\":1794521416517,\"worker_id\":\"local-worker-0\"},\"reason\":\"the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)\",\"terminal_charge\":{\"token_usage\":{\"cache_read\":0,\"cache_savings_micro_usd\":0,\"cache_write\":0,\"cost\":{\"backend\":\"nanocode_anthropic\",\"model\":\"claude-sonnet-5-5\",\"quality\":\"unavailable\"},\"input\":0,\"output\":0}},\"verdict\":\"proven_ambiguous\"}")
+after a respawned worker and 10 s, the raw implement chain: 1 attempt row(s); transitions ["Some(0) claimed pending", "Some(0) dispatched dispatched", "Some(0) attempt_safe_point attempt_safe_point", "Some(0) attempt_advanced running", "Some(0) attempt_advanced failed"]
+judge_p2_settlement (MainRestarted): one attempt, one claim, one dispatch, no acceptance, verdict proven_ambiguous; reason the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)
+/work heads before the kill [("", "AF84F4C0E81780BFF3BE6CCC3A56A750197BFB8C9AF9955B16C2B7B5105BD409", 0)], after settlement [("", "AF84F4C0E81780BFF3BE6CCC3A56A750197BFB8C9AF9955B16C2B7B5105BD409", 0)]
+[verify] raw implement transitions holding a token_usage: [("attempt_advanced", Object {"cache_read": Number(0), "cache_savings_micro_usd": Number(0), "cache_write": Number(0), "cost": Object {"backend": String("nanocode_anthropic"), "model": String("claude-sonnet-5-5"), "quality": String("unavailable")}, "input": Number(0), "output": Number(0)})]
+the killed attempt's terminal_charge: {"token_usage":{"cache_read":0,"cache_savings_micro_usd":0,"cache_write":0,"cost":{"backend":"nanocode_anthropic","model":"claude-sonnet-5-5","quality":"unavailable"},"input":0,"output":0}}
+assert_no_mutation: nothing landed, pushed or opened
+assert_no_container_residue: no live container, no kata.* cgroup
+operator recourse (recourse.txt): run show = failed; parked/01M78WZ9PHYYFSBQFFA2Y2FC6V = Some("a8ae78d7b703d2c7f43ec55939d6eb586eb83c77") (auto-parked)
+spend: issued calls of the killed attempt 1, every one of unknown usage (unmetered_calls; none is on any durable row): completed 0, closed only by the next start 0, open at the end true; no second attempt
+kata's known tokens (completed plan/implement attempts, raw accepting transitions; [input, cache_read, cache_write, output]): [8, 13965, 7321, 601]
+outcome: pass: settled proven-ambiguous, every oracle held

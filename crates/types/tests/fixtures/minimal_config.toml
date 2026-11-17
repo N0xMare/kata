@@ -1,0 +1,26 @@
+# Fixture config used by kata-types tests. Kept intentionally minimal —
+# it only exercises the fields that `load_config_placeholder` parses and
+# validates.
+
+[node]
+id = "main-a"
+data_dir = "/var/lib/kata"
+
+[runtime]
+max_concurrent_dispatches = 128
+
+[workers]
+dispatch_deadline_ms = 5000
+heartbeat_interval_ms = 2500
+heartbeat_grace_ms = 10000
+max_workers = 16
+
+[[workers.transports]]
+type = "supervised_node"
+
+[api]
+bind = "127.0.0.1:8400"
+
+[api.auth]
+type = "signed_token"
+verifying_key_env = "API_VERIFYING_KEY"

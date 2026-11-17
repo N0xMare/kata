@@ -1,0 +1,16 @@
+execution 01M71T7484N9G2CTBYA9V183PZ (completed)
+- find#0 state=completed accepted=1 adapter=generic_acp model=claude-sonnet-5-5 effort=medium model_reported=sonnet stop_reason=end_turn
+    usage frames: 0 (metered 0, reemitted 0, unmetered 0)
+    turn answer: none recorded
+    model rerouted: none
+    events_dropped: 0; other events: notice=1, permission=2, tool_call=8, update=108, usage=6
+- find#1 state=completed accepted=1 adapter=generic_acp model=claude-sonnet-5-5 effort=medium model_reported=sonnet stop_reason=end_turn
+    usage frames: 0 (metered 0, reemitted 0, unmetered 0)
+    turn answer: none recorded
+    model rerouted: none
+    events_dropped: 0; other events: notice=1, permission=1, tool_call=4, update=121, usage=5
+- verify#0 state=completed accepted=1 adapter=generic_acp model=claude-sonnet-5-5 effort=medium model_reported=sonnet stop_reason=end_turn
+    usage frames: 0 (metered 0, reemitted 0, unmetered 0)
+    turn answer: none recorded
+    model rerouted: none
+    events_dropped: 0; other events: notice=1, permission=1, tool_call=4, update=112, usage=4

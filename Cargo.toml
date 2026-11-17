@@ -1,0 +1,502 @@
+[workspace]
+resolver = "2"
+members = [
+    "bin/kata",
+    "bin/kata-worker",
+    # The OCI provider: it starts the rootless OCI container
+    # `oci_bundle::spec_for` described, from the plan's `config.json` bytes, by
+    # exec'ing the pinned youki. Shipped: the flake installs it under
+    # `share/kata/provider-source` (`providerSourceBins`), which `kata host
+    # setup` provisions into the by-hash provider store it is run from,
+    # together with the iproute2 `ip` the package declares by store path.
+    "bin/kata-provider-youki",
+    # The OCI createContainer hooks — `loopback-up` and the
+    # listener-fd handoff an `Egress` capsule's bundle carries. Like the
+    # provider it runs BESIDE the container inside its network namespace, not
+    # inside kata, and ships the same way: under `share/kata/provider-source`,
+    # provisioned into the provider store. `cargo build --workspace` must
+    # produce it for the live cells.
+    "bin/kata-oci-hook",
+    # The init of an agent capsule: it serves the toolhost protocol over the
+    # worker-owned FIFOs and runs every tool call inside the capsule. Built
+    # static for x86_64-unknown-linux-musl (a capsule's rootfs has no dynamic
+    # loader), bound read-only at `/.kata` from the provider entry's
+    # `toolhost/`. Shipped like the provider: the flake installs it as
+    # `share/kata/provider-source/toolhost/kata-toolhost` (`kataToolhost`).
+    "bin/kata-toolhost",
+    "crates/provider-protocol",
+    # The worker <-> kata-toolhost wire: the frames an agent capsule's init
+    # speaks. A leaf like the provider protocol, whose codec it reuses.
+    "crates/toolhost-protocol",
+    "crates/types",
+    "crates/op-contract",
+    "crates/crypto",
+    "crates/core",
+    "crates/transport",
+    "crates/worker",
+    "crates/agent",
+    # The nanocode agent harness, embedded as a library. Kept out of kata-agent so
+    # that crate's tests never compile nanocode's dependency closure.
+    "crates/agent-nanocode",
+    # Code Mode's interpreter in a confined child process of the process that
+    # hosts the worker, behind the vendored engine's worker seam.
+    "crates/code-mode-host",
+    # The authoring toolchain: the Starlark frontend, the checked program and its
+    # lowering, static analysis and the program hash. Depends on kata-types alone.
+    "crates/program",
+    "crates/workflow",
+    "bin/kata-eval",
+    # The repository and forge boundary kata-vcs implements: the provider and
+    # forge traits and the values they carry, with no implementation.
+    "crates/effects-contract",
+    "crates/vcs",
+    "crates/api",
+    "crates/client",
+    "crates/test-utils",
+    # `run_seeded` over commonware's deterministic runtime, apart from
+    # kata-test-utils so that runtime's dependency closure reaches only the test
+    # binaries that run seeded bodies.
+    "crates/test-seeded",
+    "crates/test-macros",
+]
+# The vendored nanocode Code Mode engine (`[patch]` below) is a path package
+# inside this directory, so cargo would otherwise make it a member: it is
+# nanocode's code, built under nanocode's own lints, and is never linted or
+# tested as kata's (`just fmt` leaves it alone too: it formats members only).
+exclude = ["vendor/nanocode-code-mode-engine"]
+# What a bare `cargo build --release` in a checkout builds: exactly the shipped
+# binaries, which is the source install (README). `kata host setup`, run from
+# `target/release/kata`, provisions the two provider members from beside it,
+# and the static `kata-toolhost` from a second, musl build (`cargo build
+# --release --locked --target x86_64-unknown-linux-musl -p kata-toolhost`): a
+# host build of it would need a dynamic loader no capsule has, so it is no
+# default member.
+# The test-only crates (kata-test-utils, kata-test-seeded and the commonware
+# runtime under it) and kata-eval build only under `--workspace` or `-p`.
+default-members = [
+    "bin/kata",
+    "bin/kata-worker",
+    "bin/kata-provider-youki",
+    "bin/kata-oci-hook",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/N0xMare/kata"
+rust-version = "1.99"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = "0.3"
+
+# Native build helper. Kata's macOS binary uses one audited C shim because
+# Apple's os_log write entry point is a variadic C macro rather than a stable
+# directly-callable symbol.
+cc = "1"
+
+# OS / signals — diagnostic capture of SIGTERM sender PID via
+# sigaction(SA_SIGINFO) in `bin/kata`'s §SIGTERM-source
+# diagnostic path, process-group signaling (`killpg`) of spawned
+# subprocesses, and `kata-test-utils`'s `live` module Drop teardown
+# (SIGTERM/SIGKILL to spawned `kata` / `kata-worker` children).
+nix = { version = "0.28", default-features = false, features = ["dir", "fs", "signal", "user"] }
+libc = "0.2"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+# The dotted key path a config parse error sits at (`runtime.<key>`): toml's own
+# error carries a line, not the section an unknown key was written under.
+serde_path_to_error = "0.1"
+# Comment-preserving TOML edits — `kata host setup` merges the oci
+# declarations into an operator's kata.toml and the file's comments are
+# documentation, so a `toml::Value` round-trip that drops them is not a
+# write kata may make.
+toml_edit = "0.25"
+ciborium = "0.2"
+starlark = "0.13"
+
+# JSON-Schema derivation — the shared operation contract (`kata-op-contract`)
+# derives a machine-parseable JSON Schema per operation request/response so the
+# CLI (`kata check --format json` OpEnvelope), the MCP `tools/list`, and the REST/client faces all
+# publish the SAME typed contract. Pinned to
+# the 0.8 line (stable, small dep closure, serde_json 1 compatible).
+schemars = "0.8"
+
+# Types
+ulid = { version = "1", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+smol_str = { version = "0.3", features = ["serde"] }
+indexmap = { version = "2", features = ["serde"] }
+# Custom Starlark value derives for the kata-program contract DSL builtins.
+# Versions track the transitive deps starlark 0.13 already pulls in (Cargo.lock).
+allocative = "0.3"
+derive_more = { version = "1", features = ["display"] }
+strum = { version = "0.26", features = ["derive"] }
+arbitrary = "1"
+# Dev-only: criterion latency benches (the hot-path benches). Pinned to the 0.7
+# line already resolved in Cargo.lock.
+# Not in `just gate`; run via `just bench` / `just bench-crate <crate>`.
+criterion = "0.7"
+# Dev-only: rstest parametrized-test cases. Folds
+# copy-paste `#[test]` clusters into one fn with named `#[case::name(..)]`
+# rows so each scenario stays an individually-addressable sub-test.
+rstest = "0.23"
+
+# Path globbing — declared read-closure resolution. Filesystem-based
+# glob expansion (`glob::glob`) resolves a stage's repo-relative `reads=` globs
+# to concrete paths for the precise closure content-hash.
+glob = "0.3"
+
+# POSIX shell quoting: a refusal that prints a fix (`chmod go-w <dir>`) quotes
+# the path so the printed command is the one to run.
+shlex = "1.3"
+
+# Crypto
+ed25519-dalek = { version = "2", features = ["serde"] }
+blake3 = "1"
+rand = "0.8"
+
+# Commonware — test-only: `commonware-runtime`'s deterministic runtime runs
+# kata-test-seeded's seeded test runs, and `commonware-codec` /
+# `commonware-conformance` drive kata-transport's wire conformance harness. No
+# shipped binary links any of them; the mains run on a plain tokio runtime
+# (`bin/kata/src/runtime_start.rs`).
+#
+# Pinned to one commonwarexyz/monorepo commit: the v2026.9.0 release
+# (2026-09-03). It is the first release whose workspace takes ctutils 0.4: ctutils
+# before 0.4.4 can compile its constant-time mask generation and `u128` comparisons to
+# branches on secret values (RustCrypto/utils#1569), and no 0.3.x release carries the
+# fix. It needs rustc 1.95 or newer, which rust-toolchain.toml satisfies. The API kata
+# integrates moves between commits, so a bump is a deliberate change with its own
+# build and test run, never a drive-by.
+commonware-runtime      = { git = "https://github.com/commonwarexyz/monorepo", rev = "d476a2361ce6840d2b9d0aa6fb30a924429046d4" }
+commonware-codec        = { git = "https://github.com/commonwarexyz/monorepo", rev = "d476a2361ce6840d2b9d0aa6fb30a924429046d4" }
+commonware-conformance  = { git = "https://github.com/commonwarexyz/monorepo", rev = "d476a2361ce6840d2b9d0aa6fb30a924429046d4" }
+
+# The nanocode agent harness (`crates/agent-nanocode`): only its three direct
+# backend crates, never the `nanocode` facade, whose `Runtime` brings a session
+# store kata does not use. Pinned to one gakonst/nanocode commit because the host
+# seam kata implements (`crates/core/process/src/lib.rs`) and the tools each
+# backend registers over it move between commits. A bump is a deliberate change:
+# `crates/agent-nanocode/tests/nanocode_seam.rs` goes red when it moves the host
+# tool names or leaves `NANOCODE_REV` behind the lockfile, and flake.nix's
+# `nanocode-agent-config` outputHash must be re-hashed (a `nix build .#kata` with
+# the stale one fails and names the new one).
+# Requires rustc 1.97 and a C compiler (QuickJS and zstd build scripts). nanocode
+# pins `async-trait = "=0.1.89"` exactly, which holds every workspace crate's
+# async-trait at that version in Cargo.lock.
+# `just nanocode-bump <rev>` moves these three revs, `NANOCODE_REV`, the lock, the
+# vendored engine below and the flake hash together
+# (docs/development/nanocode.md).
+nanocode-backend-codex     = { git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-backend-claude    = { git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-process-contracts = { git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+# The vendored engine itself, for `crates/agent-nanocode`, which installs its
+# `NativeLimits` (the `[patch]` below routes nanocode's own dependents to it).
+nanocode-code-mode-engine  = { path = "vendor/nanocode-code-mode-engine" }
+
+# Storage
+# `bundled` links SQLite from libsqlite3-sys's own source (3.54.1 in 0.39.1), never the
+# host's. `cache` is `prepare_cached`; `fallible_uint` is the `u64`/`usize` `ToSql`/
+# `FromSql` that refuses a value outside `i64` rather than wrapping it. Default features
+# are off so the wasm-only `ffi-sqlite-wasm-rs` backend stays out of the lock.
+rusqlite = { version = "0.41", default-features = false, features = ["bundled", "cache", "fallible_uint"] }
+rustix = { version = "1", features = ["fs", "process"] }
+dashmap = "6"
+
+# Observability
+tracing = "0.1"
+tracing-log = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# OpenTelemetry tracing pipeline. Pinned to the 0.27 line for consistency
+# across opentelemetry / opentelemetry_sdk / opentelemetry-otlp; the 0.28
+# release of tracing-opentelemetry is the matching tracing→OTel bridge.
+opentelemetry = { version = "0.27", default-features = false, features = ["trace"] }
+opentelemetry_sdk = { version = "0.27", default-features = false, features = ["rt-tokio", "trace"] }
+opentelemetry-otlp = { version = "0.27", default-features = false, features = ["grpc-tonic", "trace"] }
+tracing-opentelemetry = { version = "0.28", default-features = false, features = ["tracing-log"] }
+
+# Metrics pipeline — metrics-rs facade + prometheus pull-exporter.
+metrics = "0.24"
+metrics-exporter-prometheus = { version = "0.16", default-features = false }
+# Dev-only helper (DebuggingRecorder). Version pinned to match metrics 0.24.
+metrics-util = "0.19"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Environment / config loading
+# `dotenvy` is the maintained fork of `dotenv`. Each kata binary calls
+# `dotenvy::dotenv().ok()` at the top of main, so operators running
+# the release binaries directly (not via `just` recipes) still pick
+# up `.env` from the cwd. The justfile separately uses `set dotenv-load
+# := true` to load `.env` for `just` invocations. See `.env.example`
+# for the operator-facing env surface.
+dotenvy = "0.15"
+
+# HTTP
+axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["trace"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# File watching
+notify = "7"
+
+# Version control
+jj-lib = "=0.39.0"
+# The `/work` delta walk honours the post-run tree's own
+# `.gitignore` files under git semantics — `gix-ignore`'s matcher over
+# `gix-glob`'s wildmatch — and the agent capsule's git-history artifact is
+# built out of `gix` (its `index` feature) and `gix-pack` against the jj
+# backend's git object store. Pinned to the exact versions jj-lib's gix already resolved in
+# Cargo.lock, so the direct deps add no download. `bstr` is the byte-string
+# type the matcher takes paths as — tracking the 1.x line already in the
+# lockfile. `gix-pack` needs `generate` (the `pack-objects` machinery) and
+# `streaming-input` (re-parse written pack bytes into index entries) — `gix`'s
+# own dep on it disables default features, so neither arrives transitively.
+gix-ignore = "=0.19.1"
+gix-glob = "=0.24.0"
+bstr = "1"
+gix = { version = "=0.80.0", default-features = false, features = [
+    "index",
+    "revision",
+    "max-performance-safe",
+    "zlib-rs",
+] }
+gix-pack = { version = "=0.67.0", default-features = false, features = [
+    "generate",
+    "streaming-input",
+] }
+
+# Concurrency
+parking_lot = "0.12"
+async-trait = "0.1"
+arc-swap = "1"
+
+# Testing
+tempfile = "3"
+
+# Prompt templating: minijinja renders
+# stage prompt templates against the context produced by prior stage
+# outputs, so a reviewer stage can reference its upstream's content
+# via `{{ stages.draft.content }}`. Chosen over tera/handlebars for
+# its small dep closure and stable Jinja-syntax semantics.
+# Pinned EXACTLY: kata-program enables `unstable_machinery`, which carries no
+# semver guarantee, and `kata check`'s `template_untrusted_in_run` refusal is
+# a walk over the AST it exposes (`crates/program/src/target_namespace.rs`,
+# `untrusted_reads_in_command`). A minijinja bump is therefore a deliberate
+# review of that walk's refused set, never a lockfile refresh.
+minijinja = "=2.19.0"
+
+# HTTP. One reqwest for the whole tree, at the version nanocode's own clients lock,
+# with no bundled crypto provider and no bundled roots: TLS verifies against the
+# HOST's trust store (`rustls-platform-verifier`; on Linux the system store, or
+# `SSL_CERT_FILE` / `SSL_CERT_DIR`), and each crate that builds a client installs
+# the ring provider first. Crates add the request features they use.
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider"] }
+# The crypto provider those clients install (`rustls::crypto::ring`). Already in
+# the tree, at this version and with these features, through reqwest and nanocode.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+# WebSocket handshake for the mock Responses endpoints the harness cells serve.
+# Already in the lockfile through nanocode's codex client, at nanocode's version.
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+
+# Hex encoding
+hex = "0.4"
+
+# Regular expressions — VALUE-CONSTRAINT contracts:
+# the `string(pattern=..)` contract kwarg lowers to a JSON-Schema `pattern`
+# that both the DSL (author-time compile check) and the structured-output
+# validator (`kata_types::agent_run`) enforce. The `regex` crate is
+# guaranteed linear-time (no catastrophic backtracking), so a compilable
+# pattern is safe to run against untrusted structured output. Version tracks
+# the 1.x line already resolved in Cargo.lock.
+regex = "1"
+
+# Rust source parsing for the protected-property ledger's checker
+# (`bin/kata-eval/tests/protected_property_ledger.rs`), which resolves every cell the
+# ledger names to a real `#[test]` function through the module tree. Already in the
+# tree with these features (proc-macro dependencies); version tracks that 2.x line.
+syn = { version = "2", features = ["full"] }
+
+# Base64 encoding — used by `kata_crypto::generate_shared_secret` for
+# the worker handshake pre-shared key (URL-safe, no padding so
+# the result is shell-safe).
+base64 = "0.22"
+
+# SHA-256 (youki provider and worker digests).
+sha2 = "0.10"
+
+# OCI runtime spec — the `config.json` TYPES, and only the
+# runtime half of them. `kata_worker::oci_bundle` builds an
+# `oci_spec::runtime::Spec` from a `Capsule` + its authorized Nix closure rather
+# than hand-assembling JSON, so a field the OCI spec renamed or retyped is a
+# compile error here instead of a container youki silently starts differently.
+#
+# `default-features = false, features = ["runtime"]` drops the `image` and
+# `distribution` halves: kata pulls no images and talks to no registry, and a
+# type nothing constructs is dep-closure weight that a reader has to rule out.
+# Pinned to the 0.8 line (0.8.4 is its newest release) — the generation youki
+# 0.7's own `config.json` reader is built on, so kata and the runtime that
+# consumes its bytes agree about the schema by construction.
+oci-spec = { version = "0.8", default-features = false, features = ["runtime"] }
+
+# Internal crates
+kata-types = { path = "crates/types" }
+kata-op-contract = { path = "crates/op-contract" }
+kata-provider-protocol = { path = "crates/provider-protocol" }
+kata-toolhost-protocol = { path = "crates/toolhost-protocol" }
+kata-code-mode-host = { path = "crates/code-mode-host" }
+kata-crypto = { path = "crates/crypto" }
+kata-core = { path = "crates/core" }
+kata-transport = { path = "crates/transport" }
+kata-worker = { path = "crates/worker" }
+kata-program = { path = "crates/program" }
+kata-workflow = { path = "crates/workflow" }
+kata-effects-contract = { path = "crates/effects-contract" }
+kata-vcs = { path = "crates/vcs" }
+kata-api = { path = "crates/api" }
+kata-client = { path = "crates/client" }
+kata-agent-nanocode = { path = "crates/agent-nanocode" }
+kata-test-utils = { path = "crates/test-utils" }
+kata-test-seeded = { path = "crates/test-seeded" }
+kata-test-macros = { path = "crates/test-macros" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+# The execution-provenance compile-fail probe needs three cfgs that NOTHING ever sets
+# in an ordinary build: `crates/types/src/execution_provenance.rs` carries two
+# `#[cfg_attr(<probe>, derive(...))]` attributes and
+# `crates/types/tests/execution_provenance_tests.rs` one downstream mint, and
+# `derive-refusal-probe` compiles each under its cfg to observe the compiler
+# REFUSE it.
+#
+# Declaring them here is not decoration. Cargo passes `--check-cfg` for every cfg
+# it knows about, so an undeclared name makes the warn-by-default `unexpected_cfgs`
+# lint fire on every ordinary build — and `lint` is `-D warnings`, so the whole
+# workspace would go red on a probe attribute that is inert by design. Declaring
+# exactly these three keeps every OTHER unexpected cfg an error, which is the
+# property worth having: the escape hatch is three names wide and is listed here.
+unexpected_cfgs = { level = "warn", check-cfg = [
+    "cfg(kata_probe_derive_deserialize)",
+    "cfg(kata_probe_derive_default)",
+    "cfg(kata_probe_mint_attribution)",
+] }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+# These pedantic lints are opinions, not correctness, and churning docs on
+# every public function for them is not a good use of effort while the
+# subsystem APIs are still under active reshaping. Revisit once they settle,
+# not per change.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+uninlined_format_args = "allow"
+needless_pass_by_value = "allow"
+items_after_statements = "allow"
+too_many_lines = "allow"
+# Nightly clippy's `unused_async_trait_impl` fires on kata's many INTENTIONALLY-async
+# methods (signature parity with async traits). The async is deliberate, not a
+# defect — absorb the
+# toolchain churn workspace-wide rather than scatter per-site allows.
+unused_async_trait_impl = "allow"
+# `double_must_use` fires only inside `#[async_trait]` expansions: async-trait
+# 0.1.89 adds a bare `#[must_use]` to the boxed futures it returns. nanocode pins
+# `async-trait = "=0.1.89"` (see the nanocode entries above), so the workspace
+# cannot take 0.1.92, which stopped emitting it. Remove this allow when that pin
+# moves.
+double_must_use = "allow"
+# Pedantic `assert_is_empty` (unknown to clippy 1.97 and the audit nightly; fires
+# on 1.99) asks every `assert!(x.is_empty())` and `assert!(!x.is_empty())` to become
+# `assert_eq!(x, [] as [T; 0])` / `assert_ne!(..)`. Its only gain is the value printed
+# on a failure; its cost is a spelled-out element type at 171 test sites. Same
+# treatment as the lint above.
+assert_is_empty = "allow"
+
+# nanocode's Code Mode engine (`nanocode-code-mode-engine`, the native QuickJS
+# worker) is vendored in-tree with kata's resource-guard patch, and every
+# dependency on it from the nanocode git source resolves to that copy. The copy
+# must be exactly upstream at the revs above plus
+# `vendor/nanocode-code-mode-engine.patch`: `just nanocode-vendor-check` refuses
+# anything else, and `just verify` runs it for a change under `vendor/`.
+[patch."https://github.com/gakonst/nanocode"]
+nanocode-code-mode-engine = { path = "vendor/nanocode-code-mode-engine" }
+
+[profile.release]
+lto = "thin"
+strip = true
+codegen-units = 1
+
+# MEASURED: four cold `cargo build --tests --workspace` runs into a scratch
+# `CARGO_TARGET_DIR`, ONE AT A TIME on an otherwise idle 128-core, single-NVMe
+# host, varying only the debuginfo settings:
+#
+#   arm                                wall    CPU%   target/    347 test bins   mean
+#   baseline (debug = true)           26:02    178%   149.2 GiB   136.1 GiB    402 MiB
+#   debug = "line-tables-only"         9:11    421%    53.7 GiB    45.2 GiB    133 MiB
+#   + split-debuginfo = "unpacked"     6:36    590%    34.0 GiB    25.4 GiB     75 MiB
+#   + deps debug = false               4:47    759%    20.4 GiB    12.8 GiB     38 MiB
+#
+# Reproduce (`--config` values per arm):
+#   CARGO_TARGET_DIR=<scratch> CARGO_BUILD_JOBS=16 CARGO_INCREMENTAL=1 RUSTC_WRAPPER= \
+#     /usr/bin/time -v cargo build --tests --workspace [--config 'profile.dev.…']
+#
+# THE BASELINE WAS RUN TWICE — once under heavy concurrent load, once idle — and
+# came back 26:03 and 26:02 at 179% and 178% CPU. It is not a contention artifact.
+# A `--config profile.dev.debug=false` control on a standalone probe shrank the
+# binary 9.4x and dropped its backtrace line numbers, proving these `--config`
+# overrides actually beat this manifest rather than being silently ignored.
+#
+# 178% CPU is the finding. Averaged over 26 minutes on a 128-core host, with
+# `CARGO_BUILD_JOBS=16` permitting 1600%, the baseline kept 1.78 cores busy: it
+# was never compute-bound. Each of 347 test binaries carried ~330 MiB of DWARF
+# that the linker copied in and that almost nothing ever read. User CPU barely
+# moves across the arms (2416s -> 2017s -> 2014s -> 1882s), so the wall-clock
+# collapse is the LINK+WRITE critical path shortening, not less compilation.
+#
+# Line tables are what a test failure needs, and they are RETAINED: backtraces
+# still print file:line for every frame. Nothing in the tree consumes a
+# `Backtrace` API (`rg 'Backtrace::|backtrace::' crates --include='*.rs'` -> 0).
+#
+# The fourth arm is REFUSED, not merely untaken.
+# `[profile.dev.package."*"] debug = false` buys another 1.38x and another 2x,
+# and costs file:line in every dependency frame of every backtrace; kata runs on
+# tokio and runs its seeded tests on a SPECIFIC commonware commit's deterministic
+# runtime — precisely the frame class a kata backtrace needs to be readable. The
+# trade was weighed and declined.
+#
+# The refusal is MACHINE-CHECKED, because it is one line away in a table that
+# already exists below, and the prize is measured:
+# `bin/kata-eval/tests/dependency_frame_line_tables.rs` resolves the level a
+# DEPENDENCY compiles at — the `[profile.dev.package."*"]` override, else
+# `[profile.dev]`, else cargo's dev default — and fails if it carries no line
+# table. Per-spec overrides (tokio, the commonware pins) are the same refusal
+# and fail the same way.
+#
+# Not sccache, AS THE GLOBAL DEFAULT: the justfile's `RUSTC_WRAPPER` block
+# measured it 2.33x SLOWER, because sccache and incremental builds are mutually
+# exclusive. That measurement is on WARM incremental builds and does NOT settle the
+# cold-worktree case, which is unmeasured: it stays open pending a cold-worktree
+# measurement both ways.
+[profile.dev]
+opt-level = 0
+debug = "line-tables-only"
+split-debuginfo = "unpacked"
+
+[profile.dev.package."*"]
+opt-level = 2

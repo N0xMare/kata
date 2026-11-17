@@ -1,0 +1,60 @@
+[package]
+name = "kata-test-utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+# Kata crates — deliberately NOT kata-core: kata-core pulls kata-test-utils in
+# as a dev-dependency, so depending on it here would be circular.
+kata-types.workspace  = true
+kata-transport = { path = "../transport" }
+kata-test-macros.workspace = true
+
+# Async glue for runner helpers + fixture builders.
+tokio.workspace       = true
+tempfile.workspace    = true
+parking_lot.workspace = true
+serde_json.workspace  = true
+ulid.workspace        = true
+smol_str.workspace    = true
+
+# `live` module: thin SDK consumer for spawning real
+# `kata` / `kata-worker` binaries from tests. We depend on
+# `kata-client` (the typed REST/SSE SDK) rather than
+# `kata-api` (the SDK keeps the axum / dispatcher closure out of
+# tests).
+kata-client.workspace = true
+thiserror.workspace   = true
+
+# `live` module Drop teardown sends SIGTERM /
+# SIGKILL to the spawned `kata` / `kata-worker` children.
+# `nix` 0.28 is already in the dependency closure (transitively
+# pulled by tonic), and its `signal::kill` wrapper avoids the
+# unsafe-block lint deny in workspace.lints.rust. Adding it as
+# a direct dep here is the smaller change vs threading
+# `#[allow(unsafe_code)]` into the test-utils crate. Same version/features
+# as the workspace-level `nix` pin (see root Cargo.toml); declared via
+# `.workspace = true` so the two can't drift.
+nix.workspace = true
+# `inotify` module — the kernel's IN_OPEN/IN_ACCESS record for cells that
+# prove a path was never opened. rustix (already the workspace's safe-fd
+# library, `fs` feature) exposes inotify without `unsafe`, which this crate
+# forbids; nix 0.28's would need a feature and raw-fd adoption.
+rustix.workspace = true
+
+[dev-dependencies]
+# `seed_and_mock_agent_tests` drives `run_seeded` and reads `Seed`.
+kata-test-seeded.workspace = true
+# Inspect the authoritative, co-located status projection in
+# read-only mode so the live restart test proves the sleep stage was durably
+# parked before it interrupts the installed main.
+rusqlite = { workspace = true }
+# `kata_timeout_tests` pauses a tokio clock (`start_paused`) to prove the watchdog spends
+# none of its real-time budget on virtual time.
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

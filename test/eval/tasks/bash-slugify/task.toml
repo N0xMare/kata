@@ -1,0 +1,13 @@
+id = "bash-slugify"
+title = "Implement slugify() so its test passes"
+required_tool = "bash"
+max_cost_micro_usd = 2000000
+
+prompt = """
+Implement the shell function slugify in slug.sh: lowercase the input, replace
+spaces with single hyphens, and drop characters that are not lowercase letters,
+digits, or hyphens. Make `bash test.sh` pass without editing the test.
+"""
+
+[mock]
+strategy = "noop"

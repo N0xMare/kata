@@ -1,0 +1,7 @@
+# execution 01M785A4YAXJJDFDDXY0THEMFC (completed): ledger.py record
+tokens_recorded = { input = 12, cache_read = 19804, cache_write = 8388, output = 614 }
+# e3-finish.py: ledger.py prints its unknown CHARGES (one per attempt kata could not meter) as `unmetered_calls`; here they are `unknown_charges`, not issued calls
+unknown_charges = 0
+# cost_recorded: the sum of 2 estimated charge(s), kata's own
+cost_recorded = "estimated"
+cost_recorded_usd = 0.029114

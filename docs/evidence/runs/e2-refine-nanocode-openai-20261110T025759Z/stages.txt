@@ -1,0 +1,13 @@
+execution 01M71P85WRS6RM6J9BCKYKJPFD (completed)
+stage      ordinal  state      accepted  adapter          model       effort  model_reported  schema_sent  charge     provider_failure  input  output  cache_read  cache_write  cost
+---------  -------  ---------  --------  ---------------  ----------  ------  --------------  -----------  ---------  ----------------  -----  ------  ----------  -----------  ----------------------------
+implement  0        completed  1         nanocode_openai  gpt-6-luna  medium  gpt-6-luna      0            completed  -                 44015  3110    52480       0            unavailable(nanocode_openai)
+implement  1        completed  1         nanocode_openai  gpt-6-luna  medium  gpt-6-luna      0            completed  -                 43485  1188    36864       0            unavailable(nanocode_openai)
+implement  2        completed  1         nanocode_openai  gpt-6-luna  medium  gpt-6-luna      0            completed  -                 13309  819     35200       0            unavailable(nanocode_openai)
+plan       0        completed  1         nanocode_openai  gpt-6-luna  medium  gpt-6-luna      1            completed  -                 12090  508     31616       0            unavailable(nanocode_openai)
+
+stage totals (every attempt):
+stage      attempts  occurrences  retries  unknown_charges  input   output  cache_read  cache_write  cost
+---------  --------  -----------  -------  ---------------  ------  ------  ----------  -----------  -----------
+implement  3         3            0        0                100809  5117    124544      0            unavailable
+plan       1         1            0        0                12090   508     31616       0            unavailable

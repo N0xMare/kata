@@ -1,0 +1,1 @@
+{"findings": [], "summary": "The change correctly checks whether each command has an own stored source entry, so an explicitly stored `undefined` on the global command masks a defined local source as intended. The regression test exercises this case. No confirmed findings.", "verdict": "approve"}

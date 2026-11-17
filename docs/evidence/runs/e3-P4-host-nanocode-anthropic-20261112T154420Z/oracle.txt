@@ -1,0 +1,15 @@
+arm: forge: the local bare fsyncs what it acknowledges (core.fsync=all, core.fsyncMethod=fsync, a reference-transaction hook fsyncing each committed ref and its directory); the fake gh fsyncs gh.log after each call
+arm: control: sync(1) before the submit: the fixture, the provider and the booted node are on disk; the run's own writes are not flushed by the rig
+arm: execution 01M786WXJ316FFNSG7TJHP7FMR
+arm: control: [kata-fault-inject] crash point reached: operational.after_forge_push_before_pr (KATA_FAULT_INJECT=operational.after_forge_push_before_pr, action=stop); stopping process now (SIGSTOP)
+arm: control: the main (pid 1753), every thread's state ['T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T']
+arm: control: froze the main (pid 1753) before the kill; every thread's state ['T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T']
+arm: control: froze the worker (pid 2116) before the kill; every thread's state ['T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T', 'T']
+arm: control: frozen, before the kill: the forge's kata/<exec> ["48bbf4db102d911459b97897eb1319b1aaa8abaa\trefs/heads/kata/01M786WXJ316FFNSG7TJHP7FMR"]; pull requests for kata/<exec> 0
+the forge after the restart, before the main boots: kata/<exec> ["48bbf4db102d911459b97897eb1319b1aaa8abaa\trefs/heads/kata/01M786WXJ316FFNSG7TJHP7FMR"]; git fsck Ok(()); pull requests for kata/<exec> 0; at the kill ["48bbf4db102d911459b97897eb1319b1aaa8abaa\trefs/heads/kata/01M786WXJ316FFNSG7TJHP7FMR"]
+resumed execution 01M786WXJ316FFNSG7TJHP7FMR on /home/[redacted-private_session-5]/e3-state/P4-host after the machine restarted
+after the restart: status completed; remote refs/heads/kata/<exec> ["48bbf4db102d911459b97897eb1319b1aaa8abaa\trefs/heads/kata/01M786WXJ316FFNSG7TJHP7FMR"]; pull requests for kata/<exec> 1 (LocalBare forge)
+the one export ref Some("48bbf4db102d911459b97897eb1319b1aaa8abaa") against trunk's tip Some("48bbf4db102d911459b97897eb1319b1aaa8abaa")
+assert_final_state: trunk = kata/<exec> = the commit effect's commit_sha, exactly one `gh pr create`, no residue
+spend: issued calls of the agent attempts that never completed 0 (unmetered_calls; started 0, completed 0, unclosed 0, open false); the case kills no model call, so 0
+outcome: pass: settled pr-opened-once, every oracle held

@@ -1,0 +1,13 @@
+id = "python-median"
+title = "Implement median(xs) so its test passes"
+required_tool = "python3"
+max_cost_micro_usd = 2000000
+
+prompt = """
+Implement median(xs) in stats.py: the median of a non-empty list of numbers
+(average of the two middle values for even length). Make `python3 test_stats.py`
+pass without editing the test.
+"""
+
+[mock]
+strategy = "noop"

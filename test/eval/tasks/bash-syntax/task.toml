@@ -1,0 +1,12 @@
+id = "bash-syntax"
+title = "Fix the syntax error in deploy.sh"
+required_tool = "bash"
+max_cost_micro_usd = 1500000
+
+prompt = """
+deploy.sh has a shell syntax error (a malformed if statement). Fix it so
+`bash -n deploy.sh` reports no errors, preserving the intended behavior.
+"""
+
+[mock]
+strategy = "solve"

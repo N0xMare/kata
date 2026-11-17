@@ -1,0 +1,782 @@
+{
+  "execution_program": {
+    "external_input_channels": {
+      "channels": [
+        {
+          "default_value": "No external steering was appended.",
+          "description": "Run-level external steering rendered into every stage prompt.",
+          "expose_as": "steering",
+          "id": "operator_steering",
+          "index": 0,
+          "kind": "advisory",
+          "max_items": 8,
+          "schema": "text"
+        },
+        {
+          "description": "Plan-stage feedback appended by an operator or external controller.",
+          "expose_as": "plan_feedback",
+          "id": "plan_feedback",
+          "index": 1,
+          "kind": "advisory",
+          "max_items": 4,
+          "schema": "text",
+          "stage": "plan"
+        },
+        {
+          "description": "Review-stage feedback appended by an operator or external controller.",
+          "expose_as": "review_feedback",
+          "id": "review_feedback",
+          "index": 2,
+          "kind": "advisory",
+          "max_items": 4,
+          "schema": "text",
+          "stage": "review"
+        }
+      ],
+      "max_channels": 4
+    },
+    "human_request_queue": {
+      "max_items": 4,
+      "requests": [
+        {
+          "context": "Advisory steering only; approval gates remain reserved for protected actions.",
+          "default_assumption": "Keep the implementation single-writer unless the plan proves disjoint owned paths.",
+          "id": "HR-kata-loop-lite-scope",
+          "index": 0,
+          "priority": "medium",
+          "question": "Should the planned implementation wave stay single-writer if ownership is unclear?",
+          "stage": "plan"
+        }
+      ]
+    },
+    "memory_selectors": null,
+    "program_hash": "<program_hash>",
+    "schema_version": 11,
+    "summary": {
+      "edge_count": 6,
+      "external_input_channel_count": 3,
+      "human_request_count": 1,
+      "planned_invocation_count": 13,
+      "review_loop_count": 1,
+      "sandbox_profile_count": 3,
+      "stage_count": 7,
+      "worktree_isolated": true
+    },
+    "validation_criteria": null,
+    "verifier": {
+      "diagnostics": [
+        {
+          "code": "unstructured_stage_output",
+          "message": "stage implement declares no structured outputs; validators cannot machine-check its envelope",
+          "severity": "info",
+          "stage": "implement"
+        },
+        {
+          "code": "human_request_queue_nonblocking",
+          "message": "human_request_queue carries 1 nonblocking request(s) with max_items=4",
+          "severity": "info"
+        },
+        {
+          "code": "external_input_channels_prompt_context",
+          "message": "external_input_channels declares 3 prompt/context channel(s) with max_channels=4",
+          "severity": "info"
+        }
+      ],
+      "status": "pass"
+    },
+    "workflow_class": {
+      "id": "<workflow_class>",
+      "schema_version": 1
+    },
+    "workflow_name": "kata-loop-lite",
+    "workflow_pattern": {
+      "capabilities": [
+        "completion_check",
+        "research",
+        "plan",
+        "implement_review_loop"
+      ],
+      "escape_hatch": false,
+      "name": "normal_code_wave",
+      "risk_tier": "normal"
+    }
+  },
+  "format": "starlark",
+  "name": "kata-loop-lite",
+  "preflight": {
+    "edge_count": 6,
+    "execution_program": {
+      "diagnostic_count": 3,
+      "program_hash": "<program_hash>",
+      "schema_version": 11,
+      "verifier_passes": [
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "program_hash_present": true,
+            "schema_version": 11,
+            "workflow_class_present": true
+          },
+          "id": "execution_program_identity",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "checked_stage_count": 7,
+            "normalized_stage_count": 7
+          },
+          "id": "normalized_stage_lowers_into_program",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "normalized_stage_count": 7,
+            "planned_stage_count": 7
+          },
+          "id": "invocation_plan_stage_coverage",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "approval_not_required_stage_count": 7,
+            "approval_not_required_stages": [
+              "closeout",
+              "completion_check",
+              "implement",
+              "plan",
+              "research",
+              "review",
+              "validate"
+            ],
+            "approval_required_stage_count": 0,
+            "approval_required_stages": [],
+            "checked_stage_count": 7,
+            "normalized_stage_count": 7,
+            "policy_fields": [
+              "cache_policy",
+              "approval_required",
+              "model_hint",
+              "timeout_ms",
+              "allowed_tools",
+              "required_capabilities",
+              "sandbox",
+              "validate_retries",
+              "cost_budget",
+              "progress_visibility",
+              "execution_class",
+              "exit_policy"
+            ],
+            "runtime_decision": "approval_gate_eligibility"
+          },
+          "id": "dispatch_policy_coverage",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [
+            "unstructured_stage_output"
+          ],
+          "evidence": {
+            "structured_stage_count": 6,
+            "unstructured_stage_count": 1,
+            "unstructured_stages": [
+              "implement"
+            ]
+          },
+          "id": "structured_output_contracts",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "full_visibility_stage_count": 0,
+            "full_visibility_stages": []
+          },
+          "id": "progress_visibility_policy",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "multi_agent_stage_count": 3,
+            "multi_agent_stages": [
+              "implement",
+              "research",
+              "review"
+            ],
+            "worktree_isolated": true
+          },
+          "id": "multi_agent_worktree_isolation",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "dynamic_fanout_stage_count": 0,
+            "mutating_dynamic_fanout_stages": [],
+            "non_owned_paths_dynamic_fanout_stages": [],
+            "policy_reason": "mutating dynamic fanout must declare machine-checkable owned paths",
+            "required_mutation_policy": "owned_paths"
+          },
+          "id": "dynamic_fanout_mutation_policy",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "missing_quorum_stages": [],
+            "reviewer_stage_count": 1
+          },
+          "id": "reviewer_quorum_policy",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [
+            "human_request_queue_nonblocking"
+          ],
+          "evidence": {
+            "blocking_request_count": 0,
+            "max_items": 4,
+            "nonblocking_request_count": 1,
+            "request_count": 1,
+            "requests": [
+              {
+                "blocking": false,
+                "context": "Advisory steering only; approval gates remain reserved for protected actions.",
+                "context_present": true,
+                "default_assumption": "Keep the implementation single-writer unless the plan proves disjoint owned paths.",
+                "id": "HR-kata-loop-lite-scope",
+                "index": 0,
+                "priority": "medium",
+                "projection": "HR-kata-loop-lite-scope [plan]: Should the planned implementation wave stay single-writer if ownership is unclear? Default: Keep the implementation single-writer unless the plan proves disjoint owned paths.",
+                "question": "Should the planned implementation wave stay single-writer if ownership is unclear?",
+                "stage": "plan"
+              }
+            ]
+          },
+          "id": "human_request_queue",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [
+            "external_input_channels_prompt_context"
+          ],
+          "evidence": {
+            "channel_count": 3,
+            "channels": [
+              {
+                "default_value": "No external steering was appended.",
+                "default_value_present": true,
+                "description": "Run-level external steering rendered into every stage prompt.",
+                "expose_as": "steering",
+                "id": "operator_steering",
+                "index": 0,
+                "kind": "advisory",
+                "max_items": 8,
+                "runtime_authority": "prompt_context_only",
+                "schema": "text",
+                "stage": null
+              },
+              {
+                "default_value": null,
+                "default_value_present": false,
+                "description": "Plan-stage feedback appended by an operator or external controller.",
+                "expose_as": "plan_feedback",
+                "id": "plan_feedback",
+                "index": 1,
+                "kind": "advisory",
+                "max_items": 4,
+                "runtime_authority": "prompt_context_only",
+                "schema": "text",
+                "stage": "plan"
+              },
+              {
+                "default_value": null,
+                "default_value_present": false,
+                "description": "Review-stage feedback appended by an operator or external controller.",
+                "expose_as": "review_feedback",
+                "id": "review_feedback",
+                "index": 2,
+                "kind": "advisory",
+                "max_items": 4,
+                "runtime_authority": "prompt_context_only",
+                "schema": "text",
+                "stage": "review"
+              }
+            ],
+            "max_channels": 4,
+            "runtime_authority": "prompt_context_only"
+          },
+          "id": "external_input_channels",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "escape_hatch": false,
+            "pattern": "normal_code_wave"
+          },
+          "id": "workflow_pattern_escape_hatch",
+          "status": "pass"
+        },
+        {
+          "diagnostic_codes": [],
+          "evidence": {
+            "escape_hatch": false,
+            "pattern": "normal_code_wave",
+            "reason_present": false
+          },
+          "id": "workflow_pattern_escape_reason",
+          "status": "pass"
+        }
+      ],
+      "verifier_status": "pass",
+      "workflow_class": "<workflow_class>"
+    },
+    "planned_invocation_count": 13,
+    "review_loop_count": 1,
+    "sandbox_profile_count": 3,
+    "source_format": "starlark",
+    "stage_count": 7,
+    "stages": [
+      {
+        "agent": "default",
+        "cache_policy": "omitted",
+        "cost_budget": {
+          "mode": "unlimited"
+        },
+        "execution_class": {
+          "adapter_issuance": false,
+          "axes": {
+            "computation": "process_action",
+            "containment": "contained",
+            "determinism": "nondeterministic",
+            "external_issuance": "durable_activity",
+            "network": "unrestricted",
+            "pre_commit_recovery": "reconcile_required",
+            "workspace": "read_only"
+          },
+          "containment": "contained",
+          "content_cache_eligible": false,
+          "workspace_mutating": false
+        },
+        "output_names": [
+          "evidence",
+          "next_action",
+          "outcome",
+          "remaining"
+        ],
+        "progress_visibility": "summary",
+        "sandbox": {
+          "data": "verdict",
+          "kind": "named"
+        },
+        "stage": "closeout",
+        "structured_output_count": 4,
+        "topology": {
+          "dynamic_fanout": false,
+          "fanout_limit": null,
+          "kind": "single_agent",
+          "max_concurrency": 1,
+          "mutation_policy": "advisory",
+          "review_quorum": null,
+          "reviewers": [],
+          "root": {
+            "agent": "default",
+            "required": true,
+            "role": "closeout_authority"
+          },
+          "workers": []
+        },
+        "validate_retries": 2
+      },
+      {
+        "agent": "default",
+        "cache_policy": "model_reuse",
+        "cost_budget": {
+          "mode": "unlimited"
+        },
+        "execution_class": {
+          "adapter_issuance": false,
+          "axes": {
+            "computation": "process_action",
+            "containment": "contained",
+            "determinism": "nondeterministic",
+            "external_issuance": "durable_activity",
+            "network": "unrestricted",
+            "pre_commit_recovery": "reconcile_required",
+            "workspace": "read_only"
+          },
+          "containment": "contained",
+          "content_cache_eligible": false,
+          "workspace_mutating": false
+        },
+        "output_names": [
+          "complete",
+          "missing",
+          "reason"
+        ],
+        "progress_visibility": "summary",
+        "sandbox": {
+          "data": "verdict",
+          "kind": "named"
+        },
+        "stage": "completion_check",
+        "structured_output_count": 3,
+        "topology": {
+          "dynamic_fanout": false,
+          "fanout_limit": null,
+          "kind": "single_agent",
+          "max_concurrency": 1,
+          "mutation_policy": "advisory",
+          "review_quorum": null,
+          "reviewers": [],
+          "root": {
+            "agent": "default",
+            "required": true,
+            "role": "completion_judge"
+          },
+          "workers": []
+        },
+        "validate_retries": 2
+      },
+      {
+        "agent": "default",
+        "cache_policy": "omitted",
+        "cost_budget": {
+          "mode": "unlimited"
+        },
+        "execution_class": {
+          "adapter_issuance": false,
+          "axes": {
+            "computation": "process_action",
+            "containment": "contained",
+            "determinism": "nondeterministic",
+            "external_issuance": "durable_activity",
+            "network": "unrestricted",
+            "pre_commit_recovery": "reconcile_required",
+            "workspace": "mutable_candidate"
+          },
+          "containment": "contained",
+          "content_cache_eligible": false,
+          "workspace_mutating": true
+        },
+        "output_names": [],
+        "progress_visibility": "summary",
+        "sandbox": {
+          "data": "implement",
+          "kind": "named"
+        },
+        "stage": "implement",
+        "structured_output_count": 0,
+        "topology": {
+          "dynamic_fanout": false,
+          "fanout_limit": 3,
+          "kind": "root_with_parallel_workers",
+          "max_concurrency": 3,
+          "mutation_policy": "advisory",
+          "review_quorum": null,
+          "reviewers": [],
+          "root": {
+            "agent": "default",
+            "required": true,
+            "role": "implementation_root"
+          },
+          "workers": [
+            {
+              "agent": "default",
+              "required": false,
+              "role": "package_writer"
+            },
+            {
+              "agent": "default",
+              "required": false,
+              "role": "second_writer"
+            }
+          ]
+        },
+        "validate_retries": 2
+      },
+      {
+        "agent": "default",
+        "cache_policy": "model_reuse",
+        "cost_budget": {
+          "mode": "unlimited"
+        },
+        "execution_class": {
+          "adapter_issuance": false,
+          "axes": {
+            "computation": "process_action",
+            "containment": "contained",
+            "determinism": "nondeterministic",
+            "external_issuance": "durable_activity",
+            "network": "unrestricted",
+            "pre_commit_recovery": "reconcile_required",
+            "workspace": "read_only"
+          },
+          "containment": "contained",
+          "content_cache_eligible": false,
+          "workspace_mutating": false
+        },
+        "output_names": [
+          "acceptance",
+          "objective",
+          "risk_tier",
+          "steps",
+          "validation",
+          "write_scope"
+        ],
+        "progress_visibility": "summary",
+        "sandbox": {
+          "data": "verdict",
+          "kind": "named"
+        },
+        "stage": "plan",
+        "structured_output_count": 6,
+        "topology": {
+          "dynamic_fanout": false,
+          "fanout_limit": null,
+          "kind": "single_agent",
+          "max_concurrency": 1,
+          "mutation_policy": "advisory",
+          "review_quorum": null,
+          "reviewers": [],
+          "root": {
+            "agent": "default",
+            "required": true,
+            "role": "plan_authority"
+          },
+          "workers": []
+        },
+        "validate_retries": 2
+      },
+      {
+        "agent": "default",
+        "cache_policy": "model_reuse",
+        "cost_budget": {
+          "mode": "unlimited"
+        },
+        "execution_class": {
+          "adapter_issuance": false,
+          "axes": {
+            "computation": "process_action",
+            "containment": "contained",
+            "determinism": "nondeterministic",
+            "external_issuance": "durable_activity",
+            "network": "unrestricted",
+            "pre_commit_recovery": "reconcile_required",
+            "workspace": "read_only"
+          },
+          "containment": "contained",
+          "content_cache_eligible": false,
+          "workspace_mutating": false
+        },
+        "output_names": [
+          "candidate_wave",
+          "findings",
+          "recommended_tests",
+          "risks"
+        ],
+        "progress_visibility": "summary",
+        "sandbox": {
+          "data": "verdict",
+          "kind": "named"
+        },
+        "stage": "research",
+        "structured_output_count": 4,
+        "topology": {
+          "dynamic_fanout": false,
+          "fanout_limit": 2,
+          "kind": "root_with_optional_researchers",
+          "max_concurrency": 3,
+          "mutation_policy": "advisory",
+          "review_quorum": null,
+          "reviewers": [],
+          "root": {
+            "agent": "default",
+            "required": true,
+            "role": "research_root"
+          },
+          "workers": [
+            {
+              "agent": "default",
+              "required": false,
+              "role": "codebase_researcher"
+            },
+            {
+              "agent": "default",
+              "required": false,
+              "role": "docs_researcher"
+            }
+          ]
+        },
+        "validate_retries": 2
+      },
+      {
+        "agent": "reviewer",
+        "cache_policy": "omitted",
+        "cost_budget": {
+          "mode": "unlimited"
+        },
+        "execution_class": {
+          "adapter_issuance": false,
+          "axes": {
+            "computation": "process_action",
+            "containment": "contained",
+            "determinism": "nondeterministic",
+            "external_issuance": "durable_activity",
+            "network": "unrestricted",
+            "pre_commit_recovery": "reconcile_required",
+            "workspace": "read_only"
+          },
+          "containment": "contained",
+          "content_cache_eligible": false,
+          "workspace_mutating": false
+        },
+        "output_names": [
+          "feedback",
+          "verdict"
+        ],
+        "progress_visibility": "summary",
+        "sandbox": {
+          "data": "review",
+          "kind": "named"
+        },
+        "stage": "review",
+        "structured_output_count": 2,
+        "topology": {
+          "dynamic_fanout": false,
+          "fanout_limit": null,
+          "kind": "review_quorum",
+          "max_concurrency": 2,
+          "mutation_policy": "advisory",
+          "review_quorum": {
+            "block_on_any_finding": true,
+            "block_on_optional_findings": false,
+            "count_optional_reviewers": false,
+            "required": 1
+          },
+          "reviewers": [
+            {
+              "agent": "reviewer",
+              "required": true,
+              "role": "primary_reviewer"
+            },
+            {
+              "agent": "default",
+              "required": false,
+              "role": "secondary_reviewer"
+            }
+          ],
+          "root": {
+            "agent": "reviewer",
+            "required": true,
+            "role": "review_root"
+          },
+          "workers": []
+        },
+        "validate_retries": 4
+      },
+      {
+        "agent": "shell",
+        "cache_policy": "omitted",
+        "cost_budget": {
+          "mode": "unlimited"
+        },
+        "execution_class": {
+          "adapter_issuance": false,
+          "axes": {
+            "computation": "process_action",
+            "containment": "contained",
+            "determinism": "nondeterministic",
+            "external_issuance": "durable_activity",
+            "network": "unrestricted",
+            "pre_commit_recovery": "manual_resolution",
+            "workspace": "read_only"
+          },
+          "containment": "contained",
+          "content_cache_eligible": false,
+          "workspace_mutating": false
+        },
+        "output_names": [
+          "commands",
+          "status"
+        ],
+        "progress_visibility": "summary",
+        "sandbox": {
+          "data": {
+            "exec": {
+              "kind": "oci"
+            },
+            "fs": {
+              "kind": "workspace_ro"
+            },
+            "locked": false,
+            "net": {
+              "kind": "host"
+            },
+            "requires": [
+              "cargo",
+              "git",
+              "just"
+            ]
+          },
+          "kind": "inline"
+        },
+        "stage": "validate",
+        "structured_output_count": 2,
+        "topology": {
+          "dynamic_fanout": false,
+          "fanout_limit": null,
+          "kind": "deterministic_validation",
+          "max_concurrency": 1,
+          "mutation_policy": "advisory",
+          "review_quorum": null,
+          "reviewers": [],
+          "root": {
+            "agent": "shell",
+            "required": true,
+            "role": "validator"
+          },
+          "workers": []
+        },
+        "validate_retries": 2
+      }
+    ],
+    "warnings": [
+      {
+        "code": "unstructured_stage_output",
+        "message": "stage implement declares no structured outputs; validators cannot machine-check its envelope",
+        "severity": "info",
+        "stage": "implement"
+      },
+      {
+        "code": "human_request_queue_nonblocking",
+        "message": "human_request_queue carries 1 nonblocking request(s) with max_items=4",
+        "severity": "info",
+        "stage": null
+      },
+      {
+        "code": "external_input_channels_prompt_context",
+        "message": "external_input_channels declares 3 prompt/context channel(s) with max_channels=4",
+        "severity": "info",
+        "stage": null
+      }
+    ],
+    "workflow_budget": {
+      "mode": "unlimited"
+    },
+    "worktree_isolated": true
+  },
+  "stage_names": [
+    "closeout",
+    "completion_check",
+    "implement",
+    "plan",
+    "research",
+    "review",
+    "validate"
+  ]
+}

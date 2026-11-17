@@ -1,0 +1,8 @@
+✓ Closed pull request N0xMare/kata-e2-fixture#8 (kata change)
+close rc=0
+To github.com:N0xMare/kata-e2-fixture.git
+ - [deleted]         kata/01M71NQKBCA7NRXY3Q316YVFDM
+delete rc=0
+CLOSED merged=null
+45235ea1c860df735eb9ad6bf58e0911f0e7e18f	refs/heads/e1-seeded
+01a7cd25555241e27eb4669807fc7452eb82d0f4	refs/heads/main

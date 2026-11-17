@@ -1,0 +1,111 @@
+   13s rc=0   readme      Requirements        sudo apt-get update
+   25s rc=0   readme      Requirements        sudo apt-get install -y build-essential git curl
+    2s rc=0   readme      Requirements        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+   25s rc=0   readme      Requirements        sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install) --daemon --yes
+    0s rc=0   readme      Requirements        mkdir -p ~/.config/nix ~/.local/bin ~/.local/state
+    0s rc=0   readme      Requirements        chmod go-w ~/.config ~/.local ~/.local/state
+    0s rc=0   readme      Requirements        echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
+    0s rc=0   readme      Requirements        git config --global user.name 'Your Name'
+    0s rc=0   readme      Requirements        git config --global user.email 'you@example.com'
+    6s rc=0   readme      Requirements        sudo apt-get install -y gh   # only for pull requests; then run `gh auth login` once
+    3s rc=0   substituted Install from source git clone ~/e9/kata.bundle kata
+    0s rc=0   readme      Install from source cd kata
+  280s rc=0   readme      Install from source cargo build --release --locked
+   13s rc=0   readme      Install from source cargo build --release --locked --target x86_64-unknown-linux-musl -p kata-toolhost
+    0s rc=0   readme      Install from source mkdir -p ~/.local/bin ~/.local/state
+    0s rc=0   readme      Install from source chmod go-w ~/.local ~/.local/state
+    0s rc=0   readme      Install from source ln -sf "$PWD/target/release/kata" "$PWD/target/release/kata-worker" ~/.local/bin/
+    0s rc=0   readme      Install from source ~/.local/bin/kata --version
+    0s rc=0   glue        Quickstart          mkdir -p ~/e9-demo && cd ~/e9-demo && git init -q -b main && git commit -q --allow-empty -m 'e9: empty root'
+    0s rc=0   readme      Quickstart          kata init
+  355s rc=0   readme      Quickstart          systemd-run --user --scope -p Delegate=yes -- kata host setup --install-apparmor
+    0s rc=0   readme-bg   Quickstart          systemd-run --user --scope -p Delegate=yes -- kata serve --config .kata/kata.toml   # terminal 1
+    3s rc=0   glue        Quickstart          for _ in $(seq 120); do kata run list >/dev/null 2>&1 && break; sleep 1; done; kata run list >/dev/null
+    1s rc=0   readme      Quickstart          kata run std.hello --wait --timeout-secs 60                                          # terminal 2
+    0s rc=0   glue        Checks              cd ~/e9-demo
+    0s rc=0   glue        Checks              kata --version
+    0s rc=0   glue        Checks              kata doctor --config .kata/kata.toml
+    0s rc=0   glue        Checks              test "$(git -C ~/kata rev-parse HEAD)" = 4da3b2fe2aa434cfd68b267c1177354510c32c2f
+    0s rc=0   glue        Checks              python3 -I ~/e9/run/oracle.py .kata/kata.toml
+    5s rc=0   glue        Checks              sudo apt-get install -y sqlite3 && sqlite3 --version
+time to first run: 726s (first planned line start -> first kata run end)
+deviations from README as written: 10 planned line(s) of kind substituted/readme-bg/glue
+commit: 4da3b2fe2aa434cfd68b267c1177354510c32c2f
+run without a terminal (ssh, no tty, stdin /dev/null) and with passwordless guest sudo: a prompt that asks only on a tty took its non-interactive path
+Requirements	0
+Install from source	0
+Quickstart	0
+Checks	0
+planned lines that run sudo:
+  readme: sudo apt-get update
+  readme: sudo apt-get install -y build-essential git curl
+  readme: sudo apt-get install -y gh   # only for pull requests; then run `gh auth login` once
+  glue: sudo apt-get install -y sqlite3 && sqlite3 --version
+sudo commands the guest journal recorded during the run (incl. sudo run by kata itself, and this script's journalctl):
+  2026-11-12T15:20:49+00:00 e9-vm sudo[1426]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/apt-get update
+  2026-11-12T15:21:02+00:00 e9-vm sudo[1739]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/apt-get install -y build-essential git curl
+  2026-11-12T15:21:34+00:00 e9-vm sudo[2513]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env groupadd -g 30000 --system nixbld
+  2026-11-12T15:21:34+00:00 e9-vm sudo[2524]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 1' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30001 --password ! nixbld1
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2551]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 2' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30002 --password ! nixbld2
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2578]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 3' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30003 --password ! nixbld3
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2605]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 4' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30004 --password ! nixbld4
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2632]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 5' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30005 --password ! nixbld5
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2659]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 6' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30006 --password ! nixbld6
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2686]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 7' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30007 --password ! nixbld7
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2713]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 8' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30008 --password ! nixbld8
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2740]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 9' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30009 --password ! nixbld9
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2767]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 10' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30010 --password ! nixbld10
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2794]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 11' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30011 --password ! nixbld11
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2821]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 12' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30012 --password ! nixbld12
+  2026-11-12T15:21:35+00:00 e9-vm sudo[2848]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 13' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30013 --password ! nixbld13
+  2026-11-12T15:21:36+00:00 e9-vm sudo[2875]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 14' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30014 --password ! nixbld14
+  2026-11-12T15:21:36+00:00 e9-vm sudo[2902]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 15' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30015 --password ! nixbld15
+  2026-11-12T15:21:36+00:00 e9-vm sudo[2929]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 16' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30016 --password ! nixbld16
+  2026-11-12T15:21:36+00:00 e9-vm sudo[2956]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 17' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30017 --password ! nixbld17
+  2026-11-12T15:21:36+00:00 e9-vm sudo[2983]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 18' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30018 --password ! nixbld18
+  2026-11-12T15:21:36+00:00 e9-vm sudo[3010]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 19' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30019 --password ! nixbld19
+  2026-11-12T15:21:36+00:00 e9-vm sudo[3037]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 20' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30020 --password ! nixbld20
+  2026-11-12T15:21:36+00:00 e9-vm sudo[3064]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 21' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30021 --password ! nixbld21
+  2026-11-12T15:21:36+00:00 e9-vm sudo[3091]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 22' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30022 --password ! nixbld22
+  2026-11-12T15:21:36+00:00 e9-vm sudo[3118]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 23' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30023 --password ! nixbld23
+  2026-11-12T15:21:36+00:00 e9-vm sudo[3145]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 24' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30024 --password ! nixbld24
+  2026-11-12T15:21:36+00:00 e9-vm sudo[3172]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 25' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30025 --password ! nixbld25
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3199]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 26' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30026 --password ! nixbld26
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3226]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 27' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30027 --password ! nixbld27
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3253]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 28' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30028 --password ! nixbld28
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3280]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 29' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30029 --password ! nixbld29
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3307]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 30' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30030 --password ! nixbld30
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3334]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 31' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30031 --password ! nixbld31
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3361]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env useradd --home-dir /var/empty --comment 'Nix build user 32' --gid 30000 --groups nixbld --no-user-group --system --shell /sbin/nologin --uid 30032 --password ! nixbld32
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3386]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env install -dv -m 0755 /nix /nix/var /nix/var/log /nix/var/log/nix /nix/var/log/nix/drvs /nix/var/nix /nix/var/nix/db /nix/var/nix/gcroots /nix/var/nix/profiles /nix/var/nix/temproots /nix/var/nix/userpool /nix/var/nix/daemon-socket /nix/var/nix/gcroots/per-user /nix/var/nix/profiles/per-user
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3388]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env install -dv -g nixbld -m 1775 /nix/store
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3390]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env install -dv -m 0555 /etc/nix
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3392]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env install -m 0644 /tmp/tmp.Lpm336GFc7/.nix-channels /root/.nix-channels
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3397]:       e9 : PWD=/tmp/nix-binary-tarball-unpack.FfUSK9yriK/unpack/nix-2.35.6-x86_64-linux ; USER=root ; COMMAND=/usr/bin/env cp -RP --preserve=mode,timestamps ./store/0ba5kj6r0zhfwd84l5vzccqvx7amlq2c-gcc-15.3.0-lib ./store/0px2m28zr2bfqycpl1av8qqpw7s8p2h5-editline-1.17.1-unstable-2025-05-24 ./store/0xb7cjikm4hw9a7lagf7bkbpkw3rjzg1-nix-fetchers-2.35.6 ./store/0z8ig0fi7vwha3qwk5wgirpmm1jlhifr-aws-c-s3-0.8.7 ./store/1d733bdg61s0qwwr04xiyrqz4wydv3ym-xz-5.8.4 ./store/1ivagjbq7qpaqdl045zrq2g626xj6yvb-aws-c-compression-0.3.1 ./store/2l6kf3nfwb4k9c5dsdg8k1fs2jr5qikb-brotli-1.2.1-lib ./store/2llb0qaa9lbwli6i0350vy3j4jkhmbmg-libseccomp-2.6.1-lib ./store/31f225xam9v06jnm4878id3ch2wjkgkl-keyutils-1.6.3-lib ./store/41xwpwwpg8jxqgar1jf9lww0xkfy9mjc-ngtcp2-1.22.1 ./store/4fhm41clh7s82xgb3jdnpll1axi9zqgq-xgcc-15.3.0-libgcc ./store/4qqwpd1f34k9505ljggkh07p5a9pllsz-sqlite-3.53.3 ./store/56vgzbxd1k167sq900dnlp7lldcmznl3-libxml2-2.15.4
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3400]:       e9 : PWD=/tmp/nix-binary-tarball-unpack.FfUSK9yriK/unpack/nix-2.35.6-x86_64-linux ; USER=root ; COMMAND=/usr/bin/env chmod -R ugo-w /nix/store/
+  2026-11-12T15:21:37+00:00 e9-vm sudo[3402]:       e9 : PWD=/tmp/nix-binary-tarball-unpack.FfUSK9yriK/unpack/nix-2.35.6-x86_64-linux ; USER=root ; COMMAND=/usr/bin/env HOME=/root /nix/store/g3m57m0jcdj84fas49lpiwpisacp20gr-nix-2.35.6/bin/nix-store --load-db
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3421]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env touch /etc/bashrc
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3426]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env tee /etc/bashrc
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3430]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env touch /etc/profile.d/nix.sh
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3435]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env tee /etc/profile.d/nix.sh
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3439]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env touch /etc/zshrc
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3444]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env tee /etc/zshrc
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3447]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env cp /etc/bash.bashrc /etc/bash.bashrc.backup-before-nix
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3452]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env tee /etc/bash.bashrc
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3459]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env HOME=/root /nix/store/g3m57m0jcdj84fas49lpiwpisacp20gr-nix-2.35.6/bin/nix-env -i /nix/store/g3m57m0jcdj84fas49lpiwpisacp20gr-nix-2.35.6
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3483]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env HOME=/root /nix/store/g3m57m0jcdj84fas49lpiwpisacp20gr-nix-2.35.6/bin/nix-env -i /nix/store/ff4flqgbk4b615sfq3kkp0fldyar60zm-nix-manual-2.35.6-man
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3507]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env HOME=/root /nix/store/g3m57m0jcdj84fas49lpiwpisacp20gr-nix-2.35.6/bin/nix-env -i /nix/store/j8kb3zn9kvx1f4ny1jlf21w8gd4zh2k8-nss-cacert-3.131.1
+  2026-11-12T15:21:38+00:00 e9-vm sudo[3531]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env HOME=/root NIX_SSL_CERT_FILE=/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt /nix/store/g3m57m0jcdj84fas49lpiwpisacp20gr-nix-2.35.6/bin/nix-channel --update nixpkgs
+  2026-11-12T15:21:53+00:00 e9-vm sudo[3583]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env install -m 0644 /tmp/tmp.Lpm336GFc7/nix.conf /etc/nix/nix.conf
+  2026-11-12T15:21:53+00:00 e9-vm sudo[3586]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env mkdir -p /etc/tmpfiles.d
+  2026-11-12T15:21:53+00:00 e9-vm sudo[3588]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env ln -sfn /nix/var/nix/profiles/default/lib/tmpfiles.d/nix-daemon.conf /etc/tmpfiles.d/nix-daemon.conf
+  2026-11-12T15:21:53+00:00 e9-vm sudo[3590]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env systemd-tmpfiles --create --prefix=/nix/var/nix
+  2026-11-12T15:21:54+00:00 e9-vm sudo[3592]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env systemctl link /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.service
+  2026-11-12T15:21:54+00:00 e9-vm sudo[3636]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env systemctl enable /nix/var/nix/profiles/default/lib/systemd/system/nix-daemon.socket
+  2026-11-12T15:21:54+00:00 e9-vm sudo[3681]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env systemctl daemon-reload
+  2026-11-12T15:21:54+00:00 e9-vm sudo[3725]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env systemctl start nix-daemon.socket
+  2026-11-12T15:21:54+00:00 e9-vm sudo[3727]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/env systemctl restart nix-daemon.service
+  2026-11-12T15:21:54+00:00 e9-vm sudo[3770]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/apt-get install -y gh
+  2026-11-12T15:31:38+00:00 e9-vm sudo[19888]:       e9 : PWD=/home/[redacted-private_session-1]/e9-demo ; USER=root ; COMMAND=/home/[redacted-private_session-1]/kata/target/release/kata host apparmor-install
+  2026-11-12T15:32:55+00:00 e9-vm sudo[29176]:       e9 : PWD=/home/[redacted-private_session-1]/e9-demo ; USER=root ; COMMAND=/usr/bin/apt-get install -y sqlite3
+  2026-11-12T15:33:00+00:00 e9-vm sudo[29324]:       e9 : PWD=/home/[redacted-private_session-1] ; USER=root ; COMMAND=/usr/bin/journalctl --no-pager -o short-iso --since @1794496849 _COMM=sudo

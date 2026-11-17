@@ -1,0 +1,92 @@
+ok   t_cli: no command is a usage error
+ok   t_cli: an unknown command is a usage error
+ok   t_cli: an unknown option is a usage error
+ok   t_cli: --help prints the usage on stdout
+ok   t_cli: --version prints the version
+ok   t_cli: --list names every lib/cmd_*.sh
+ok   t_conventions: count -h prints its usage on stdout
+ok   t_conventions: count rejects an unknown option
+ok   t_conventions: count refuses a missing file
+ok   t_conventions: count refuses a directory
+ok   t_conventions: count ends a final line that lacked a newline
+ok   t_conventions: count reads a FILE operand
+ok   t_conventions: count reads - as standard input
+ok   t_conventions: number -h prints its usage on stdout
+ok   t_conventions: number rejects an unknown option
+ok   t_conventions: number refuses a missing file
+ok   t_conventions: number refuses a directory
+ok   t_conventions: number ends a final line that lacked a newline
+ok   t_conventions: number reads a FILE operand
+ok   t_conventions: number reads - as standard input
+ok   t_conventions: squeeze -h prints its usage on stdout
+ok   t_conventions: squeeze rejects an unknown option
+ok   t_conventions: squeeze refuses a missing file
+ok   t_conventions: squeeze refuses a directory
+ok   t_conventions: squeeze ends a final line that lacked a newline
+ok   t_conventions: squeeze reads a FILE operand
+ok   t_conventions: squeeze reads - as standard input
+ok   t_conventions: trim -h prints its usage on stdout
+ok   t_conventions: trim rejects an unknown option
+ok   t_conventions: trim refuses a missing file
+ok   t_conventions: trim refuses a directory
+ok   t_conventions: trim ends a final line that lacked a newline
+ok   t_conventions: trim reads a FILE operand
+ok   t_conventions: trim reads - as standard input
+ok   t_conventions: wrap -h prints its usage on stdout
+ok   t_conventions: wrap rejects an unknown option
+ok   t_conventions: wrap refuses a missing file
+ok   t_conventions: wrap refuses a directory
+ok   t_conventions: wrap ends a final line that lacked a newline
+ok   t_conventions: wrap reads a FILE operand
+ok   t_conventions: wrap reads - as standard input
+ok   t_count: no input counts 0
+ok   t_count: counts lines
+ok   t_count: counts a final line without a newline
+ok   t_count: counts empty lines
+ok   t_count: counts across files
+ok   t_number: numbers lines with a tab
+ok   t_number: numbers empty lines and a final line without newline
+ok   t_number: -s sets the separator
+ok   t_number: -sSEP is accepted
+ok   t_number: numbers run on across files
+ok   t_number: -s without an argument is a usage error
+ok   t_number: no input prints nothing
+ok   t_squeeze: collapses a run of empty lines
+ok   t_squeeze: blank-only lines count as blank
+ok   t_squeeze: keeps one blank line at either end
+ok   t_squeeze: leaves text without blank lines alone
+ok   t_trim: strips leading and trailing blanks
+ok   t_trim: keeps inner blanks
+ok   t_trim: blank lines become empty lines
+ok   t_trim: no input prints nothing
+ok   t_wrap: A1 fills greedily
+ok   t_wrap: A2 a line of exactly the width fits
+ok   t_wrap: A3 one byte over the width breaks
+ok   t_wrap: A4 a long word sits alone
+ok   t_wrap: A5 blanks collapse and are trimmed
+ok   t_wrap: A6 paragraphs separated by one empty line
+ok   t_wrap: A7 final line without newline
+ok   t_wrap: A8 empty input prints nothing
+ok   t_wrap: A9 blank-only input prints nothing
+ok   t_wrap: A10 default width is 72
+ok   t_wrap: A11 attached -wWIDTH
+ok   t_wrap: A12 files form one stream
+ok   t_wrap: A13 invalid width '0'
+ok   t_wrap: A13 invalid width '0' shows usage
+ok   t_wrap: A13 invalid width '07'
+ok   t_wrap: A13 invalid width '07' shows usage
+ok   t_wrap: A13 invalid width '-3'
+ok   t_wrap: A13 invalid width '-3' shows usage
+ok   t_wrap: A13 invalid width '+5'
+ok   t_wrap: A13 invalid width '+5' shows usage
+ok   t_wrap: A13 invalid width 'abc'
+ok   t_wrap: A13 invalid width 'abc' shows usage
+ok   t_wrap: A13 invalid width '5x'
+ok   t_wrap: A13 invalid width '5x' shows usage
+ok   t_wrap: A13 invalid width ''
+ok   t_wrap: A13 invalid width '' shows usage
+ok   t_wrap: A14 -w without an argument
+ok   t_wrap: unknown option
+ok   t_wrap: -h prints usage
+ok   t_wrap: -w 1 puts each word on its own line
+linekit tests: 91 passed, 0 failed, 7 suites

@@ -1,0 +1,34 @@
+The known fix — the ORACLE ANSWER for the `tally` playground fixture.
+
+This file is deliberately NOT materialized into the fixture repository (no
+MANIFEST line names it), so a coding agent working in a candidate workspace
+never sees it. It has two callers, both of them checks:
+
+  * `scripts/materialize-gold-fixture.sh` runs `git apply --check` against every
+    freshly materialized tree. That is how the script knows it built the UNFIXED
+    fixture, DERIVED from the answer rather than re-spelling the defect in a grep.
+  * `--self-test` applies it for real, to prove the suite is RED before and GREEN
+    after — the before/after pair that makes the fixture an oracle instead of a
+    directory of shell.
+
+Regenerate it (never hand-edit) if `repo/src/tally.sh` changes: materialize the
+fixture, edit `tail_last`, and `git -C <dest> diff > test/fixtures/gold-loop/known-fix.patch`.
+`git apply` skips this preamble; the diff starts below.
+
+diff --git a/src/tally.sh b/src/tally.sh
+index f2599f8..b870fef 100644
+--- a/src/tally.sh
++++ b/src/tally.sh
+@@ -30,9 +30,10 @@ tail_last() {
+     # instead of returning everything.
+     #
+     # The fix is one expression; see `README.md`.
++    # `start` clamps to 0 instead of refusing, so an `n` larger than the list
++    # returns everything, as documented.
+     if [ "$start" -lt 0 ]; then
+-        echo "tail_last: n is larger than the list" >&2
+-        return 1
++        start=0
+     fi
+     i=0
+     for item in "$@"; do

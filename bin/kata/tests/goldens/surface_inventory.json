@@ -1,0 +1,1968 @@
+{
+  "schema_version": 1,
+  "operations": [
+    {
+      "name": "author",
+      "request_fields": [
+        "config",
+        "force",
+        "print"
+      ],
+      "response_fields": [
+        "config",
+        "created"
+      ]
+    },
+    {
+      "name": "check",
+      "request_fields": [
+        "all",
+        "deny_warnings",
+        "workflow"
+      ],
+      "response_fields": [
+        "capsule_networks",
+        "deferred_node_facts",
+        "error_count",
+        "info_count",
+        "name",
+        "passed",
+        "status",
+        "warning_count"
+      ]
+    },
+    {
+      "name": "run",
+      "request_fields": [
+        "params",
+        "target",
+        "wait",
+        "wait_timeout_secs",
+        "workflow",
+        "workflow_filename",
+        "workflow_starlark"
+      ],
+      "response_fields": [
+        "execution_id",
+        "status",
+        "terminal",
+        "wait_timed_out"
+      ]
+    },
+    {
+      "name": "observe",
+      "request_fields": [
+        "execution_id"
+      ],
+      "response_fields": [
+        "capsule_networks",
+        "current_stage",
+        "execution_id",
+        "failure_reason",
+        "iteration",
+        "last_stage",
+        "stage_outputs",
+        "status",
+        "terminal",
+        "terminal_detail",
+        "wave",
+        "workflow_name"
+      ]
+    },
+    {
+      "name": "list",
+      "request_fields": [
+        "limit"
+      ],
+      "response_fields": [
+        "executions"
+      ]
+    },
+    {
+      "name": "approve",
+      "request_fields": [
+        "execution_id"
+      ],
+      "response_fields": [
+        "approved",
+        "execution_id"
+      ]
+    },
+    {
+      "name": "reject",
+      "request_fields": [
+        "execution_id",
+        "reason"
+      ],
+      "response_fields": [
+        "execution_id",
+        "rejected"
+      ]
+    },
+    {
+      "name": "cancel",
+      "request_fields": [
+        "execution_id"
+      ],
+      "response_fields": [
+        "execution_id",
+        "stop_requested"
+      ]
+    },
+    {
+      "name": "promote",
+      "request_fields": [
+        "execution_id"
+      ],
+      "response_fields": [
+        "execution_id",
+        "promoted"
+      ]
+    },
+    {
+      "name": "discharge_stop",
+      "request_fields": [
+        "assertion",
+        "attempt_id",
+        "execution_id",
+        "lease_epoch",
+        "operator"
+      ],
+      "response_fields": [
+        "assertion",
+        "attempt_id",
+        "discharged",
+        "execution_id",
+        "lease_epoch",
+        "operator",
+        "outstanding_stops_remaining",
+        "provenance",
+        "rests_on_a_proof"
+      ]
+    },
+    {
+      "name": "forge_reconcile",
+      "request_fields": [
+        "execution_id"
+      ],
+      "response_fields": [
+        "execution_id",
+        "exports"
+      ]
+    }
+  ],
+  "cli_commands": [
+    {
+      "path": "__service-exec",
+      "hidden": true,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "definition",
+        "environment",
+        "expected_binary_digest",
+        "expected_config_digest",
+        "expected_data_directory",
+        "expected_directory_id",
+        "expected_environment_digest"
+      ]
+    },
+    {
+      "path": "__syscall-probe",
+      "hidden": true,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "unshare_userns"
+      ]
+    },
+    {
+      "path": "api-token",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "api-token mint",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "expires_in",
+        "issued_for",
+        "scope",
+        "signing_key_file"
+      ]
+    },
+    {
+      "path": "approvals",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "backup",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "out",
+        "recoverable"
+      ]
+    },
+    {
+      "path": "build",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "deny_warnings",
+        "out",
+        "workflow"
+      ]
+    },
+    {
+      "path": "check",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "all",
+        "config",
+        "deny_warnings",
+        "workflow"
+      ]
+    },
+    {
+      "path": "config",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "config check",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config"
+      ]
+    },
+    {
+      "path": "diff",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id",
+        "stage"
+      ]
+    },
+    {
+      "path": "doctor",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "online",
+        "workflow"
+      ]
+    },
+    {
+      "path": "events",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "exit_on",
+        "filter_execution",
+        "since",
+        "status"
+      ]
+    },
+    {
+      "path": "evidence",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "evidence list",
+      "hidden": false,
+      "has_own_json_flag": true,
+      "is_leaf": true,
+      "args": [
+        "json",
+        "path",
+        "strict"
+      ]
+    },
+    {
+      "path": "evidence summary",
+      "hidden": false,
+      "has_own_json_flag": true,
+      "is_leaf": true,
+      "args": [
+        "json",
+        "path",
+        "strict"
+      ]
+    },
+    {
+      "path": "execution-provider",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "execution-provider certify",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "provider"
+      ]
+    },
+    {
+      "path": "execution-provider inspect",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "provider"
+      ]
+    },
+    {
+      "path": "execution-provider list",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "execution-workspace",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id"
+      ]
+    },
+    {
+      "path": "explain",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "current",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "factory",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "factory apply",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "action",
+        "active",
+        "channel",
+        "current",
+        "decision_id",
+        "execution_id",
+        "input_id",
+        "name",
+        "resume_claimed_side_effect",
+        "source",
+        "workflow"
+      ]
+    },
+    {
+      "path": "factory candidate",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "current",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "factory finalize",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "action",
+        "active",
+        "commit_sha",
+        "confirm_side_effect",
+        "current",
+        "decision_id",
+        "evidence",
+        "execution_id",
+        "next_execution_id",
+        "parked_ref",
+        "promoted_commit_sha",
+        "promoted_ref",
+        "reason",
+        "source"
+      ]
+    },
+    {
+      "path": "factory report",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "bundle",
+        "bundle_dir",
+        "current",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "factory run",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "channel",
+        "context",
+        "context_file",
+        "include_outputs",
+        "input_id",
+        "payload_json",
+        "poll_ms",
+        "source",
+        "target_stage",
+        "timeout_secs",
+        "wait",
+        "watch",
+        "workflow"
+      ]
+    },
+    {
+      "path": "factory status",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "current",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "factory steer",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "channel",
+        "context",
+        "context_file",
+        "current",
+        "execution_id",
+        "input_id",
+        "payload_json",
+        "source",
+        "target_stage"
+      ]
+    },
+    {
+      "path": "health",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "host",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "host apparmor-install",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "host setup",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "environment_file",
+        "install_apparmor",
+        "provider_ip",
+        "provider_source"
+      ]
+    },
+    {
+      "path": "init",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "force",
+        "print"
+      ]
+    },
+    {
+      "path": "login",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "login anthropic",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "api_key"
+      ]
+    },
+    {
+      "path": "login openai",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "api_key",
+        "browser",
+        "device_code",
+        "no_browser"
+      ]
+    },
+    {
+      "path": "login status",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "check"
+      ]
+    },
+    {
+      "path": "logout",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "provider"
+      ]
+    },
+    {
+      "path": "mcp",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "connect",
+        "no_engine"
+      ]
+    },
+    {
+      "path": "memory",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "memory get",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "id"
+      ]
+    },
+    {
+      "path": "memory import-inbox",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "archive_dir",
+        "delete_processed",
+        "dir"
+      ]
+    },
+    {
+      "path": "memory propose",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "file"
+      ]
+    },
+    {
+      "path": "memory snapshot",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "kind",
+        "kinds",
+        "limit",
+        "out_dir",
+        "query",
+        "status",
+        "statuses"
+      ]
+    },
+    {
+      "path": "node",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "node environment",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "node environment release",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "data_dir",
+        "id"
+      ]
+    },
+    {
+      "path": "repair-nucleus",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "apply",
+        "config",
+        "data_dir"
+      ]
+    },
+    {
+      "path": "replay",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "current",
+        "execution_id",
+        "include_outputs"
+      ]
+    },
+    {
+      "path": "report",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "bundle",
+        "bundle_dir",
+        "current",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "restore",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "from",
+        "recoverable",
+        "recovery_decisions",
+        "restore_config"
+      ]
+    },
+    {
+      "path": "run",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": [
+        "include_outputs",
+        "param",
+        "params_file",
+        "poll_ms",
+        "submit",
+        "target",
+        "timeout_secs",
+        "wait",
+        "watch",
+        "workflow"
+      ]
+    },
+    {
+      "path": "run approve",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "assignment_id",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "run cancel",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id",
+        "reason"
+      ]
+    },
+    {
+      "path": "run current",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active"
+      ]
+    },
+    {
+      "path": "run discharge-stop",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "assertion",
+        "attempt_id",
+        "execution_id",
+        "lease_epoch",
+        "operator"
+      ]
+    },
+    {
+      "path": "run forge-reconcile",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id"
+      ]
+    },
+    {
+      "path": "run list",
+      "hidden": false,
+      "has_own_json_flag": true,
+      "is_leaf": true,
+      "args": [
+        "json",
+        "limit",
+        "status"
+      ]
+    },
+    {
+      "path": "run output",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id",
+        "stage"
+      ]
+    },
+    {
+      "path": "run park",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id",
+        "ref_name"
+      ]
+    },
+    {
+      "path": "run promote",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id"
+      ]
+    },
+    {
+      "path": "run reject",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "assignment_id",
+        "execution_id",
+        "reason"
+      ]
+    },
+    {
+      "path": "run show",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id"
+      ]
+    },
+    {
+      "path": "run wait",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "execution_id",
+        "poll_ms",
+        "timeout_secs"
+      ]
+    },
+    {
+      "path": "run-summary",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "current",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "sandbox",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "sandbox install-external-provider",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "name",
+        "source",
+        "store"
+      ]
+    },
+    {
+      "path": "serve",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config"
+      ]
+    },
+    {
+      "path": "service",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "service install",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "apply",
+        "config"
+      ]
+    },
+    {
+      "path": "service logs",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "service restart",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "apply"
+      ]
+    },
+    {
+      "path": "service start",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "apply"
+      ]
+    },
+    {
+      "path": "service status",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "service stop",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "apply"
+      ]
+    },
+    {
+      "path": "service uninstall",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "apply"
+      ]
+    },
+    {
+      "path": "skill",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "skill install",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "dir",
+        "host"
+      ]
+    },
+    {
+      "path": "status",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "steer",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "steer answer-human-request",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "answer_summary",
+        "execution_id",
+        "request_id",
+        "steering_id"
+      ]
+    },
+    {
+      "path": "steer append-external-input",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "channel",
+        "execution_id",
+        "input_id",
+        "payload_json",
+        "source",
+        "target_stage",
+        "text"
+      ]
+    },
+    {
+      "path": "steer external-inputs",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "channel",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "steer human-requests",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "answered",
+        "execution_id",
+        "status",
+        "unanswered"
+      ]
+    },
+    {
+      "path": "timeline",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "current",
+        "execution_id"
+      ]
+    },
+    {
+      "path": "upgrade",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "apply",
+        "config",
+        "data_dir",
+        "dry_run"
+      ]
+    },
+    {
+      "path": "usage",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "since"
+      ]
+    },
+    {
+      "path": "version",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "compare"
+      ]
+    },
+    {
+      "path": "watch",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "active",
+        "current",
+        "execution_id",
+        "include_outputs",
+        "timeout_secs"
+      ]
+    },
+    {
+      "path": "workers",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "workflows",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": false,
+      "args": []
+    },
+    {
+      "path": "workflows check",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "all",
+        "config",
+        "deny_warnings",
+        "workflow"
+      ]
+    },
+    {
+      "path": "workflows inspect",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "config",
+        "name"
+      ]
+    },
+    {
+      "path": "workflows list",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "all"
+      ]
+    },
+    {
+      "path": "workflows schema",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    },
+    {
+      "path": "workflows test",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": [
+        "fixture",
+        "show_rendered"
+      ]
+    },
+    {
+      "path": "workspace",
+      "hidden": false,
+      "has_own_json_flag": false,
+      "is_leaf": true,
+      "args": []
+    }
+  ],
+  "http_routes": [
+    {
+      "method": "GET",
+      "path": "/api/v1/agents",
+      "registered_by": "agents::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/agents/run",
+      "registered_by": "agents::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/approvals",
+      "registered_by": "approvals::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/events",
+      "registered_by": "events::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/executions",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/executions/{id}",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/executions/{id}/stages/{stage}/output",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/executions/{id}/workspace",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/health",
+      "registered_by": "server::build"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory",
+      "registered_by": "memory::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/memory/{id}",
+      "registered_by": "memory::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/system/status",
+      "registered_by": "system::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/version",
+      "registered_by": "version::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workers",
+      "registered_by": "workers::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workflows",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workflows/{name}",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/workspace",
+      "registered_by": "workspace::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/agents/run",
+      "registered_by": "agents::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/approve",
+      "registered_by": "approvals::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/cancel",
+      "registered_by": "approvals::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/external-inputs",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/factory/apply",
+      "registered_by": "approvals::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/factory/finalize",
+      "registered_by": "approvals::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/human-request-answer",
+      "registered_by": "workflows::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/park",
+      "registered_by": "approvals::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/promote",
+      "registered_by": "approvals::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/executions/{id}/reject",
+      "registered_by": "approvals::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/memory",
+      "registered_by": "memory::router"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ops/{operation}",
+      "registered_by": "ops::router"
+    }
+  ],
+  "mcp_tools": [
+    {
+      "name": "author",
+      "input_properties": [
+        "config",
+        "force",
+        "print"
+      ]
+    },
+    {
+      "name": "check",
+      "input_properties": [
+        "all",
+        "deny_warnings",
+        "workflow"
+      ]
+    },
+    {
+      "name": "list",
+      "input_properties": [
+        "limit"
+      ]
+    },
+    {
+      "name": "observe",
+      "input_properties": [
+        "execution_id"
+      ]
+    },
+    {
+      "name": "run",
+      "input_properties": [
+        "params",
+        "target",
+        "wait",
+        "wait_timeout_secs",
+        "workflow",
+        "workflow_filename",
+        "workflow_starlark"
+      ]
+    }
+  ],
+  "mcp_resources": [
+    "kata://workflows/dsl-catalog"
+  ],
+  "sdk_methods": [
+    {
+      "module": "client",
+      "name": "agent_run_capabilities"
+    },
+    {
+      "module": "client",
+      "name": "answer_human_request"
+    },
+    {
+      "module": "client",
+      "name": "append_external_input"
+    },
+    {
+      "module": "client",
+      "name": "apply_controller_decision"
+    },
+    {
+      "module": "client",
+      "name": "approve"
+    },
+    {
+      "module": "client",
+      "name": "base_url"
+    },
+    {
+      "module": "client",
+      "name": "cancel"
+    },
+    {
+      "module": "client",
+      "name": "current_execution"
+    },
+    {
+      "module": "client",
+      "name": "execution_explain"
+    },
+    {
+      "module": "client",
+      "name": "execution_factory_candidate"
+    },
+    {
+      "module": "client",
+      "name": "execution_factory_status"
+    },
+    {
+      "module": "client",
+      "name": "execution_replay_summary"
+    },
+    {
+      "module": "client",
+      "name": "execution_report"
+    },
+    {
+      "module": "client",
+      "name": "execution_run_summary"
+    },
+    {
+      "module": "client",
+      "name": "execution_workspace"
+    },
+    {
+      "module": "client",
+      "name": "finalize_controller_application_claim"
+    },
+    {
+      "module": "client",
+      "name": "forge_reconcile"
+    },
+    {
+      "module": "client",
+      "name": "get_memory_object"
+    },
+    {
+      "module": "client",
+      "name": "get_stage_output"
+    },
+    {
+      "module": "client",
+      "name": "get_workflow"
+    },
+    {
+      "module": "client",
+      "name": "health"
+    },
+    {
+      "module": "client",
+      "name": "http_builder"
+    },
+    {
+      "module": "client",
+      "name": "invoke_op"
+    },
+    {
+      "module": "client",
+      "name": "list"
+    },
+    {
+      "module": "client",
+      "name": "list_agents"
+    },
+    {
+      "module": "client",
+      "name": "list_approvals"
+    },
+    {
+      "module": "client",
+      "name": "list_filtered"
+    },
+    {
+      "module": "client",
+      "name": "list_workers"
+    },
+    {
+      "module": "client",
+      "name": "list_workflows"
+    },
+    {
+      "module": "client",
+      "name": "memory_snapshot_query"
+    },
+    {
+      "module": "client",
+      "name": "new"
+    },
+    {
+      "module": "client",
+      "name": "new_with_env_token"
+    },
+    {
+      "module": "client",
+      "name": "observe"
+    },
+    {
+      "module": "client",
+      "name": "park"
+    },
+    {
+      "module": "client",
+      "name": "promote"
+    },
+    {
+      "module": "client",
+      "name": "propose_memory"
+    },
+    {
+      "module": "client",
+      "name": "reject"
+    },
+    {
+      "module": "client",
+      "name": "run"
+    },
+    {
+      "module": "client",
+      "name": "run_agent"
+    },
+    {
+      "module": "client",
+      "name": "run_starlark"
+    },
+    {
+      "module": "client",
+      "name": "run_starlark_with_external_inputs"
+    },
+    {
+      "module": "client",
+      "name": "run_starlark_with_params"
+    },
+    {
+      "module": "client",
+      "name": "run_with_external_inputs"
+    },
+    {
+      "module": "client",
+      "name": "run_with_params"
+    },
+    {
+      "module": "client",
+      "name": "subscribe_event_frames"
+    },
+    {
+      "module": "client",
+      "name": "subscribe_events"
+    },
+    {
+      "module": "client",
+      "name": "subscribe_events_with_status"
+    },
+    {
+      "module": "client",
+      "name": "system_status"
+    },
+    {
+      "module": "client",
+      "name": "system_status_bounded"
+    },
+    {
+      "module": "client",
+      "name": "version"
+    },
+    {
+      "module": "client",
+      "name": "wait_for_status_event"
+    },
+    {
+      "module": "client",
+      "name": "with_bearer_token"
+    },
+    {
+      "module": "client",
+      "name": "with_http"
+    },
+    {
+      "module": "client",
+      "name": "workspace_awareness"
+    },
+    {
+      "module": "error",
+      "name": "op_error_code"
+    },
+    {
+      "module": "events",
+      "name": "feed"
+    },
+    {
+      "module": "events",
+      "name": "filter_execution"
+    },
+    {
+      "module": "events",
+      "name": "filter_execution"
+    },
+    {
+      "module": "events",
+      "name": "last_seq"
+    },
+    {
+      "module": "events",
+      "name": "last_seq"
+    },
+    {
+      "module": "events",
+      "name": "new"
+    },
+    {
+      "module": "events",
+      "name": "next_emit"
+    },
+    {
+      "module": "events",
+      "name": "next_frame"
+    },
+    {
+      "module": "execution",
+      "name": "from_id"
+    },
+    {
+      "module": "execution",
+      "name": "id"
+    },
+    {
+      "module": "execution",
+      "name": "record"
+    },
+    {
+      "module": "execution",
+      "name": "subscribe_events"
+    },
+    {
+      "module": "execution",
+      "name": "wait_for_terminal"
+    },
+    {
+      "module": "execution",
+      "name": "wait_for_terminal_with"
+    },
+    {
+      "module": "operator_projection::explain",
+      "name": "explain_summary"
+    },
+    {
+      "module": "operator_projection::explain",
+      "name": "fold_approval_gates_into_explain"
+    },
+    {
+      "module": "operator_projection::explain",
+      "name": "resume_claimed_side_effect_command"
+    },
+    {
+      "module": "operator_projection::explain",
+      "name": "resume_claimed_side_effect_reason"
+    },
+    {
+      "module": "operator_projection::explain",
+      "name": "retry_claimed_application_command"
+    },
+    {
+      "module": "operator_projection::explain",
+      "name": "retry_claimed_application_reason"
+    },
+    {
+      "module": "operator_projection::factory",
+      "name": "factory_candidate_packet"
+    },
+    {
+      "module": "operator_projection::factory",
+      "name": "factory_controller_action"
+    },
+    {
+      "module": "operator_projection::factory",
+      "name": "factory_controller_status_from_parts"
+    },
+    {
+      "module": "operator_projection::factory",
+      "name": "resumable_claimed_side_effect"
+    },
+    {
+      "module": "operator_projection::factory",
+      "name": "retriable_claimed_application"
+    },
+    {
+      "module": "operator_projection::report",
+      "name": "execution_report_from_parts"
+    },
+    {
+      "module": "operator_projection::report",
+      "name": "fold_approval_gates_into_report"
+    },
+    {
+      "module": "operator_projection::summaries",
+      "name": "external_input_rows"
+    },
+    {
+      "module": "operator_projection::summaries",
+      "name": "filter_external_input_rows"
+    },
+    {
+      "module": "operator_projection::summaries",
+      "name": "filter_human_request_rows"
+    },
+    {
+      "module": "operator_projection::summaries",
+      "name": "human_request_rows"
+    },
+    {
+      "module": "operator_projection::summaries",
+      "name": "replay_summary_with_worker_attribution"
+    },
+    {
+      "module": "operator_projection::summaries",
+      "name": "run_summary_with_worker_attribution"
+    },
+    {
+      "module": "operator_projection::summaries",
+      "name": "watch_snapshot_with_worker_attribution"
+    },
+    {
+      "module": "operator_projection::worker_attribution",
+      "name": "collect_worker_attribution"
+    },
+    {
+      "module": "operator_projection::worker_attribution",
+      "name": "from_attribution"
+    },
+    {
+      "module": "operator_projection::worker_attribution",
+      "name": "record_event"
+    },
+    {
+      "module": "operator_projection::worker_attribution",
+      "name": "to_vec"
+    }
+  ],
+  "starlark_builtins": [
+    "branch",
+    "branch_if",
+    "channel",
+    "contract",
+    "cost_bound",
+    "cost_budget",
+    "enum",
+    "field",
+    "human_request",
+    "integer",
+    "json_skeleton",
+    "list_of",
+    "loop",
+    "memory_selector",
+    "memory_snapshot",
+    "memory_writeback",
+    "number",
+    "parallel",
+    "review_quorum",
+    "role",
+    "route",
+    "sandbox_profile",
+    "schedule",
+    "sequence",
+    "sleep",
+    "stage",
+    "string",
+    "subworkflow",
+    "time_bound",
+    "token_bound",
+    "topology",
+    "validation_criterion",
+    "variant",
+    "when",
+    "workflow",
+    "workflow_pattern"
+  ],
+  "skill_taught_operations": [
+    "author",
+    "check",
+    "run",
+    "observe",
+    "list"
+  ],
+  "matrix": [
+    {
+      "operation": "author",
+      "http_ops_anchor": false,
+      "http_routes_whose_path_names_it": [],
+      "mcp_tool": true,
+      "cli_commands_whose_last_segment_names_it": [],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": false,
+      "skill_teaches_it": true
+    },
+    {
+      "operation": "check",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [],
+      "mcp_tool": true,
+      "cli_commands_whose_last_segment_names_it": [
+        "check",
+        "config check",
+        "workflows check"
+      ],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": false,
+      "skill_teaches_it": true
+    },
+    {
+      "operation": "run",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [
+        "GET /api/v1/agents/run",
+        "POST /api/v1/agents/run"
+      ],
+      "mcp_tool": true,
+      "cli_commands_whose_last_segment_names_it": [
+        "factory run",
+        "run"
+      ],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": true,
+      "skill_teaches_it": true
+    },
+    {
+      "operation": "observe",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [],
+      "mcp_tool": true,
+      "cli_commands_whose_last_segment_names_it": [],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": true,
+      "skill_teaches_it": true
+    },
+    {
+      "operation": "list",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [],
+      "mcp_tool": true,
+      "cli_commands_whose_last_segment_names_it": [
+        "evidence list",
+        "execution-provider list",
+        "run list",
+        "workflows list"
+      ],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": true,
+      "skill_teaches_it": true
+    },
+    {
+      "operation": "approve",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [
+        "POST /api/v1/executions/{id}/approve"
+      ],
+      "mcp_tool": false,
+      "cli_commands_whose_last_segment_names_it": [
+        "run approve"
+      ],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": true,
+      "skill_teaches_it": false
+    },
+    {
+      "operation": "reject",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [
+        "POST /api/v1/executions/{id}/reject"
+      ],
+      "mcp_tool": false,
+      "cli_commands_whose_last_segment_names_it": [
+        "run reject"
+      ],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": true,
+      "skill_teaches_it": false
+    },
+    {
+      "operation": "cancel",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [
+        "POST /api/v1/executions/{id}/cancel"
+      ],
+      "mcp_tool": false,
+      "cli_commands_whose_last_segment_names_it": [
+        "run cancel"
+      ],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": true,
+      "skill_teaches_it": false
+    },
+    {
+      "operation": "promote",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [
+        "POST /api/v1/executions/{id}/promote"
+      ],
+      "mcp_tool": false,
+      "cli_commands_whose_last_segment_names_it": [
+        "run promote"
+      ],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": true,
+      "skill_teaches_it": false
+    },
+    {
+      "operation": "discharge_stop",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [],
+      "mcp_tool": false,
+      "cli_commands_whose_last_segment_names_it": [
+        "run discharge-stop"
+      ],
+      "cli_reaches_the_ops_anchor": true,
+      "sdk_method_named_for_it": false,
+      "skill_teaches_it": false
+    },
+    {
+      "operation": "forge_reconcile",
+      "http_ops_anchor": true,
+      "http_routes_whose_path_names_it": [],
+      "mcp_tool": false,
+      "cli_commands_whose_last_segment_names_it": [
+        "run forge-reconcile"
+      ],
+      "cli_reaches_the_ops_anchor": false,
+      "sdk_method_named_for_it": true,
+      "skill_teaches_it": false
+    }
+  ],
+  "derivation": {
+    "mcp_principal": "http_api",
+    "api_operations_mcp_does_not_advertise": [
+      "approve",
+      "reject",
+      "cancel",
+      "promote",
+      "discharge_stop",
+      "forge_reconcile"
+    ],
+    "skill_principals": [
+      "cli",
+      "mcp"
+    ],
+    "skill_named_cli_commands": [
+      "init",
+      "mcp"
+    ]
+  },
+  "counts": {
+    "operations": 11,
+    "cli_commands_total": 99,
+    "cli_commands_visible": 97,
+    "cli_commands_leaf_visible": 81,
+    "cli_commands_with_own_json_flag": 3,
+    "http_routes": 30,
+    "http_router_builders": 12,
+    "mcp_tools": 5,
+    "mcp_resources": 1,
+    "sdk_methods": 93,
+    "sdk_projection_methods": 24,
+    "starlark_builtins": 36,
+    "skill_taught_operations": 5,
+    "operations_named_on_the_cli": 9,
+    "operations_named_on_the_sdk": 8,
+    "absent_principal_matrix_cells": 21
+  }
+}

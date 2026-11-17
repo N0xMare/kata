@@ -1,0 +1,57 @@
+{
+  "ok": false,
+  "structure_errors": [],
+  "warnings": [],
+  "path_errors": [],
+  "verdict": "request_changes",
+  "findings": 2,
+  "seeded_found": "2/3 (unmatched 0 of 2 findings)",
+  "unmatched_findings": 0,
+  "defects": [
+    {
+      "path": "lib/cmd_number.sh",
+      "line_range": [
+        33,
+        35
+      ],
+      "defect": "off-by-one: the offset is START, so -n START numbers the first line START+1; it must be START-1 (default 0)",
+      "matched": false,
+      "finding": null,
+      "candidates": []
+    },
+    {
+      "path": "lib/cmd_number.sh",
+      "line_range": [
+        32,
+        32
+      ],
+      "defect": "word splitting: unquoted $@ splits FILE operands on blanks, so a file whose name holds a space is refused as unreadable; must be \"$@\"",
+      "matched": true,
+      "finding": {
+        "index": 0,
+        "line": 32,
+        "severity": "major"
+      },
+      "candidates": [
+        0
+      ]
+    },
+    {
+      "path": "lib/cmd_number.sh",
+      "line_range": [
+        17,
+        22
+      ],
+      "defect": "wrong exit code: an invalid START is a usage error and must exit 2 with the usage line (lk_usage_error), not exit 1",
+      "matched": true,
+      "finding": {
+        "index": 1,
+        "line": 21,
+        "severity": "major"
+      },
+      "candidates": [
+        1
+      ]
+    }
+  ]
+}

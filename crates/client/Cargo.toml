@@ -1,0 +1,62 @@
+[package]
+name = "kata-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Typed Rust SDK for the kata REST + SSE API."
+
+[dependencies]
+# We deliberately do NOT pull in `kata-api` (would drag axum + the entire
+# server stack into anything that links the SDK) or `kata-core` (would
+# drag the SQLite ledger + dispatcher + reactor). The wire types
+# (ExecutionRecord, ExecutionStatus, PendingApproval, LedgerEvent,
+# AssignmentStatus, SubsystemId, SubsystemHealth, HealthSnapshot) live in
+# `kata-types`, so we depend on that lightweight crate and re-export from
+# there instead of maintaining hand-written mirrors.
+kata-types.workspace = true
+# The operation contract's request/response/envelope types: the SDK's typed
+# `/ops` methods decode the contract's own types, never a copy of them.
+kata-op-contract.workspace = true
+# `query` for the list filters, `stream` for SSE, `json` for every body.
+reqwest = { workspace = true, features = ["json", "query", "stream"] }
+# The crypto provider `KataClient::http_builder` installs before building.
+rustls.workspace = true
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+smol_str.workspace = true
+ulid.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+# Used to spin up an in-process axum server hosting the real REST router
+# so the integration tests drive the SDK over a TCP loopback socket.
+tokio = { workspace = true, features = ["full", "test-util"] }
+axum.workspace = true
+tower.workspace = true
+kata-agent = { path = "../agent" }
+# SDK fixtures install delivery using the executor's test-only dispatcher access.
+kata-api = { path = "../api", features = ["test-support"] }
+kata-core.workspace = true
+# `integration.rs` mints a signed scoped `Operate` token to authenticate against
+# the signed-token API server it boots.
+kata-crypto.workspace = true
+# `test-support` exposes the `OciNodeRig` and its scripted worker
+# (`ScriptedWorkerHandle`) the shared `oci` rig builders in tests/common wire
+# behind the API server.
+kata-workflow = { path = "../workflow", features = ["test-support"] }
+# `test-support` reaches the fixture-agent installers the shared rigs declare
+# their agents through (`kata_program::test_harness::install_rig_agents`).
+kata-program = { workspace = true, features = ["test-support"] }
+kata-transport = { path = "../transport" }
+# Mock backends use a synthetic home without changing the production audit.
+kata-worker = { path = "../worker", features = ["test-support"] }
+kata-test-utils.workspace = true
+tempfile.workspace = true
+chrono.workspace = true
+
+[lints]
+workspace = true

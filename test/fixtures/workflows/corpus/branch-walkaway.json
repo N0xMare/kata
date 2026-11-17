@@ -1,0 +1,13 @@
+{
+  "name": "branch-walkaway-smoke — variant verdict routes to the taken arm; the rest is skipped",
+  "workflow_path": "../../../../workflows/smoke/branch-walkaway-smoke.star",
+  "recorded_outputs": {
+    "decide": { "parsed": { "choice": { "first": {} } } },
+    "first": { "content": "first ran" }
+  },
+  "expect": {
+    "ran": ["decide", "first"],
+    "skipped": ["second"],
+    "branch_taken": { "decide": "first" }
+  }
+}

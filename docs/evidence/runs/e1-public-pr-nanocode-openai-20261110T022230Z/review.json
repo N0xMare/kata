@@ -1,0 +1,1 @@
+{"findings": [], "summary": "The change checks whether each command has an own source entry, so an explicitly stored value with an undefined source correctly masks a descendant source. The regression test covers this case, and the project\u2019s Node.js minimum supports Object.hasOwn.", "verdict": "approve"}

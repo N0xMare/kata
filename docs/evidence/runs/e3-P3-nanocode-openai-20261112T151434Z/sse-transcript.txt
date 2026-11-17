@@ -1,0 +1,70 @@
+1794496476061	#connected
+1794496476062	HTTP/1.0 200 OK
+1794496476062	content-type: text/event-stream
+1794496476062	cache-control: no-cache
+1794496476062	date: Thu, 12 Nov 2026 15:14:36 GMT
+1794496476062	
+1794496476368	id: 1
+1794496476368	event: ledger
+1794496476368	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","new_status":{"kind":"pending"},"output":null}
+1794496476368	
+1794496476368	id: 2
+1794496476368	event: ledger
+1794496476368	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","new_status":{"kind":"dispatched","worker_id":"local-worker-0"},"output":null}
+1794496476368	
+1794496476377	id: 3
+1794496476377	event: ledger
+1794496476377	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","new_status":{"kind":"running","worker_id":"local-worker-0"},"output":null}
+1794496476377	
+1794496476473	event: progress
+1794496476473	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":18,"preview":"model_call_started","dropped":0,"at_ms":1794496476473}
+1794496476473	
+1794496484955	event: progress
+1794496484955	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":38,"preview":"model_call_completed","dropped":0,"at_ms":1794496484955}
+1794496484956	
+1794496484956	event: progress
+1794496484956	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":44,"preview":"tool_call: `exec`","dropped":0,"at_ms":1794496484955}
+1794496484956	
+1794496484965	event: progress
+1794496484965	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":58,"preview":"tool_call: `exec_command`","dropped":0,"at_ms":1794496484964}
+1794496484965	
+1794496484973	event: progress
+1794496484973	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":104,"preview":"tool_result: `[redacted-provider_payload-21]/code-1`","dropped":0,"at_ms":1794496484973}
+1794496484973	
+1794496484974	event: progress
+1794496484974	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":143,"preview":"tool_result: `[redacted-provider_payload-21]`","dropped":0,"at_ms":1794496484974}
+1794496484974	
+1794496484974	event: progress
+1794496484974	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":161,"preview":"model_call_started","dropped":0,"at_ms":1794496484974}
+1794496484974	
+1794496494508	event: progress
+1794496494508	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":181,"preview":"model_call_completed","dropped":0,"at_ms":1794496494508}
+1794496494508	
+1794496494508	event: progress
+1794496494509	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":187,"preview":"tool_call: `exec`","dropped":0,"at_ms":1794496494508}
+1794496494509	
+1794496494511	event: progress
+1794496494511	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":201,"preview":"tool_call: `exec_command`","dropped":0,"at_ms":1794496494511}
+1794496494511	
+1794496494520	event: progress
+1794496494520	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":247,"preview":"tool_result: `[redacted-provider_payload-22]/code-1`","dropped":0,"at_ms":1794496494520}
+1794496494520	
+1794496494522	event: progress
+1794496494522	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":286,"preview":"tool_result: `[redacted-provider_payload-22]`","dropped":0,"at_ms":1794496494521}
+1794496494522	
+1794496494522	event: progress
+1794496494522	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":304,"preview":"model_call_started","dropped":0,"at_ms":1794496494522}
+1794496494522	
+1794496502597	event: progress
+1794496502597	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":567,"preview":"agent_message_chunk: `{\"files\":[\"src/app.txt\"],\"risks\":[\"The current file contai","dropped":0,"at_ms":1794496502597}
+1794496502597	
+1794496502848	event: progress
+1794496502848	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":756,"preview":"agent_message_chunk: `. No files were changed.\"}`","dropped":0,"at_ms":1794496502848}
+1794496502848	
+1794496503962	event: progress
+1794496503963	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","byte_offset":776,"preview":"model_call_completed","dropped":0,"at_ms":1794496503962}
+1794496503963	
+1794496504087	id: 4
+1794496504087	event: ledger
+1794496504087	data: {"execution_id":"01M7856D14W3FRZXMNHDJKD7G8","assignment_id":"01M7856D68R311J2EXDA2ET9W3","stage_name":"plan","new_status":{"kind":"failed","worker_id":"local-worker-0","reason":"worker local-worker-0 died: its connection closed (network error: connection closed by peer); its process 1397025 exists in state Z. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)"},"output":null,"terminal_charge":{"token_usage":{"input":0,"output":0,"cache_read":0,"cache_write":0,"cache_savings_micro_usd":0,"cost":{"quality":"unavailable","backend":"nanocode_openai","model":"gpt-6-luna"}}}}
+1794496504087	

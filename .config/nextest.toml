@@ -1,0 +1,681 @@
+# cargo-nextest config for kata.
+#
+# cargo-nextest is the canonical test runner for this workspace.
+# Plain `cargo test` is not used (AGENTS.md, and the justfile's test
+# recipes): it ignores the slow-timeouts below. nextest is ~10-100x
+# faster than `cargo test --workspace` because it discovers every test
+# upfront and runs test binaries in parallel, which cargo test cannot do.
+#
+# This file's job is to turn the "tests hang forever" failure mode
+# into "tests are killed in seconds with a clear error": a runner test
+# stuck in an unbounded `continue` loop costs a whole run its wall
+# clock without one, and is killed in 60 seconds with one.
+
+# The starved-not-hung family: tests that are fast standalone but
+# drive heavy real disk I/O (fsync storms, dozens of on-disk jj
+# repos + FileLocks, 20k-frame WALs). Run CONCURRENTLY they starve
+# each other past even generous kill timeouts under full ~2800-test
+# gate load (the four merge-queue soaks running in parallel pushed
+# recovery_100k past its 300s kill AND their own invariant matrix past
+# the default 60s). Serializing the
+# family against itself (max-threads = 1; still parallel with the
+# rest of the suite) removes the mutual starvation instead of
+# inflating timeouts in an arms race.
+#
+# ── Ending the cap-inflation arms race ──
+#
+# ONE `heavy-io` group holding BOTH the merely fsync-heavy tests
+# (seconds-scale: sqlite/jj-reopen/ledger families) AND the
+# load-sensitive GIANTS (recovery_100k and the
+# merge-queue soak) has two failure modes that compound:
+#   1. The giants queue behind each other in the single serialized
+#      group, and
+#   2. more corrosively, they run INSIDE the ~3,000-test parallel
+#      `just test` run, so the whole suite's CPU/IO thrash starves
+#      them past their kill caps — which forces the caps UP, one
+#      raise after another. A cap sized to survive full-suite
+#      contention is not an acceptance bound; it is a symptom.
+#
+# The structural fix (chosen over a mere second same-run group,
+# which cannot remove the cross-suite contention that IS the root
+# cause): the giants do not run in the parallel suite at all.
+# `[profile.default]` sets a `default-filter` that EXCLUDES them, and
+# a dedicated `[profile.soak]` re-includes ONLY them, serialized in
+# the `heavy-io-soak` group, run by the gate as a SEPARATE pass
+# (`just test-soak`, `cargo nextest run -P soak`) AFTER the parallel
+# suite. Run alone, each giant's wall is its TRUE runtime with no
+# suite contention, so its kill cap tracks real cost and stops
+# inflating. No coverage is lost — L1 still runs every giant;
+# it just runs them where their timing is meaningful. The giants are
+# absent from `just test` / `just test-crate`; reach them
+# with `just test-soak` or `-P soak`, or with an explicit filter via
+# `just test-one` / `just flake-check` (both pass
+# `--ignore-default-filter`, and the default profile keeps mirror
+# kill-cap overrides for exactly that escape hatch).
+#
+# `heavy-io-soak` serializes the giants against each other during the
+# soak pass (the four merge-queue tiers running concurrently were the
+# original starvation trigger — keep them one-at-a-time). It is distinct
+# from `heavy-io` only so the two groups read clearly; both are
+# max-threads=1.
+[test-groups]
+heavy-io = { max-threads = 1 }
+heavy-io-soak = { max-threads = 1 }
+
+[profile.default]
+# The load-sensitive GIANTS are excluded from the default
+# parallel suite and run in `[profile.soak]` as a separate serialized
+# gate pass (see the `[test-groups]` header). Excluding them
+# here is what ends the cap-inflation arms race — the parallel `just
+# test` run no longer contains a single soak giant, so nothing
+# in it can be starved past a kill cap by the giants, and the giants
+# are never starved by it. `default-filter` is inherited by the
+# `coverage` profile (consistent: it is not the soak pass);
+# `soak` overrides it to select exactly these four. The current-writer
+# measurement has its own required serialized `measurement` pass; its small
+# raw-SQL correctness fixture remains in the default suite. Reach the giants
+# with `just test-soak` (or `-P soak`); a bare `-E test(recovery_100k…)`
+# under the default profile is intentionally empty (add
+# `--ignore-default-filter` to force it).
+default-filter = '''
+    not (
+        test(recovery_100k_resume_is_bounded)
+        | binary(jj_merge_queue_soak)
+        | (binary(=operational_write_measurement) & test(=persistent_current_writer_reports_serialized_transaction_latency_and_throughput))
+    )
+'''
+
+# Most tests in the workspace complete in under a second. Warn at
+# 10s (mark as "slow"), kill at 60s if the test is still running
+# after six slow-timeout periods. A test that genuinely needs more
+# than a minute gets a named `[[profile.default.overrides]]` block
+# below, and a soak giant runs in the `soak` profile. A
+# test-level deadline is the `#[kata_timeout]` attribute: a real-time
+# watchdog that must fire BELOW the kill resolved here, which
+# `bin/kata-eval/tests/timeout_budgets.rs` enforces for every site.
+slow-timeout = { period = "10s", terminate-after = 6 }
+
+# Show every failure, not just the first. Especially important
+# when refactoring touches many crates — we want the full blast
+# radius in one run, not a whack-a-mole loop.
+fail-fast = false
+
+# Deterministic: no automatic retries. A flaky test is a bug.
+retries = 0
+
+# Output failures in a way that's useful in terminal and in
+# capture logs.
+failure-output = "immediate-final"
+success-output = "never"
+status-level = "pass"
+final-status-level = "slow"
+
+[[profile.default.overrides]]
+# FULL-sync class, kata-core's two operational race cells: each round opens
+# fresh file-backed planes and commits on two threads (18 and 200 rounds).
+# Alone 1.0-1.2 s and 4.2 s; in gates 3.8-49.9 s and 26-51.5 s, then both TIMEOUT
+# at 60 s in an L1 whose tree passes them in 1.2 s alone on a quiet disk. While
+# they ran, a kata-workflow cell's CAS insert outwaited its
+# 5 s busy_timeout ("database is locked"). Starved-not-hung, and they starve
+# their neighbours: serialize them with heavy-io; the race rounds are the claim.
+filter = 'package(kata-core) & (test(=accept_and_settle_raced_on_two_threads_leave_exactly_one_outcome) | test(=a_latch_and_a_dispatch_race_to_exactly_one_durable_truth))'
+test-group = "heavy-io"
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# Same class in kata-api: the operator-cancel race runs 16 rounds, each a fresh
+# execution on a file-backed operational plane that commits its terminal. Alone
+# 1.3 s (a rare round waits ~8 s); across 109 L1 runs p50 21 s, p90 36 s, and
+# 4 TIMEOUTs at 60 s, one on a tree that then passed it 40/40 alone.
+# Starved-not-hung: serialize it with heavy-io; the race rounds are the claim.
+filter = 'package(kata-api) & test(=a_cancel_racing_the_roots_completion_publishes_exactly_one_terminal)'
+test-group = "heavy-io"
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# Same FULL-sync class in kata's data-directory lock: the cell initializes a whole
+# store set seven times (one per lost asset it then proves is refused), and strace
+# counts 434 fsync plus 7 fdatasync calls with no sleep or poll — no
+# busy-timeout wait, no blocking flock. Alone 0.43-0.47 s on the reference host
+# (128 cores, one NVMe); in full-suite gates it ran to the 60 s kill. Starved-not-
+# hung: serialize it with heavy-io; each lost asset is its own claim, so it is
+# not shrunk.
+filter = 'package(kata) & test(=data_dir_lock::tests::established_clean_identity_never_recreates_any_lost_store_asset)'
+test-group = "heavy-io"
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# Disk-metadata class in kata-worker: the wide-tree removal cell plants 60 000
+# directories and files on `target/`'s disk (not the suite's tmpfs) and removes
+# them. 16-27 s at load 100-350 on the reference host; its claim is a bound on the
+# removal thread's ON-CPU time (45 s), which load inflates far less than wall time, but the
+# planting is wall-clock disk work. Serialize it with heavy-io, and let a red run
+# reach its own on-CPU verdict and drop its tree before the kill.
+filter = 'package(kata-worker) & test(=a_wide_guest_directory_is_removed_in_time_linear_in_its_entries)'
+test-group = "heavy-io"
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+# Current recovery also reaches the per-euid immutable inspection lock. Keep
+# its shared-resource scheduling here; its timeout comes from the
+# inspection-lock override below, which covers every guarded binary.
+filter = 'binary(backup_recovery_v4)'
+test-group = "heavy-io"
+
+# ─── Tests that hold the per-uid TEST inspection lock ────────────────────────
+#
+# WHY THESE NEED A LONGER KILL, measured rather than assumed. Every test matched
+# below drives a product immutable-SQLite inspection and therefore takes
+# `kata_test_utils::inspection_lock` first, which BLOCKS while another process on
+# this uid is inside its own inspection window — that is the point: two suites
+# under one uid (a snapshot gate plus the checkout's tests) would otherwise collide
+# on kata_core's per-euid coordinator and produce a storage-integrity message for a
+# scheduling cause.
+#
+# A blocking wait that outlives the runner's kill just moves the lie. With the
+# default profile (period 10s, terminate-after 6 => killed at 60s) a real wait
+# surfaces as TIMEOUTs in a concurrent commit tier
+# (`recovery_capture::tests::*`, `data_dir_lock::recovery_tests::*`) while a
+# holder holds the lock for 90s. A TIMEOUT says "this test hangs"; the truth is
+# "another suite held a shared lock", which is the substitution this whole
+# mechanism exists to prevent.
+#
+# So: 120s x 3 = killed at 360s, against the lock's own 240s WAIT_BUDGET. The
+# ORDER is the property — the lock's named refusal (which says another process
+# holds it, that this is not an integrity failure, and how to find the holder)
+# must fire ~120s before nextest's kill, leaving that margin for the test's own
+# work. Raise the budget and this block must move with it.
+#
+# The filter is DERIVED from where the guard actually appears, not curated:
+# `scripts/check-inspection-lock-timeouts.py` (run by `just dev-loop-check`)
+# greps every `inspection_lock::hold` call, maps it to the module prefix or
+# integration-test binary it lives in, and FAILS if that prefix or binary is not
+# named here. A new guarded test cannot quietly inherit the 60s kill.
+#
+# It is deliberately coarser than the guarded set: a module prefix also covers
+# unguarded neighbours in the same module, which relaxes their kill from 60s to
+# 360s. That is the accepted cost of a filter that cannot omit a guarded test,
+# and the neighbours are the recovery/backup families, none of which is a
+# sub-second unit test whose hang the 60s cap was written for.
+[[profile.default.overrides]]
+filter = '''
+    test(cli::recovery_capture::tests::)
+    | test(data_dir_lock::recovery_tests::)
+    | test(sqlite_immutable::tests::)
+    | test(store::backup::tests::)
+    | binary(backup_tests)
+    | binary(backup_durability_tests)
+    | binary(backup_recovery_v4)
+    | binary(durable_asset_map)
+    | test(cli::backup::tests::)
+'''
+slow-timeout = { period = "120s", terminate-after = 3 }
+
+[[profile.default.overrides]]
+# Immutable SQLite inspection intentionally admits one active per-euid attempt
+# beneath the host temporary root and fails concurrent acquisition without an
+# unbounded wait. Every test that reaches
+# `inspect_optional_immutable_sqlite` therefore contends for ONE per-euid lock, and the
+# refusal is immediate rather than queued — so the failure is LOAD-SENSITIVE and
+# `retries = 0` means the gate shows it the first time it fires. Serialize the helper,
+# the backup/durable-asset callers, the restore preflight, the upgrade-command
+# integration binary, and the kata unit callers here.
+# `bin/kata`'s upgrade-command integration binary, the remaining production caller, already
+# joins this same group with its own slow-timeout override below. Keep this exact
+# split synchronized with the core structural regression
+# (`sqlite_immutable_nextest_group_covers_every_current_caller_surface`).
+#
+# THIS FILTER CAN FAIL BY OMISSION, which is the whole hazard of an
+# enumerated-by-name group: a new call to `inspect_optional_immutable_sqlite` reaches
+# test sets no clause here names. On a LOADED host (loadavg ~17) such an omission shows
+# as failures carrying *"nonblocking coordinator lock refused acquisition: Resource
+# temporarily unavailable (os error 11)"*; on an idle host (loadavg ~3.8) the same
+# suite is green. A name-list cannot see a new caller. The structural regression scans
+# direct core call sites, but transitive callers remain an explicit inventory
+# (`cli::backup::tests::` and `backup_recovery_v4` are such families; the latter has
+# its own group-only override above).
+# This scheduling policy only coordinates one nextest invocation;
+# independent invocations under the same euid can still contend. The production
+# nonblocking refusal remains unchanged.
+#
+# `binary()` and `test()` are SUBSTRING matchers, so the clauses below are checked for
+# over-reach as well as under-reach: `binary(backup_tests)` does NOT match
+# `backup_durability_tests` (hence its own clause), and the unit-test clauses carry their
+# full `module::path::` prefix with a trailing `::` so they cannot swallow a same-named
+# module elsewhere in the tree.
+filter = '''
+    test(sqlite_immutable)
+    | binary(backup_tests)
+    | binary(backup_durability_tests)
+    | binary(backup_omission_report_tests)
+    | binary(durable_asset_map)
+    | binary(upgrade_cmd_tests)
+    | test(cli::backup::tests::)
+    | test(store::backup::tests::)
+    | test(durable_assets::tests::)
+    | test(restore_stays_bound_to_locked_directory_after_parent_alias_retarget)
+    | test(apply_stays_bound_to_the_locked_directory_after_parent_alias_retarget)
+    | test(dry_run_stays_on_one_physical_source_after_parent_alias_retarget)
+'''
+test-group = "heavy-io"
+# The `slow-timeout` matters as much as the group: heavy-io serializes these
+# against each other but does NOT shield against external build thrash, so the
+# group without the headroom every sibling on-disk block carries is a timeout
+# outlier.
+#
+# Same FILE-BACKED `synchronous=FULL` class as `operational_adjudication` and
+# `sqlite_workflow_tests`: `upgrade_cmd_tests` builds real on-disk data dirs and
+# does byte-level `snapshot_dir` comparisons plus WAL/SHM existence checks around
+# a `VACUUM INTO` backup. NOT subprocess-bound — it calls `run_upgrade_cmd`
+# in-process (zero `Command::new` in the file), which is why it belongs in
+# heavy-io.
+#
+# Measured on an idle host, `NEXTEST_TEST_THREADS=40 just test-one-crate kata
+# first_compatibility_probe`: PASS 5.204s. In-suite the same test hit TIMEOUT
+# 60.011s. A ~10x standalone margin that still dies in-suite is starved-not-hung;
+# kill-at-120s is a hang detector, not an acceptance bound.
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+# Let nextest schedule test threads across all available cores by
+# default. Individual tests that need exclusive use of the whole
+# machine should declare `test_threads = 1` explicitly.
+
+[profile.default.junit]
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true
+
+[[profile.default.overrides]]
+# The git-view member-boundary cells each write 8–64 MiB of incompressible
+# blob fixtures, commit them, pack the whole reachable history and re-verify
+# under `git index-pack`/`fsck` — real disk I/O in the tens of seconds
+# standalone (measured: the later-pack-delta cell ~35s on an idle host). Under
+# three concurrent workspace builds the same cell exceeded 120s — starved-not-hung,
+# so like every heavy-io block the kill is a hang detector, not an acceptance
+# bound: ~7x the standalone measurement.
+filter = '''
+    binary(=git_view)
+    & (
+        test(=packs_split_at_the_member_bound)
+        | test(=a_deltaed_history_splits_self_contained)
+        | test(=a_delta_in_a_later_pack_addresses_its_own_pack)
+        | test(=a_pack_landing_exactly_at_the_member_bound_is_admitted)
+        | test(=an_object_encoding_to_exactly_the_member_bound_is_admitted)
+        | test(=one_object_just_over_the_member_bound_is_refused_naming_it)
+        | test(=a_history_just_over_the_member_bound_splits)
+        | test(=a_two_object_history_under_the_bound_is_one_pack)
+    )
+'''
+test-group = "heavy-io"
+slow-timeout = { period = "30s", terminate-after = 8 }
+
+[[profile.default.overrides]]
+# The git-view multi-chunk cell is not a member-bound cell (so the block above does
+# not name it), but its cost is the same kind: 220 real `git commit` processes, each
+# writing and fsyncing loose objects and the index, before one pack and a
+# `git fsck --strict`. Historically 2-41 s in gates, then TIMEOUT at 61 s in an L1;
+# 51.5 s standalone (one test, loadavg ~16, IO pressure full avg60 ~31%).
+# Starved-not-hung: serialize it with heavy-io; the 220-commit history (more than one
+# 200-object chunk) is the claim, so it is not shrunk.
+filter = 'binary(=git_view) & test(=a_history_over_one_chunk_produces_in_order)'
+test-group = "heavy-io"
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = 'test(jj_revset_query_reports_ambiguous_symbols)'
+# This jj-lib ambiguity regression creates enough native commits to guarantee a
+# short-prefix collision. It is correct but can exceed the default 60s kill under
+# full workspace parallel load on slower filesystems.
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+# NOTE: the soak GIANTS' primary kill caps + full
+# rationale live on the `[[profile.soak.overrides]]` blocks below — the soak
+# pass (`just test-soak`) is where they normally run; this profile's
+# `default-filter` excludes them from the parallel suite. The four overrides
+# that follow are NOT dead config, though: `just test-one` / `just flake-check`
+# pass `--ignore-default-filter`, which pulls an explicitly-filtered giant back
+# into THIS profile — without these blocks such a run would reach the giant and
+# then kill it at the stock 60s cap, a false FAIL. They mirror the soak caps
+# exactly; keep the two in sync.
+
+[[profile.default.overrides]]
+filter = 'test(recovery_100k_resume_is_bounded)'
+# Escape-hatch mirror of the profile.soak override (see below): applies only
+# under `--ignore-default-filter` (test-one/flake-check). ~10 s alone.
+slow-timeout = { period = "60s", terminate-after = 10 }
+test-group = "heavy-io-soak"
+
+[[profile.default.overrides]]
+filter = 'binary(jj_merge_queue_soak)'
+# Escape-hatch mirror of the profile.soak override (see below); serializes the
+# four tiers against each other when a filter selects several.
+slow-timeout = { period = "30s", terminate-after = 6 }
+test-group = "heavy-io-soak"
+
+[[profile.default.overrides]]
+filter = 'test(operational_crash_)'
+# Matched by TEST NAME, not `binary(...)`: a `binary()` predicate that names no
+# target in the package under test is a hard nextest error, so a crate-scoped run
+# (`just test-crate workflow`) would fail to even list. The prefix is unique to
+# the operational crash matrix.
+#
+# The prefix is `operational_crash_`, not `operational_crash_cell_`, so the
+# binary's accounting test (`operational_crash_matrix_accounts_for_every_registered_boundary`)
+# runs in the same group and under the same kill budget as the cells. Serialization
+# without a kill budget, or a kill budget the filter never reaches, are the same
+# defect wearing different clothes — the budget-outlier class of `upgrade_cmd_tests`
+# (5.204s idle, TIMEOUT 60.011s in-suite) above.
+#
+# Its cells RE-EXEC this test binary as a child process — the only honest way to
+# model a process death, because an in-process `OnceLock` fault target poisons every
+# sibling test in the binary. Each cell therefore pays a process SPAWN plus a
+# file-backed `synchronous=FULL` nucleus, and the parent then re-opens and verifies
+# it, so the process-spawn cost is structural and does not shrink with a warm cache
+# the way a pure-fsync test does.
+#
+# A cell is (fixture direction x transaction group x kill point). There is one
+# `#[test]` per (fixture direction x kill point), and it iterates every transaction
+# group that reaches its kill point (`Group::reaches` is the single place that
+# decides), so one test drives many cells. Count the tests rather than trusting a
+# number written here:
+#
+#   cargo nextest list -p kata-core -E 'test(operational_crash_)'
+#
+# Measured on a 128-core, single-NVMe host, per cell: around 10s warm and
+# standalone, and a slowest cell of 54.732s at loadavg ~8. Both are inside this
+# block's 360s kill; the default 60s kill has no headroom over the second.
+# Serializing into heavy-io and granting the
+# same generous kill the cutover matrices earned keeps a load spike from
+# false-timing-out a passing cell, rather than shrinking the matrix: the coverage
+# is the point, and a cap sized to survive suite contention is a symptom, not an
+# acceptance bound.
+#
+# The DELIVERY PROJECTOR does not belong here: a 12.4s / "5 of 8 SLOW" figure for
+# it is a COLD FIRST RUN taken while the crate is still linking. Measured warm and
+# standalone: `cargo nextest run -p kata-core --ignore-default-filter -E
+# 'binary(operational_delivery_projector)'` -> 8 tests, 0.163s, ZERO flagged SLOW;
+# inside a full concurrent `-p kata-core` run its cells are 0.017-0.021s each. It
+# is an ordinary test binary and does not belong in a serialized group.
+slow-timeout = { period = "60s", terminate-after = 6 }
+test-group = "heavy-io"
+
+[[profile.default.overrides]]
+filter = 'test(crash_cell_k)'
+# The crash matrix's OUT-OF-FILE cells: K6/K7 (`operational_inbox_composition`) and
+# K8 (`cas_root_liveness`). Same class as the `operational_crash_` block above — each
+# re-execs this test binary as a child that `std::process::abort()`s at a named
+# boundary, so every cell pays a process SPAWN plus a file-backed `synchronous=FULL`
+# nucleus.
+#
+# The per-family extra cost, which is what earns the serialized group:
+#   K8       an over-`INLINE_THRESHOLD` CAS blob (tmp -> fsync -> rename -> shard fsync)
+#
+# Matched by TEST NAME for the same reason the sibling block is: `binary()` naming a
+# target absent from the package under test is a hard nextest error. `crash_cell_k`
+# occurs in exactly those two files (`rg -l crash_cell_k crates`), and nowhere else.
+#
+# MEASURED on a 128-core, single-NVMe host, warm, with the exact commands:
+#
+#   just test-one-crate core crash_cell_k          (loadavg ~40, other builds running)
+#     -> 8 tests, 10.144s total; slowest single cell 1.342s
+#
+#   just test-crate core                           (682 tests, loadavg ~8)
+#     -> slowest of these cells 32.815s
+#     (crash_cell_k8_object_durable_before_root_leaves_a_safe_orphan)
+#
+# A 3.2x inflation from concurrency alone, leaving 1.8x headroom under the default
+# 60s kill — and a single-crate run is far lighter than `just gate`, where 3-7x
+# has been measured. Textbook starved-not-hung, and exactly the budget outlier
+# above: without this block K6/K7 have no `test-group` and no kill budget of their
+# own, at 11.2-12.5s in-suite (compare `upgrade_cmd_tests`: 5.204s idle, TIMEOUT
+# 60.011s in-suite).
+#
+# DECISIVE, run with this override in place: every cell's TRUE cost is
+# 1.15-2.58s and ZERO are flagged SLOW. So the 10.4s and 32.8s figures above were
+# mutual fsync/spawn starvation between the cells, not their work — the same
+# fsync-starvation pattern measured in the cutover fixtures above.
+#
+# Serialize the family against itself and grant the same generous kill the cutover
+# matrices earned. The coverage is the point: shrinking the matrix to fit a cap
+# would trade a proof for a number.
+slow-timeout = { period = "60s", terminate-after = 6 }
+test-group = "heavy-io"
+
+
+[[profile.default.overrides]]
+filter = 'binary(jj_op_log_gc_soak)'
+# Op-log GC soak + safety: the soak grows the op-log
+# via burst HEAD-moves + explicit compaction passes and the safety test drives
+# real fork/park/land workspaces + op-log reparent/gc — the same starved-not-hung
+# on-disk-jj-repo I/O class as jj_merge_queue_soak. Fast standalone (both < 30s on
+# an unloaded host) but fsync-bound and easily starved under full-gate parallelism
+# (observed 244s for the safety test at load ~420). Serialize into heavy-io and
+# give the same generous starved-not-hung headroom the recovery_100k class earned
+# (600s) so a load spike can never false-timeout a passing test.
+slow-timeout = { period = "60s", terminate-after = 10 }
+test-group = "heavy-io"
+
+
+
+[[profile.default.overrides]]
+filter = 'binary(forge_export)'
+# forge_export VCS primitives + effect e2e: each test creates REAL on-disk
+# colocated jj repos + bare git remotes and shells `git push`, the same
+# starved-not-hung on-disk-jj-repo I/O class as jj_merge_queue_soak. Fast
+# standalone (whole vcs binary ~0.18s), but under full-gate parallelism the git
+# subprocess + FileLock traffic piles onto the jj ambiguity/soak family (observed:
+# re_push_force_with_lease at 13.9s SLOW while jj_revset ambiguity timed out at its
+# 120s cap). Serialize into heavy-io so it does not starve
+# them; `binary(forge_export)` matches the vcs `forge_export` binary.
+slow-timeout = { period = "30s", terminate-after = 4 }
+test-group = "heavy-io"
+
+[[profile.default.overrides]]
+filter = 'test(rebased_candidate)'
+# Rebased-candidate revalidation-fence regressions (jj_backend): all three
+# (jj_promote_parks_rebased_candidate_fail_closed_until_revalidated,
+# jj_land_queue_parks_rebased_candidate_for_revalidation_trunk_untouched, and
+# jj_promote_rebased_candidate_parks_trunk_keeps_only_validated — the last does
+# NOT contain the substring `parks_rebased_candidate`, so the filter matches the
+# common `rebased_candidate` substring to cover it too) build TWO real on-disk jj
+# workspaces from a shared base, commit, and drive the serialized landing ladder
+# (ff land + rebase-park) with FileLock traffic — the same starved-not-hung
+# on-disk-jj-repo I/O class as jj_merge_queue_soak. Fast standalone but observed
+# at ~8s / ~23s / ~32s under concurrent build load; serialize into
+# heavy-io so they cannot starve past the default 60s kill.
+slow-timeout = { period = "30s", terminate-after = 4 }
+test-group = "heavy-io"
+
+[[profile.default.overrides]]
+filter = 'test(installed_main_startup_faults_fail_closed_and_repair)'
+# Installed-main fault matrix: seven real debug-daemon boots exercise
+# unsupported flock semantics, ENOSPC, and recovery-scan refusal plus same-dir
+# repair. Serialize with the fsync-heavy family so full-suite load does not turn
+# readiness polling into a false timeout; the test's own polls remain bounded.
+slow-timeout = { period = "60s", terminate-after = 6 }
+test-group = "heavy-io"
+
+[[profile.default.overrides]]
+filter = 'binary(sqlite_workflow_tests)'
+# Cache-store tests: each drives real SqliteWorkflowStore writes
+# (CAS put + INSERT + WAL) against an on-disk tempdir. Correct and sub-second
+# standalone, but the same starved-not-hung fsync/on-disk class as the jj/soak
+# cases — observed with two cache-write tests EACH killed at the default 60s
+# under ~500 load from concurrent gate runs (one passed alone at 50s the same
+# run). Serialize into heavy-io so the family
+# cannot starve past the default 60s kill; kill-at-120s is a hang detector, not
+# an acceptance bound (each test is milliseconds in good disk weather).
+slow-timeout = { period = "30s", terminate-after = 4 }
+test-group = "heavy-io"
+
+[[profile.default.overrides]]
+filter = 'binary(operational_occurrences)'
+# The occurrence plane: every cell opens a file-backed `operational.db` at
+# `synchronous=FULL`, and two of them open a SECOND and THIRD connection on the same file
+# (a raw writable handle for the stored-CHECK and UNIQUE-index falsifications, and two
+# concurrent `OperationalDb` handles for the double-accept race). Same starved-not-hung
+# fsync class as `operational_adjudication`: milliseconds of real work standalone, tens of
+# seconds under concurrent build load. Serialize into heavy-io so the family cannot starve
+# past its kill; kill-at-120s is a hang detector, not an acceptance bound.
+slow-timeout = { period = "30s", terminate-after = 4 }
+test-group = "heavy-io"
+
+[[profile.default.overrides]]
+filter = 'binary(=operational_adjudication)'
+# The adjudication cells: 12 tests, 15 file-backed `OperationalDb::open`s at
+# `synchronous=FULL` (cold reopens, repairs, and three planes in one cell). The
+# reference for the FULL-sync class the `upgrade_cmd_tests` and
+# `operational_occurrences` blocks cite, until now never named itself: milliseconds
+# of real work (0.014-4.4 s for the binary standalone), tens of seconds under
+# concurrent build load. Serialize into heavy-io; kill-at-120s is a hang detector.
+slow-timeout = { period = "30s", terminate-after = 4 }
+test-group = "heavy-io"
+
+[[profile.default.overrides]]
+filter = 'binary(=blocking_input_wait) & test(=unresolvable_due_input_waits_do_not_starve_a_later_timer)'
+# 258 FULL-sync `claim_main_attempt` commits (one more due input wait than a sweep
+# page, plus the timer) into a file-backed operational.db, then one sweep pass.
+# 3.6 s standalone; one standalone run under host IO pressure (full avg60 ~31%) ran
+# to the 60 s kill. The population past one page IS the claim, so it is not shrunk:
+# serialize it with heavy-io; kill-at-120s is a hang detector.
+slow-timeout = { period = "30s", terminate-after = 4 }
+test-group = "heavy-io"
+
+# ---------------------------------------------------------------
+# Named profiles for special cases.
+# ---------------------------------------------------------------
+
+# The full current-writer screen keeps its original 1/4 producers, 128
+# lifecycles each, 4096-byte output and 120-second test deadline. Run separately
+# from both ordinary and soak tests so their disk load cannot distort it.
+# Serialization is local to this invocation, not a host-wide storage reservation.
+[profile.measurement]
+default-filter = '(binary(=operational_write_measurement) & test(=persistent_current_writer_reports_serialized_transaction_latency_and_throughput))'
+test-threads = 1
+slow-timeout = { period = "30s", terminate-after = 4 }
+success-output = "immediate-final"
+
+# `gate-nightly` keeps this run's report (`target/gate-nightly/junit/test-measurement.xml`)
+# for the flake-drift report: this test's duration IS the measurement.
+[profile.measurement.junit]
+path = "junit.xml"
+store-success-output = true
+store-failure-output = true
+
+# `cargo nextest run -P soak` (= `just test-soak`). The
+# load-sensitive GIANTS, run as a SEPARATE serialized pass that
+# `just gate` runs AFTER the parallel `just test` suite. This is the
+# structural end of the cap-inflation arms race (see the
+# `[test-groups]` header): run alone in this profile, each giant's
+# wall is its true runtime — no ~3,000-test suite thrashing it — so
+# its kill cap is a hang detector, not a contention pad. `default-filter`
+# selects EXACTLY the giants excluded from `[profile.default]`;
+# the `heavy-io-soak` group serializes them against each other (the
+# four merge-queue tiers running concurrently were the original
+# starvation trigger). Base settings (fail-fast, retries, output) inherit from
+# `[profile.default]`; the per-giant kill budgets live on the
+# overrides below.
+[profile.soak]
+default-filter = '''
+    test(recovery_100k_resume_is_bounded)
+    | binary(jj_merge_queue_soak)
+'''
+
+[[profile.soak.overrides]]
+filter = 'test(recovery_100k_resume_is_bounded)'
+# Builds 20,000 claims in operational.db through the claim door's own writer,
+# 10,000 per commit (`authority_corpus::claim_in_bulk`; the equivalence with one
+# `claim_attempt` commit per claim is `authority_corpus_bulk_matches_the_claim_door`),
+# then times the whole-chain scan against the indexed, reopen and tail reads. The
+# build is CPU in the unoptimized dev-profile SQLite and is the whole cost: 10 s,
+# measured at a load average of 30-60 (the 100,000-claim cell it replaced took
+# 122-172 s; the test's doc gives why 20,000 still catches a full scan). The
+# kill-at-600s cap (period 60s x terminate-after 10) is the hang detector, and the
+# test's own #[kata_timeout(secs = 540)] watchdog names it first. The test's internal
+# ratio assertions gate the actual resume-cost bound.
+slow-timeout = { period = "60s", terminate-after = 10 }
+test-group = "heavy-io-soak"
+
+# `test(...)` on a name nothing matches is NOT a nextest error — unlike `binary(...)`,
+# which refuses the whole config file — so a stale clause here would have silently shrunk
+# the soak selection instead of failing.
+
+[[profile.soak.overrides]]
+filter = 'binary(jj_merge_queue_soak)'
+# MergeQueue N-candidate soaks: each tier creates
+# dozens of REAL on-disk jj repos + workspaces + FileLock traffic. Running the
+# four tiers CONCURRENTLY was the original starvation trigger that pushed
+# recovery_100k past its kill — so the soak pass serializes them (heavy-io-soak,
+# max-threads=1). kill-at-180s sits above each test's own #[kata_timeout(secs = 160)],
+# so the watchdog names a wedged tier first.
+slow-timeout = { period = "30s", terminate-after = 6 }
+test-group = "heavy-io-soak"
+
+# `cargo llvm-cov nextest -P coverage` — used by `just coverage`.
+# Source-based instrumentation makes test binaries ~2-4x slower, so
+# widen the slow-timeout well past the 60s default to keep the
+# coverage run from false-killing otherwise-fast tests. Not an
+# acceptance profile — coverage is an enabler, never a gate.
+[profile.coverage]
+slow-timeout = { period = "2m", terminate-after = 4 }
+retries = 0
+fail-fast = false
+
+# Live binary smokes — boot real `kata` / `kata-worker` subprocesses,
+# drive them through the typed `kata-client` SDK, assert real
+# end-to-end behavior. Gated behind both KATA_LIVE_SMOKE=1 (env
+# check at test entry) AND `--run-ignored all` (nextest flag),
+# so plain `just test` never accidentally fires them.
+#
+# Per-test slow-timeout 60s (LLM stage call latency baseline);
+# terminate-after 5 means a hung smoke is killed at 5min sharp.
+# The offline-rw smoke needs ~3min (claude takes ~182s to give up
+# inside an offline capsule before exiting non-zero), so 4min would
+# clip it; 5min gives ~120s slack over that empirical worst case.
+# Holds to "a test that hangs is worse than a test that fails"
+# without false-killing legitimate slow paths.
+#
+# Every installed-main live test enters through this profile: the three tests in
+# `kata-test-utils/tests/live_smoke.rs` and every `smoke_*` test in
+# `kata-test-utils/tests/smokes.rs`. The production per-owner discovery lease
+# and effective-owner-home attachment path are both fixed. A second installed
+# main is correctly rejected, and one smoke must withdraw its descriptor before
+# the next begins, so nextest must not manufacture cross-test contenders from
+# otherwise independent fixtures. Serialize the profile rather than maintaining
+# a second, name-based inventory that can omit a future smoke. Concurrency
+# *inside* a smoke (workers, submissions, and the explicit losing-main
+# contender) remains fully exercised. Cargo features cannot redirect the
+# attachment in these binary targets; only cfg(test) unit-harness children have
+# an isolated attachment fixture.
+[profile.live-smoke]
+test-threads = 1
+slow-timeout = { period = "60s", terminate-after = 5 }
+fail-fast = false
+retries = 0
+failure-output = "immediate-final"
+success-output = "final"   # see the per-smoke wall clock
+status-level = "pass"
+final-status-level = "slow"
+
+# Every live step writes a report; `gate-nightly` moves each of its steps' reports
+# into `target/gate-nightly/junit/` before the next step overwrites it, and the push
+# tier's steps simply leave the last one behind.
+[profile.live-smoke.junit]
+path = "junit.xml"
+store-success-output = false
+store-failure-output = true
+
+# The E3 crash matrix (`oci-live-smoke`'s step 8, `just e3-crash-matrix`, and the host
+# column by hand): a cell boots a node, runs the change pack across a kill and a
+# restart, and P2 re-runs a VOID try up to three times; on a real model that is many
+# minutes, so its cells get 30 minutes, not the profile's five.
+[[profile.live-smoke.overrides]]
+filter = 'binary(e3_crash_matrix_live) | binary(e3_crash_matrix_host_live)'
+slow-timeout = { period = "60s", terminate-after = 30 }
+
+# N6's funded nanocode cells (`just live-nanocode`): a real model's turn, three in the
+# re-prompt measurement, plus the pack's gate and effects; a real provider on a busy host
+# runs past the profile's five minutes.
+[[profile.live-smoke.overrides]]
+filter = 'binary(nanocode_live)'
+slow-timeout = { period = "60s", terminate-after = 20 }

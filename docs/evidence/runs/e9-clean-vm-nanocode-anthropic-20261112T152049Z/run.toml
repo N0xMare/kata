@@ -1,0 +1,41 @@
+cell = "E9"
+case = "clean-vm"
+harness = "nanocode-anthropic"
+surface = "cli"
+kata_sha = "4da3b2fe2aa434cfd68b267c1177354510c32c2f"
+kata_tree = "74133d703da4dd98910352faa569d87e8c06666f"
+nanocode_rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2"
+model = "claude-sonnet-5-5"
+effort = "medium"
+credential_mode = "api_key"
+capsule_network = "offline"
+started_utc = "2026-11-12T15:20:49Z"
+wall_seconds = 803
+outcome = "pass"
+outcome_source = "e9-verdict.txt: pass: install 4 of 4 sections rc 0; boot check ok; E1 7 of 7 non-recall oracles PASS, the review validates (structure, paths); seeded recall 3/3 recorded, not judged"
+tokens_recorded = { input = 14, cache_read = 30038, cache_write = 14239, output = 1769 }
+unmetered_calls = 0
+tokens_provider = "unavailable: per-run provider usage not attributable"
+cost_recorded = "estimated"
+cost_recorded_usd = 0.056318
+cost_provider = "unavailable: per-run provider usage not attributable"
+artifacts = [
+  { path = "e9-verdict.txt", what = "e9-verdict.py's verdict (first line) and one line per input it read" },
+  { path = "summary.txt", what = "e9-vm.sh install's summary: per-line seconds, time to first run, declared deviations" },
+  { path = "plan.tsv", what = "the install plan: section, kind, line, read from README.md at kata_sha" },
+  { path = "timing.tsv", what = "the guest's start/end epoch and rc per install section" },
+  { path = "guest-sudo.txt", what = "every sudo command the guest's journal recorded during install" },
+  { path = "sections.tsv", what = "each install section's rc" },
+  { path = "README.md", what = "the README install read, at kata_sha" },
+  { path = "bundle.env", what = "the commit pushed into the guest and the bundle's sha256" },
+  { path = "e9-e1/boot-check.txt", what = "the guest node's boot check: the running kata is the bundled commit, built clean" },
+  { path = "e9-e1/doctor.txt", what = "kata doctor in the guest's E1 project" },
+  { path = "e9-e1/config-check.txt", what = "kata config check of the guest's E1 project" },
+  { path = "e9-e1/host-setup.txt", what = "kata host setup in the guest, as the Quickstart runs it" },
+  { path = "e9-e1/ev/oracles.txt", what = "e1-run.sh's eight oracle lines, read inside the guest" },
+  { path = "e9-e1/ev/score.json", what = "score-e1.py's full scoring of the Review" },
+  { path = "e9-e1/ev/score-row.txt", what = "score-e1.py's summary row" },
+  { path = "e9-e1/ev/stages.txt", what = "ledger.py stages: every worker attempt's charge, read through a read-only handle" },
+  { path = "e9-e1/ev/turns.txt", what = "ledger.py turns: per-attempt session evidence" },
+  { path = "e9-e1/ev/spend.toml", what = "ledger.py record: tokens_recorded, unmetered_calls, cost_recorded" },
+]

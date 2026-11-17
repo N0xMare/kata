@@ -1,0 +1,75 @@
+[package]
+name = "kata-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# Exposes the executor's test-only accessors/mutators (dispatcher handle,
+# synthetic ledger seeding, progress-frame broadcast) to integration tests.
+# Off in shipped builds; the self dev-dependency below turns it on for this
+# crate's own `tests/`.
+test-support = ["kata-workflow/test-support"]
+
+[dependencies]
+kata-types.workspace = true
+kata-core.workspace = true
+kata-crypto.workspace = true
+kata-op-contract.workspace = true
+kata-program.workspace = true
+kata-workflow = { path = "../workflow" }
+kata-effects-contract.workspace = true
+kata-vcs = { path = "../vcs" }
+kata-transport = { path = "../transport" }
+dashmap.workspace = true
+smol_str.workspace = true
+axum.workspace = true
+tower-http.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+hex.workspace = true
+tracing.workspace = true
+metrics.workspace = true
+futures.workspace = true
+ulid.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+# `tower::ServiceExt::oneshot` drives the router in-process.
+tower.workspace = true
+chrono.workspace = true
+kata-agent = { path = "../agent" }
+kata-test-utils.workspace = true
+# `server_tests` runs bodies under `run_seeded`.
+kata-test-seeded.workspace = true
+kata-worker = { path = "../worker", features = ["test-support"] }
+tempfile.workspace = true
+# Self dev-dependency turns on `test-support` for this crate's own `tests/`.
+kata-api = { path = ".", features = ["test-support"] }
+# Integration tests reach `WorkerInfo::result_transport`, a receive-only view
+# gated behind kata-transport's `test-support`.
+kata-transport = { path = "../transport", features = ["test-support"] }
+# Parametrized `#[case]` rows for the server auth-token tests.
+rstest.workspace = true
+# DebuggingRecorder for asserting the request-latency histogram
+# without standing up a real Prometheus exporter.
+metrics-util.workspace = true
+# The nucleus tamper fixtures write `operational.db` rows the production
+# writer cannot produce (a program body edited under an untouched header hash, an
+# invocation whose params drift under a RECOMPUTED digest). Both are the exact
+# shapes the read-side self-verification exists to refuse, and neither has — or
+# should have — a typed seam.
+rusqlite.workspace = true
+# The invocation fixture RECOMPUTES the admission digest over its canonical
+# bytes, so the byte/digest binding still holds and only the re-resolution fixed
+# point can refuse it.
+blake3.workspace = true
+
+[lints]
+workspace = true

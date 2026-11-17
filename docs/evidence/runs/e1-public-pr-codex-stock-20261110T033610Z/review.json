@@ -1,0 +1,1 @@
+{"findings": [], "summary": "The implementation correctly distinguishes an absent source entry from an explicitly stored `undefined`, so a global option with an unknown source masks the local source. The regression test covers this behavior, and `Object.hasOwn` is supported by the package's Node.js >=22.12.0 requirement.", "verdict": "approve"}

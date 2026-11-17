@@ -1,0 +1,9 @@
+execution 01M7854JP9HYANGKBMP4ZA0XBH
+control (no model call open at the kill, from the transcript): open = []
+killed the worker daemon (SIGKILL) at the parked gate
+kata approvals after the restart: the same assignment "01M7855AWCHBD74DXJJBDB9TZQ" re-listed: true
+kata run show status after the decision: Some("completed")
+assert_final_state: one accepted attempt per occurrence, trunk = kata/<exec> = the committed commit, one `gh pr create`, no attempt roots, containers or cgroups
+spend: issued calls of the agent attempts that never completed 0 (unmetered_calls; started 0, completed 0, unclosed 0, open false); the case kills no model call, so 0
+recorded usage [in, cache_read, cache_write, out]: [21906, 26496, 0, 750]
+outcome: pass: settled resumed-at-gate, every oracle held

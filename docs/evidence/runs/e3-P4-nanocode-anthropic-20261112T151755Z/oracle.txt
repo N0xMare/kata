@@ -1,0 +1,11 @@
+control 1: KATA_FAULT_INJECT=operational.after_forge_push_before_pr
+forge: the real forge behind /home/[redacted-private_session-4]/ke/e3-forge (KATA_E3_FORGE_CLONE), the host's gh
+execution 01M785CJFJ1F3BW1FRQ3PV98CA
+control 2 (the abort line in the killed main's log): [kata-fault-inject] crash point reached: operational.after_forge_push_before_pr (KATA_FAULT_INJECT=operational.after_forge_push_before_pr, action=abort); aborting process now
+control 3 (wait status): ExitStatus(unix_wait_status(6)), signal Some(6)
+at the crash: remote refs/heads/kata/<exec> ["a20a7fbcd4b6b117b247cfb43732233e11ee277f\trefs/heads/kata/01M785CJFJ1F3BW1FRQ3PV98CA"]; pull requests for kata/<exec> 0
+after the restart: status completed; remote refs/heads/kata/<exec> ["a20a7fbcd4b6b117b247cfb43732233e11ee277f\trefs/heads/kata/01M785CJFJ1F3BW1FRQ3PV98CA"]; pull requests for kata/<exec> 1 (Forge forge)
+the one export ref Some("a20a7fbcd4b6b117b247cfb43732233e11ee277f") against trunk's tip Some("a20a7fbcd4b6b117b247cfb43732233e11ee277f")
+assert_landed_state: trunk = the commit effect's commit_sha, no residue; the forge's one kata/<exec> and one pull request read above
+spend: issued calls of the agent attempts that never completed 0 (unmetered_calls; started 0, completed 0, unclosed 0, open false); the case kills no model call, so 0
+outcome: pass: settled pr-opened-once, every oracle held

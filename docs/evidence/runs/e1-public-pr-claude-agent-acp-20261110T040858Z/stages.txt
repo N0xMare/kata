@@ -1,0 +1,11 @@
+execution 01M71TA50KZ5S33Y803K3F1QT4 (completed)
+stage   ordinal  state      accepted  adapter      model              effort  model_reported  schema_sent  charge     provider_failure  input  output  cache_read  cache_write  cost
+------  -------  ---------  --------  -----------  -----------------  ------  --------------  -----------  ---------  ----------------  -----  ------  ----------  -----------  ------------------------
+find    0        completed  1         generic_acp  claude-sonnet-5-5  medium  sonnet          0            completed  -                 6      495     45322       5779         unavailable(generic_acp)
+verify  0        completed  1         generic_acp  claude-sonnet-5-5  medium  sonnet          0            completed  -                 4      312     28263       5484         unavailable(generic_acp)
+
+stage totals (every attempt):
+stage   attempts  occurrences  retries  unknown_charges  input  output  cache_read  cache_write  cost
+------  --------  -----------  -------  ---------------  -----  ------  ----------  -----------  -----------
+find    1         1            0        0                6      495     45322       5779         unavailable
+verify  1         1            0        0                4      312     28263       5484         unavailable

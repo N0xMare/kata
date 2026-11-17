@@ -1,0 +1,48 @@
+capsule_network = "offline"
+case = "P4-host"
+cell = "E3"
+cost_provider = "unavailable: per-run provider usage not attributable"
+cost_recorded = "estimated"
+cost_recorded_usd = 0.017154
+credential_mode = "api_key"
+effort = "medium"
+harness = "nanocode-anthropic"
+kata_sha = "4da3b2fe2aa434cfd68b267c1177354510c32c2f"
+kata_tree = "74133d703da4dd98910352faa569d87e8c06666f"
+model = "claude-sonnet-5-5"
+nanocode_rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2"
+outcome = "pass"
+outcome_source = "oracle.txt: settled pr-opened-once, every oracle held (expected pr-opened-once)"
+settlement = "pr-opened-once"
+started_utc = "2026-11-12T15:44:20Z"
+surface = "cli"
+tokens_provider = "unavailable: per-run provider usage not attributable"
+unknown_charges = 0
+unmetered_calls = 0
+wall_seconds = 3
+
+[[artifacts]]
+path = "oracle.txt"
+what = "every outside-kata read this cell's outcome rests on, in order"
+
+[[artifacts]]
+path = "sse-transcript.txt"
+what = "the client-side GET /api/v1/events transcript, one received-ms-stamped line per SSE line"
+
+[[artifacts]]
+path = "change.star"
+what = 'the pack this run submitted: workflows/std/change.star at kata_sha with progress_visibility = "summary" added to plan and implement, nothing else'
+
+[[artifacts]]
+path = "tree.txt"
+what = "git rev-parse HEAD, HEAD^{tree} and git status --porcelain of the tree the binaries were built from: kata_sha names exactly what ran only when the status is empty"
+
+[[artifacts]]
+path = "spend-ledger.toml"
+what = "ledger.py record over the kept node's database (a second, read-only handle): the known tokens, the unknown charges (unknown_charges: one per attempt kata could not meter) and kata's cost"
+
+[tokens_recorded]
+cache_read = 32968
+cache_write = 2548
+input = 14
+output = 746

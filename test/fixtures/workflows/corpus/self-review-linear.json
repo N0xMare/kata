@@ -1,0 +1,13 @@
+{
+  "name": "self-review — linear DAG routing (ensure_git_repo → summarize → review → decide)",
+  "workflow_path": "../../../../workflows/std/self-review.star",
+  "recorded_outputs": {
+    "ensure_git_repo": { "content": "GIT_REPO_OK" },
+    "summarize": { "content": "Added a widget module and a unit test covering the happy path." },
+    "review": { "content": "1. Correct. 2. Low regression risk. 3. Add one edge-case test." },
+    "decide": { "content": "SHIP\nThe change is small and covered by a test." }
+  },
+  "expect": {
+    "ran": ["ensure_git_repo", "summarize", "review", "decide"]
+  }
+}

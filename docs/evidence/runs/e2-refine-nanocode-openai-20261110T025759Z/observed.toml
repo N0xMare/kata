@@ -1,0 +1,7 @@
+# e2-oracles.sh: the record's OBSERVED fields, read through ledger.py's read-only handle
+variant = "refine-cell"
+refined = "yes"
+# iterations = 3
+# final_test = "passed"
+# refine_cause = suite+gate (iteration 0's feedback)
+# iter0_gate_fails = G1-dot-first G2-dot-last G3-plus-sign C1-command-header C2-manifest C3-suite-footer G4-exponent G5-lone-minus G6-leading-zeros G7-negative-zero G8-mixed-is-text G9-header-right-aligned G10-header-width G11-header-first-nonblank G12-empty-cells-ignored G13-space-separator G14-dot-separator G15-trailing-empty-cell G16-blank-line-with-s G17-widths-span-files G18-leading-padding-kept G19-tabs-separate-words G20-tab-separator G21-two-spaces-whatever-sep

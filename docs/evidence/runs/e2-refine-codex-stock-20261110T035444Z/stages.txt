@@ -1,0 +1,12 @@
+execution 01M71SG3JNF1465RCANB8YHNP1 (completed)
+stage      ordinal  state      accepted  adapter           model       effort  model_reported  schema_sent  charge     provider_failure  input  output  cache_read  cache_write  cost
+---------  -------  ---------  --------  ----------------  ----------  ------  --------------  -----------  ---------  ----------------  -----  ------  ----------  -----------  ------------------
+implement  0        completed  1         codex_app_server  gpt-6-luna  medium  gpt-6-luna      0            completed  -                 25928  4399    218368      0            unavailable(codex)
+implement  1        completed  1         codex_app_server  gpt-6-luna  medium  gpt-6-luna      0            completed  -                 28480  1460    148352      0            unavailable(codex)
+plan       0        completed  1         codex_app_server  gpt-6-luna  medium  gpt-6-luna      1            completed  -                 21882  628     34688       0            unavailable(codex)
+
+stage totals (every attempt):
+stage      attempts  occurrences  retries  unknown_charges  input  output  cache_read  cache_write  cost
+---------  --------  -----------  -------  ---------------  -----  ------  ----------  -----------  -----------
+implement  2         2            0        0                54408  5859    366720      0            unavailable
+plan       1         1            0        0                21882  628     34688       0            unavailable

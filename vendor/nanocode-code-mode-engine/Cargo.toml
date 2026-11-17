@@ -1,0 +1,50 @@
+[package]
+name = "nanocode-code-mode-engine"
+version = "0.6.7"
+edition = "2024"
+rust-version = "1.97"
+publish = true
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/gakonst/nanocode"
+description = "QuickJS execution worker for Code Mode on native and WASM hosts"
+autotests = false
+autobenches = false
+
+[dependencies]
+nanocode-platform = { version = "0.6.7", git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-sync = { version = "0.6.7", git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+nanocode-tool-contracts = { version = "0.6.7", git = "https://github.com/gakonst/nanocode", rev = "2ac77424e032ff0f48bda718f5bebc82e35b4bb2" }
+base64 = { version = "0.22.1" }
+base64-simd = { version = "0.8.0" }
+rquickjs = { version = "0.14.0", features = ["loader"] }
+serde = { version = "1.0.228", features = ["derive", "rc"] }
+serde_json = { version = "1.0.149", features = ["raw_value"] }
+sha1 = { version = "0.11.0" }
+sha2 = { version = "0.11.0", default-features = false }
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+tokio = { version = "1.48.0", features = ["rt", "sync"] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+rquickjs = { version = "0.14.0", features = ["bindgen", "loader"] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+rquickjs = { version = "0.14.0", features = ["bindgen", "loader"] }
+tokio = { version = "1.48.0", features = ["macros", "sync"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+missing_const_for_fn = "warn"
+use_self = "warn"
+redundant_clone = "warn"
+large_enum_variant = "allow"
+result_large_err = "allow"
+
+[lib]
+test = false
+doctest = false
+bench = false

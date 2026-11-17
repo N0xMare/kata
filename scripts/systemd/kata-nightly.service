@@ -1,0 +1,33 @@
+# The L2 nightly deep tier (scripts/nightly.sh), as a systemd USER service.
+#
+# A TEMPLATE: `just nightly-install` renders @ROOT@ to the checkout it is run from and
+# installs the result into ~/.config/systemd/user/. Run it from the MAIN checkout —
+# the recipe refuses a linked worktree, which is deleted when it is pruned.
+#
+# The script waits, bounded, while a gate or this repository's tests run, and holds the
+# box (its NIGHTLY mark and the live-suite lock; scripts/gate-env.sh) once they are done,
+# refusing (exit 0, a REFUSED report) only when the bound runs out — so this unit never
+# competes with a gate or a lane for the host; Nice and the idle IO class keep it out of
+# the way of everything else. Idle IO costs
+# nothing on the quiet host the script waits for, and would slow the timing-sensitive
+# steps only under IO the guards did not see.
+[Unit]
+Description=kata L2 nightly deep tier (@ROOT@/scripts/nightly.sh)
+Documentation=file://@ROOT@/docs/development/verification.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+# PATH as the installing shell had it, minus entries that do not survive a reboot
+# (cargo, just, nextest, python3, nix): a user manager's environment is not a login
+# shell's. `just gate-launch` runs its unit on the same file (scripts/gate-env.sh).
+EnvironmentFile=-%h/.config/kata-nightly/env
+ExecStart=@ROOT@/scripts/nightly.sh
+Nice=10
+IOSchedulingClass=idle
+# The tier, a capped bisect, capped mutants and a cold build, with headroom. The
+# nanocode drift step's seconds come out of the bisect's cap, so it adds nothing here.
+TimeoutStartSec=14h
+# A red nightly exits 1; that is a verdict, recorded in the report, not a unit fault
+# worth a restart.
+Restart=no

@@ -1,0 +1,5 @@
+# e2-oracles.sh: the record's OBSERVED fields, read through ledger.py's read-only handle
+variant = "refine-addendum"
+refined = "no"
+# iterations = 1
+# final_test = "passed"

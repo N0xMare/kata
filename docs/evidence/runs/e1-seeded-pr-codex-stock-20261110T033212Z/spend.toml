@@ -1,0 +1,5 @@
+# execution 01M71R6TN4C1P54XWZNB24D349 (completed): ledger.py record
+tokens_recorded = { input = 52889, cache_read = 61184, cache_write = 0, output = 948 }
+unmetered_calls = 0
+# cost_recorded: kata priced no turn of codex_app_server unavailable(codex) (PRICED: codex-stock, nanocode-anthropic; a subscription login meters no price)
+cost_recorded = "unavailable"

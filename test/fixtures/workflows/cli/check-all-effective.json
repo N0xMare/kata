@@ -1,0 +1,2976 @@
+{
+  "check_all": {
+    "deferred_node_facts": [
+      "agents",
+      "ceilings",
+      "egress",
+      "environment"
+    ],
+    "error_count": 0,
+    "failed_count": 0,
+    "passed": true,
+    "passed_count": 42,
+    "total": 42,
+    "warning_count": 0
+  },
+  "workflows": [
+    {
+      "diagnostic_count": 5,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 5,
+      "name": "agent-change",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "663be2fa33b5472757da04a848c02d90fb6f6345de1741856e36bc731e0ce173",
+            "path": [
+              0
+            ],
+            "stage": "approve"
+          },
+          {
+            "kind": "execute",
+            "operation": "59dceec22a21b0f8da1be8deced6afd2f1c70143721a9380a9737fcbb355bcf9",
+            "path": [
+              1
+            ],
+            "stage": "commit"
+          },
+          {
+            "kind": "execute",
+            "operation": "c604652d5417a6851b5817bc408156029a5b98dfb4bec041c4f52d9065b5ae1e",
+            "path": [
+              2
+            ],
+            "stage": "export"
+          },
+          {
+            "kind": "execute",
+            "operation": "4d975e3749689dcd8c4007263ec1f92362f6f82317adc4a8c88dffb337e648fe",
+            "path": [
+              3
+            ],
+            "stage": "halt"
+          },
+          {
+            "kind": "execute",
+            "operation": "afe3f5080b43edd937aa3afac188d737226745320a3496ae9b4b472eebe354ba",
+            "path": [
+              4
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "372f7180fa35b7935dcd540fa0b5422a2b6b35a8e3acb995ce9ecce2ea950de1",
+            "path": [
+              5
+            ],
+            "stage": "promote"
+          },
+          {
+            "kind": "execute",
+            "operation": "92eb99561ef52fd710f5d3edec61f7ffa05735457a315dd10eb2e0385b9d8bdd",
+            "path": [
+              6
+            ],
+            "stage": "test"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "test",
+            "operation": "10f04aec77f09b6b8dd72a3cdc5191fa8a732f5b47c249dc71b299cfa3c3bb57",
+            "path": [
+              7
+            ],
+            "selector": "06a474e8550378ce54fbd1b96a5dce65956b1ec8e92128631847863a0d4051fc"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 2,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 2,
+      "name": "branch-walkaway-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "a80809fcfa73695c86e98bb159a7b8e10341531b5a50afdcc2c21f5b688d98c6",
+            "path": [
+              0
+            ],
+            "stage": "decide"
+          },
+          {
+            "kind": "execute",
+            "operation": "9ff3790b7cdca916e4d5d64c9b4417e44b20e1c1fea87c3b6bcfea35e65973c9",
+            "path": [
+              1
+            ],
+            "stage": "first"
+          },
+          {
+            "kind": "execute",
+            "operation": "385fcbbaa62cb8154adfea94f446038aa9c7238d7b0b090e04fe6f0bf2566c9f",
+            "path": [
+              2
+            ],
+            "stage": "second"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "decide",
+            "operation": "2868416720a0ae5243a827e7d4133acd8c94e10bca2b208c041e883c6f1b60d4",
+            "path": [
+              3
+            ],
+            "selector": "ca7ceebc7cca453578915f03eebb2b3868bf1ffec0f77d8f7e9aa034fa6bf27a"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "capsule-reuse-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "4924c0d74e0bc4e7602b30f7c182343ef44173d52c15a81b9b6bf4d435d64f9e",
+            "path": [
+              0
+            ],
+            "stage": "digest"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 6,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 6,
+      "name": "change",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 4,
+            "operation": "5ad7d03755e6486ab93a097bbce0082141b8f9636f0c9c87c7433b743fa7302f",
+            "path": [
+              9
+            ],
+            "policy": "1d0b3d7e6b3aa44f3afdeb4c88ac7c62716e9d7024cce3c47c705a75546e2c95",
+            "template": [
+              [
+                3
+              ],
+              [
+                7
+              ]
+            ],
+            "worker_stage": "implement"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "c10e7861f904a57dd1650e1bbdf5e46dd5aa10025097c4edd234e0c1b8a859ff",
+            "path": [
+              0
+            ],
+            "stage": "approve"
+          },
+          {
+            "kind": "execute",
+            "operation": "8b186a02869fed00438a6be794cda5220b3535949e431b8f24838f8f45a32524",
+            "path": [
+              1
+            ],
+            "stage": "commit"
+          },
+          {
+            "kind": "execute",
+            "operation": "fd5076855c66e5c2bef6393feaaf0795b590157452ea0ed6cf0e4ec2a380890d",
+            "path": [
+              2
+            ],
+            "stage": "export"
+          },
+          {
+            "kind": "execute",
+            "operation": "a4da6ee10f2bc9d8d4f2cba4c1cbe9727160aef906a4c90e21eb97b32f2fbcee",
+            "path": [
+              3
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "6421cc3b5d4a959d8faed4bab6ced1cd1627a3125489cfde12b7e6368c15c21a",
+            "path": [
+              4
+            ],
+            "stage": "park_unfinished"
+          },
+          {
+            "kind": "execute",
+            "operation": "b75e66982921eb3bad16291e5747de9716c3c587d719488862e587b99ed54dd7",
+            "path": [
+              5
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "execute",
+            "operation": "df0e7fae87ef17282a6317640fb84a942ccbfabeb8ce008fd658667543b99975",
+            "path": [
+              6
+            ],
+            "stage": "promote"
+          },
+          {
+            "kind": "execute",
+            "operation": "cf7d69595358f751e6bec430da0a65a28b4f4d8d95990b1ab279f63e2f8264e1",
+            "path": [
+              7
+            ],
+            "stage": "test"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "test",
+            "operation": "9f3316bc8a3aaa674eaa50e723ccfa7eea3a92e6c67c1dc9fcf66138aeca8f02",
+            "path": [
+              8
+            ],
+            "selector": "3c2259f75d2620edd694fa1d3045774695e1549df590c9d881227a9b8be54b18"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 4,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 4,
+      "name": "checked-command",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "436ca6fe712822f5827938f8ebbb89bc981a7df3b4a3f66865e475d2239412ff",
+            "path": [
+              0
+            ],
+            "stage": "approve"
+          },
+          {
+            "kind": "execute",
+            "operation": "59dceec22a21b0f8da1be8deced6afd2f1c70143721a9380a9737fcbb355bcf9",
+            "path": [
+              1
+            ],
+            "stage": "commit"
+          },
+          {
+            "kind": "execute",
+            "operation": "c604652d5417a6851b5817bc408156029a5b98dfb4bec041c4f52d9065b5ae1e",
+            "path": [
+              2
+            ],
+            "stage": "export"
+          },
+          {
+            "kind": "execute",
+            "operation": "4d975e3749689dcd8c4007263ec1f92362f6f82317adc4a8c88dffb337e648fe",
+            "path": [
+              3
+            ],
+            "stage": "halt"
+          },
+          {
+            "kind": "execute",
+            "operation": "b74ba6a83f027748d5aaee796d7dcb9b91e10c1fe0d3a9ae6dfd3d6e55f6dd43",
+            "path": [
+              4
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "372f7180fa35b7935dcd540fa0b5422a2b6b35a8e3acb995ce9ecce2ea950de1",
+            "path": [
+              5
+            ],
+            "stage": "promote"
+          },
+          {
+            "kind": "execute",
+            "operation": "92eb99561ef52fd710f5d3edec61f7ffa05735457a315dd10eb2e0385b9d8bdd",
+            "path": [
+              6
+            ],
+            "stage": "test"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "test",
+            "operation": "10f04aec77f09b6b8dd72a3cdc5191fa8a732f5b47c249dc71b299cfa3c3bb57",
+            "path": [
+              7
+            ],
+            "selector": "06a474e8550378ce54fbd1b96a5dce65956b1ec8e92128631847863a0d4051fc"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 9,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 9,
+      "name": "factory-inloop-multistage-structural-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 3,
+            "operation": "71555cb3fe81ab7f930e5465ee1d5fd3e9ee3d6b27eac11bbf88729fca001782",
+            "path": [
+              16
+            ],
+            "policy": "9ccc2180c908ed83bc4af0e8ec5355b53de5045ceb784565c726e5d4d50a268c",
+            "template": [
+              [
+                2
+              ],
+              [
+                10
+              ],
+              [
+                4
+              ],
+              [
+                13
+              ],
+              [
+                14
+              ],
+              [
+                12
+              ],
+              [
+                3
+              ]
+            ],
+            "worker_stage": "record"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "78b27cd44627ca9aaf158f45368ecf2026149117e1c37b8d23f3caaaff6b77ea",
+            "path": [
+              0
+            ],
+            "stage": "ask_human_request"
+          },
+          {
+            "kind": "execute",
+            "operation": "aef105c35f38fb600f1b574b464efc06fcafaf4e696b72edb463a7ef68b953b5",
+            "path": [
+              1
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "execute",
+            "operation": "31acc3ad90fc16c151c7e58630735add6c67de4d4f8522e85c69150166bcd270",
+            "path": [
+              2
+            ],
+            "stage": "context"
+          },
+          {
+            "kind": "execute",
+            "operation": "fbfa905c1a90502cba6228233de674b703213aad3b55957dde7999e93aeca0b4",
+            "path": [
+              3
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "7be221d8ab8832cfd72e6e8ad71d48b3ca050b350b694533e2a7f2e1e6c3f08a",
+            "path": [
+              4
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "3a2cc70c281e8af26ade4dc5662af8dd9c0a4cdc9695bbcb8a8574cd9018dfc0",
+            "path": [
+              5
+            ],
+            "stage": "noop_continue"
+          },
+          {
+            "kind": "execute",
+            "operation": "4572d2ff2354c9928c95044eed2032b0507e3ffdee59ff7aade88fa800209638",
+            "path": [
+              6
+            ],
+            "stage": "noop_reduce_scope"
+          },
+          {
+            "kind": "execute",
+            "operation": "39e95236a4bea7c08b7c8b553acdb4462648becdfb27a5f06739e2a6efbb1387",
+            "path": [
+              7
+            ],
+            "stage": "noop_repair"
+          },
+          {
+            "kind": "execute",
+            "operation": "29ddd92e7a8eb994010601c5644f1f08e8c42bf60d420037ab3e7acaf7199b92",
+            "path": [
+              8
+            ],
+            "stage": "noop_split"
+          },
+          {
+            "kind": "execute",
+            "operation": "c44cb22a96c9567b34e6088dfa223b91b189c85f5931931d1606c2c0eb5c1b72",
+            "path": [
+              9
+            ],
+            "stage": "park_effect"
+          },
+          {
+            "kind": "execute",
+            "operation": "1b09efceac0f3d74a2953bc74242ab74cbeec28c9d72c33e704fa8dca087db19",
+            "path": [
+              10
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "execute",
+            "operation": "d7c28ed59320dd5f38241771dbffb662bed02e21bd015fcc630b6dae1ce29c17",
+            "path": [
+              11
+            ],
+            "stage": "promote_effect"
+          },
+          {
+            "kind": "execute",
+            "operation": "eddc47765e9021c72265bf21623d07472f78dbecaba5e213a63b2172ea9060af",
+            "path": [
+              12
+            ],
+            "stage": "record"
+          },
+          {
+            "kind": "execute",
+            "operation": "16a477a6d0d14666853580df04f09c879c4e1a269762f25a118a5120f668dd64",
+            "path": [
+              13
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "cdb3b44efed036c337394237f2aa5e134a03391fbf5e3c94773932aadc4bb018",
+            "path": [
+              14
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "controller",
+            "operation": "db2df8611b98734610dcb9e38d8aa76d6f6349ffd095f79a9de5dd43ce346ec4",
+            "path": [
+              15
+            ],
+            "selector": "23fef48ce20109f0e2830ab2fc074db845b4d03eea39c50d35c889855b959993"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 5,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 5,
+      "name": "factory-loop-composition-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 3,
+            "operation": "ec3641ed3a52abfaee6b163c5758f96c5b3ce6d971877db5c493dd4c95a6cd5c",
+            "path": [
+              8
+            ],
+            "policy": "7f80fa7299272e8c55e20e58b9cc51923e4c336d0238f420791908bf0b9371f8",
+            "template": [
+              [
+                6
+              ],
+              [
+                5
+              ],
+              [
+                2
+              ]
+            ],
+            "worker_stage": "record"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "aef105c35f38fb600f1b574b464efc06fcafaf4e696b72edb463a7ef68b953b5",
+            "path": [
+              0
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "execute",
+            "operation": "fac651b9c74ec8dcb821628e4186ce45845d913a870647e180ed8424f45e237b",
+            "path": [
+              1
+            ],
+            "stage": "continue_noop"
+          },
+          {
+            "kind": "execute",
+            "operation": "405d1587713b36399ae3d7ef067b8af9b08210b28c3d6f24065c3bd44cf4ee12",
+            "path": [
+              2
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "c44cb22a96c9567b34e6088dfa223b91b189c85f5931931d1606c2c0eb5c1b72",
+            "path": [
+              3
+            ],
+            "stage": "park_effect"
+          },
+          {
+            "kind": "execute",
+            "operation": "d7c28ed59320dd5f38241771dbffb662bed02e21bd015fcc630b6dae1ce29c17",
+            "path": [
+              4
+            ],
+            "stage": "promote_effect"
+          },
+          {
+            "kind": "execute",
+            "operation": "e0e353861e48bd28ba417c174061e1852407a65d272be6793824ad6bba6acc08",
+            "path": [
+              5
+            ],
+            "stage": "record"
+          },
+          {
+            "kind": "execute",
+            "operation": "0ffc752ccd7c99e1adaef825b378320033a93de51b24d116bfa66ebb3bac2605",
+            "path": [
+              6
+            ],
+            "stage": "wave"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "controller",
+            "operation": "03104fb88d4728458ab20ef62b78ea97ee87b2e21f0d4850c2161bdd49b9b526",
+            "path": [
+              7
+            ],
+            "selector": "0a38e22fd1512991648ddc31457525b94e07d44e233203492aed1ff928834a92"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 3,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 3,
+      "name": "gold-loop-nobudget-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "b7949f76fc1a838ea32f559e5313697dae8ab1ecfe141ae6ef4d5c498c6293e0",
+            "path": [
+              0
+            ],
+            "stage": "approve"
+          },
+          {
+            "kind": "execute",
+            "operation": "b392108facfc89ccb7e2ea8d0d2ed9b3c7d3e4adc266bb6be9b73e2e219718b7",
+            "path": [
+              1
+            ],
+            "stage": "context"
+          },
+          {
+            "kind": "execute",
+            "operation": "fd173987b6e46957ba587cd4251e21254fb56aa2696445441a98a1a3cee16cf6",
+            "path": [
+              2
+            ],
+            "stage": "halt"
+          },
+          {
+            "kind": "execute",
+            "operation": "49a3859a6da809ca257e6bc364f2b1da28c2df7b7ac37fa54df00da50fae2af3",
+            "path": [
+              3
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "34752471016cce58b84bb51cb4a858f8aa2280592bb456fecb24443695f2a900",
+            "path": [
+              4
+            ],
+            "stage": "land"
+          },
+          {
+            "kind": "execute",
+            "operation": "b52bf455b2aa317d41ef5bdd3d49992c51bf92763b3bd5c904d0e9ce84e89cdc",
+            "path": [
+              5
+            ],
+            "stage": "record"
+          },
+          {
+            "kind": "execute",
+            "operation": "4191f05a144efcc1a4d9d24ac4b80c703039774498abb3f753ad4e8ba09fd829",
+            "path": [
+              6
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "validate",
+            "operation": "d8b76dec2313c03c041ebfae1733ba815a5e9166b5212d0f4d2bbb802dbfd771",
+            "path": [
+              7
+            ],
+            "selector": "03ce886da512c68038a699e175eaebff67285da06630a873e972d2f07bd610d8"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "hermetic-build-closure",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "fa90d436114f025df418ae6c244e9b94d2d070bea8fbb270e3bb0065e6ba2ac2",
+            "path": [
+              0
+            ],
+            "stage": "build"
+          },
+          {
+            "kind": "execute",
+            "operation": "e5f22f4752db5ea3a3cf0354bcf9ceb220790cefc18b531bb7eacc6764a68f5e",
+            "path": [
+              1
+            ],
+            "stage": "seed"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 1,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 1,
+      "name": "join-outputs-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "join",
+            "operation": "8cf8b0438e50cf78acf02940b70a2d446e57190fddda4146d8cef2cfa21316a8",
+            "path": [
+              0
+            ],
+            "stage": "__parallel_join_0"
+          },
+          {
+            "kind": "execute",
+            "operation": "19f8b8120be204740410978aedca15ba0651fc2404ea3ab17d8c6015a03ea21f",
+            "path": [
+              1
+            ],
+            "stage": "collector"
+          },
+          {
+            "kind": "execute",
+            "operation": "f0fab1f9901efc1c67441d93a897c480135a267d7129d7c03b63b272b5b882b1",
+            "path": [
+              2
+            ],
+            "stage": "left"
+          },
+          {
+            "kind": "execute",
+            "operation": "f98fc7deb42b72baec1c13bf21eab8a41719ea0873fa1bc585c9980cc854edfc",
+            "path": [
+              3
+            ],
+            "stage": "right"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 9,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 9,
+      "name": "kata-gate-fix-loop",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 4,
+            "operation": "284d7731c4acb32e7900ab0802f4dc54e25d49200a0b98edbe342819daaa1e4f",
+            "path": [
+              13
+            ],
+            "policy": "eebc08e1c53c077bd94c5d9da5ac2307e8b85c988f6a6114a00bdfe07f32ade1",
+            "template": [
+              [
+                5
+              ],
+              [
+                4
+              ],
+              [
+                2
+              ]
+            ],
+            "worker_stage": "fix"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "78b27cd44627ca9aaf158f45368ecf2026149117e1c37b8d23f3caaaff6b77ea",
+            "path": [
+              0
+            ],
+            "stage": "ask_human_request"
+          },
+          {
+            "kind": "execute",
+            "operation": "aef105c35f38fb600f1b574b464efc06fcafaf4e696b72edb463a7ef68b953b5",
+            "path": [
+              1
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "execute",
+            "operation": "df8b9384ba44c1ab6dea41b13665a39dcdc527909b7e02fa643e93eb8c631ed4",
+            "path": [
+              2
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "e6bee1a930b9ba92501b8089c485712c7ea41e92f2a35d0e21609cb184174924",
+            "path": [
+              3
+            ],
+            "stage": "final_gate"
+          },
+          {
+            "kind": "execute",
+            "operation": "5281ada3f6d936fb75dd0b78909515be1bf8defd4a50851cb117e92ebe657924",
+            "path": [
+              4
+            ],
+            "stage": "fix"
+          },
+          {
+            "kind": "execute",
+            "operation": "8b9621583b18aa23ccf3983f609e01d3fdbe780df5557088bd4aefbcfa40a8eb",
+            "path": [
+              5
+            ],
+            "stage": "gate_run"
+          },
+          {
+            "kind": "execute",
+            "operation": "3a2cc70c281e8af26ade4dc5662af8dd9c0a4cdc9695bbcb8a8574cd9018dfc0",
+            "path": [
+              6
+            ],
+            "stage": "noop_continue"
+          },
+          {
+            "kind": "execute",
+            "operation": "4572d2ff2354c9928c95044eed2032b0507e3ffdee59ff7aade88fa800209638",
+            "path": [
+              7
+            ],
+            "stage": "noop_reduce_scope"
+          },
+          {
+            "kind": "execute",
+            "operation": "39e95236a4bea7c08b7c8b553acdb4462648becdfb27a5f06739e2a6efbb1387",
+            "path": [
+              8
+            ],
+            "stage": "noop_repair"
+          },
+          {
+            "kind": "execute",
+            "operation": "29ddd92e7a8eb994010601c5644f1f08e8c42bf60d420037ab3e7acaf7199b92",
+            "path": [
+              9
+            ],
+            "stage": "noop_split"
+          },
+          {
+            "kind": "execute",
+            "operation": "c44cb22a96c9567b34e6088dfa223b91b189c85f5931931d1606c2c0eb5c1b72",
+            "path": [
+              10
+            ],
+            "stage": "park_effect"
+          },
+          {
+            "kind": "execute",
+            "operation": "083416a4b53373aa1653879ecda0d082e8d63260fb1e5f9026da364ac1bd795b",
+            "path": [
+              11
+            ],
+            "stage": "promote_effect"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "controller",
+            "operation": "bf27c62ba855422d8852b03837916df8371f2c85922379bd107a9bc82891e8d4",
+            "path": [
+              12
+            ],
+            "selector": "cd029e53da1ec48beec1768822df50ad54091bd65f267553d2bce9d58ae939b8"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 3,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 3,
+      "name": "kata-loop-lite",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 2,
+            "operation": "08fc26cba2197ce03de20a740e24e8f549f84cd606337c806b29c43874b40bb9",
+            "path": [
+              7
+            ],
+            "policy": "65b619420d13e669ced9a73bcb098fd3fdd0714670d74a469d721b1a5fb6911d",
+            "template": [
+              [
+                2
+              ],
+              [
+                5
+              ]
+            ],
+            "worker_stage": "implement"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "4a15b72faad366982a60a032086548096ee3b990401c565c0422b933d7b821d8",
+            "path": [
+              0
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "execute",
+            "operation": "03031689facc1732ca1b6008c538ee7566ddcc55993adcef4c6b0643f2b45bc9",
+            "path": [
+              1
+            ],
+            "stage": "completion_check"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "b7878b08c4983b04282db92aadfaa77111090ea1d65af914b8e751b4138fae03",
+            "path": [
+              2
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "ad39f73121d478a4f2cae7959433289596cc971433e162d57f8b37b77e680ddb",
+            "path": [
+              3
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "b934e5006cf41eca9d98d100cc13d46b67ffeb3f3ab9bda43607c14b7e4ec448",
+            "path": [
+              4
+            ],
+            "stage": "research"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "62db7f53644a097ab7663a88d1e5c5ab384149359ea0655cd812c291c2a8e798",
+            "path": [
+              5
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "2fe00582c88e1d3b1173f29d3c700246a054381c498a9ee4f30db01b7a5f4e53",
+            "path": [
+              6
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "kata-loop-plan-check-std",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "504b237875e7cab757f36401328f1ccfb29dcd2a502a82047150e0a3f5ceb589",
+            "path": [
+              0
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "execute",
+            "operation": "d742eeee9aa4e81a071a07feb21957841cb935557cae71c2afcde0aaa4d41566",
+            "path": [
+              1
+            ],
+            "stage": "completion_check"
+          },
+          {
+            "kind": "execute",
+            "operation": "c66454581d949f7ff724663705d05421356542154e6f55389b4a579190baedd8",
+            "path": [
+              2
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "befedc37bde260a557b28e3369f316a13323d5b9a09cf5bbfd688859a17d8cd2",
+            "path": [
+              3
+            ],
+            "stage": "research"
+          },
+          {
+            "kind": "execute",
+            "operation": "2b94a3b0d4ce3a2863d7f805af75eb08a77daa95a523a00acc784bfd0cf397dd",
+            "path": [
+              4
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 2,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 2,
+      "name": "kata-work-item",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 3,
+            "operation": "01821693ec01692b08f5de3ef9d2afb6514f4e04e84284f6284e5d85473c6660",
+            "path": [
+              5
+            ],
+            "policy": "04db123ab9339dfd52d82a025f9cc4fb836bd36f800f69d9721eff33fa5ffea2",
+            "template": [
+              [
+                1
+              ],
+              [
+                0
+              ]
+            ],
+            "worker_stage": "implement"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "ca261f0cd587af54f3b0aed2ea17007f91d032aea34f86127c417b23cec755c5",
+            "path": [
+              0
+            ],
+            "stage": "critique"
+          },
+          {
+            "kind": "execute",
+            "operation": "8bee3cce7dbd75eb6079bf3633fe3f4b601ec370f9e2fec62edc2ac758609106",
+            "path": [
+              1
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "2134d6498ddc81ca5aa6b99dbb35d713455b51d776e10618c463151ed3c744dd",
+            "path": [
+              2
+            ],
+            "stage": "package"
+          },
+          {
+            "kind": "execute",
+            "operation": "c7d696f72832f527a9725dab001956012f7c5651ace225afdc0f6f1c0abdd82d",
+            "path": [
+              3
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "execute",
+            "operation": "7084f46e18cd1e78f27e453edc660206a2ce55836288ab3b5435d3e4d8a5f604",
+            "path": [
+              4
+            ],
+            "stage": "run_tests"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "local-worker-ping",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "324011df06ccfc2041a685840355ffa6d8894497321d85de576e0173a83a68e2",
+            "path": [
+              0
+            ],
+            "stage": "ping"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "loop-custom-verdict-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 2,
+            "operation": "3f52293addbe508f4e7e10aa45acf870ecfc45ecf783f2fda54ae240e4830edd",
+            "path": [
+              2
+            ],
+            "policy": "f49262abff130114f49672ca7a6bbe43e3e6ce1605a2281bbd838c99610242a1",
+            "template": [
+              [
+                0
+              ],
+              [
+                1
+              ]
+            ],
+            "worker_stage": "build"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "3efe4239160fa355c26535871fc498a872c0486180098027792f13d2851f04db",
+            "path": [
+              0
+            ],
+            "stage": "build"
+          },
+          {
+            "kind": "execute",
+            "operation": "826c8ac9db5a93648ff2b282976267dd1d06d457ee03dfb1ec9315e117061f95",
+            "path": [
+              1
+            ],
+            "stage": "gate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "loop-escalate-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 2,
+            "operation": "b9001b12079e5ef040fe3636ba54014e46cd34762ce4771f427d42f3623be6d7",
+            "path": [
+              2
+            ],
+            "policy": "94c2d960058d0ad3ddb09eefd782560efa85b11ee032e698dc578b2e5749b401",
+            "template": [
+              [
+                1
+              ],
+              [
+                0
+              ]
+            ],
+            "worker_stage": "worker"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "c3b929fa92ec4f5a344e0e486dab772013a8bb5083ccc5f57f48ac0ec8d4ec41",
+            "path": [
+              0
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "22ca189de1cfe2968b604c5a0b016b6e2bf126923ed51a5d8a66c4a7073fed44",
+            "path": [
+              1
+            ],
+            "stage": "worker"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "memory-context-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "memory_snapshot",
+            "operation": "df7b471af66e9f6af171f145615b3e01c430f642af84b9c8c7574f40089bd8f0",
+            "path": [
+              0
+            ],
+            "stage": "memory_context"
+          },
+          {
+            "kind": "execute",
+            "operation": "2c77d41ea60a761170a52153c8db4dd2db4df95a736179741d18b9d9ea722a41",
+            "path": [
+              1
+            ],
+            "stage": "summarize_memory"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "multistage-loop-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 3,
+            "operation": "f5467f49c582c32f81dc1d7751e580277f0d67958ac6500fb950b064653bc22f",
+            "path": [
+              3
+            ],
+            "policy": "097140a3017abcb81b89bddc969d0752be769e99bc0af1b7329ebb6ee71e58ef",
+            "template": [
+              [
+                1
+              ],
+              [
+                2
+              ],
+              [
+                0
+              ]
+            ],
+            "worker_stage": "stage_b"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "ef0d255499049a27c81e1b65486e3c40d0674bcb6ec1f43e9c6d00477dd279c6",
+            "path": [
+              0
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "86bfa480f6a823c9a5e05296938383b7714745fc5d1fd43f8716a06a13a3fe64",
+            "path": [
+              1
+            ],
+            "stage": "stage_a"
+          },
+          {
+            "kind": "execute",
+            "operation": "6562c8783c08f808b50d5972fb4b75e798abffd07332bdaca9e7da592cffadb0",
+            "path": [
+              2
+            ],
+            "stage": "stage_b"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 1,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 1,
+      "name": "parallel-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "join",
+            "operation": "72072c79e4ce54822987a043ce8b34291882be50fe015d11a24eda6e6110dc34",
+            "path": [
+              0
+            ],
+            "stage": "__parallel_join_0"
+          },
+          {
+            "kind": "execute",
+            "operation": "883d1ce2675f03931a85892f1ea9ecf41ef7d5ccc61aac4776847cb6f5477999",
+            "path": [
+              1
+            ],
+            "stage": "branch_a"
+          },
+          {
+            "kind": "execute",
+            "operation": "5bdce71c2ba3bc508317f6fb51a27505d10b6c8d4dd47fddfa4dcc79883115c3",
+            "path": [
+              2
+            ],
+            "stage": "branch_b"
+          },
+          {
+            "kind": "execute",
+            "operation": "49411e0028701cad93654e5c2aee7aca9f8c9c7e820ec34d8f98c27e915a9a31",
+            "path": [
+              3
+            ],
+            "stage": "collector"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 1,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 1,
+      "name": "params-conformance",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "8fb20fe70b4eb8407a912eb1fad5f2842cefd5480d85e8768d73391c93f41a81",
+            "path": [
+              0
+            ],
+            "stage": "run"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 4,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 4,
+      "name": "promote-pin-parked-nobudget-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "11e2994325f8272d75c6a5b6d2c4c0b9f8a55eb7befde6cc5014778028cb05fd",
+            "path": [
+              0
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "03078360abbcf17a0a68ddeecd8f26253fc67de11e3508bcddc58e96d0e6c6a3",
+            "path": [
+              1
+            ],
+            "stage": "land"
+          },
+          {
+            "kind": "execute",
+            "operation": "b52bf455b2aa317d41ef5bdd3d49992c51bf92763b3bd5c904d0e9ce84e89cdc",
+            "path": [
+              2
+            ],
+            "stage": "record"
+          },
+          {
+            "kind": "execute",
+            "operation": "4191f05a144efcc1a4d9d24ac4b80c703039774498abb3f753ad4e8ba09fd829",
+            "path": [
+              3
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "review",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "33bd1fd52c0e362800a8400615e74e0de699591deaf906f8fa24e768b47a61a6",
+            "path": [
+              0
+            ],
+            "stage": "find"
+          },
+          {
+            "kind": "execute",
+            "operation": "51766ea50132abda32631ae07e0e171522ff67d75e5a44675d2e3c366bc43419",
+            "path": [
+              1
+            ],
+            "stage": "verify"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 1,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 1,
+      "name": "review-loop-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 3,
+            "operation": "f749ccc638ebcdbb7df182f509166af099c9ecf57867e31dfb0ab034c42dde72",
+            "path": [
+              2
+            ],
+            "policy": "f1846fdcd59a9d761f59196b22a3abe2c3bfc670a55dffc12187db6c71adb563",
+            "template": [
+              [
+                0
+              ],
+              [
+                1
+              ]
+            ],
+            "worker_stage": "implement"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "221cdcdc90a298bc11877ca8cce23b52f27cb3d80b1e3d1b424ba9ce2eef7a1e",
+            "path": [
+              0
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "c987d10a4c6a2251ec2ee139423142ab49ab9e70e27e9db7bfb8ed8e67087932",
+            "path": [
+              1
+            ],
+            "stage": "review"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "sandbox-smoke-shell-offline",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "4bb1cab152fa0bb8d2237a5591367467a2d02f6d130dbd1f5f2926f3d6ec4310",
+            "path": [
+              0
+            ],
+            "stage": "probe"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "sandbox-smoke-shell-workspace-ro",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "1aeb0a5baae57e0a507a1b2080c2ad6385ad8d25b05289c8e4e35ae45088e0fc",
+            "path": [
+              0
+            ],
+            "stage": "probe"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "sandbox-smoke-shell-write-closure",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "e34b6778b1b31542c63c452abba166f967ae69ad616109fd8719287fe7ce01a6",
+            "path": [
+              0
+            ],
+            "stage": "eligible"
+          },
+          {
+            "kind": "execute",
+            "operation": "474a5f422af04f2ff2abfd51d538556f5df0a40d49eb4194ef659bc3397a08b4",
+            "path": [
+              1
+            ],
+            "stage": "fence"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "sandbox-smoke-workspace-ro",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "f44127229f189e8736183bbe2ac2d32c072e433bb2b446f2765ddde266926ac6",
+            "path": [
+              0
+            ],
+            "stage": "probe"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 4,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 4,
+      "name": "self-review",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "2392961dd78b808e018a15c6f1136ef0d139aa4671c7df76a3faae1611c83049",
+            "path": [
+              0
+            ],
+            "stage": "decide"
+          },
+          {
+            "kind": "execute",
+            "operation": "8dbd1235c29afb5b358cf925a94e0a710dca84d5f91c8e4936dd70ea62630229",
+            "path": [
+              1
+            ],
+            "stage": "ensure_git_repo"
+          },
+          {
+            "kind": "execute",
+            "operation": "0feb4f1f2d0f7549b95f3021ebc425378ab039974ce799e6324c0a3d51b90c9c",
+            "path": [
+              2
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "bbcbe934fbf24dc45c45a110d21b3f20e3746656bdb63a49603da251ef40d1e2",
+            "path": [
+              3
+            ],
+            "stage": "summarize"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 1,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 1,
+      "name": "sleep-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "9259f4cbdee40b5f6363aed421b6f83558c5c5e70869d5a788615096a4ab06b8",
+            "path": [
+              0
+            ],
+            "stage": "after"
+          },
+          {
+            "kind": "execute",
+            "operation": "4b48d991f0d5dac0a5ebe599d82b67edf3f268d8485bc3016f824cdf7c60b817",
+            "path": [
+              1
+            ],
+            "stage": "before"
+          },
+          {
+            "kind": "wait",
+            "operation": "67df1b2eaece582f8976d5b91862e0feef58037ae1d73767f11e5f33ee8b4012",
+            "path": [
+              2
+            ],
+            "stage": "nap"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 4,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 4,
+      "name": "std.software_factory.kata_self_improve",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 2,
+            "operation": "a1af634bb50c0656e0386073e395aec5e3d5f8d6286b90cd026af5141e72ecc0",
+            "path": [
+              8
+            ],
+            "policy": "c31ed7d5e12720d3e6724413682630bc4ac3cff63f1dce5ec7d8d68704173cbf",
+            "template": [
+              [
+                3
+              ],
+              [
+                6
+              ]
+            ],
+            "worker_stage": "implement"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "701d563d5997bd8b29c69c9cdd480fa2191159a3a043314bdc6c1e3e236f175f",
+            "path": [
+              0
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "0b31de947c7f03392cb3a91df18c59a85d93e08c69e16ea0e9798ac3c0af751d",
+            "path": [
+              1
+            ],
+            "stage": "context"
+          },
+          {
+            "kind": "execute",
+            "operation": "6bc0ea5047c14e346fdc6c507349b4eaf873816a838401e1c7f8d080f9b8d6d0",
+            "path": [
+              2
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "ad929ba3d52f06fe11a100b05e6bc44ac468f63d883e33c5152c067e657a399c",
+            "path": [
+              3
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "memory_snapshot",
+            "operation": "27a3e5a3361f4fb6c6c3925d823510b37b9387a99ef694f104698d7e8a13d326",
+            "path": [
+              4
+            ],
+            "stage": "memory_context"
+          },
+          {
+            "kind": "execute",
+            "operation": "ea0e46a42624e32d9b77e07e505fc93e7f509dd3abb301e051276614a063dc3c",
+            "path": [
+              5
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "3c8ecb291d69bc7644ec4e637d0b9da9750fba36fd0db1ba0de98577459bf651",
+            "path": [
+              6
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "8e344674c621d4a4beabaa7cfd20ebc3c94a1dc08742bcc70b8403ee8fddfec8",
+            "path": [
+              7
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 3,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 3,
+      "name": "std.software_factory.kata_self_improve_implementation_smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 1,
+            "operation": "697b061307919be5eb5c1280fcb2316db200ae545c23b69172dfefbfbdb6b58e",
+            "path": [
+              7
+            ],
+            "policy": "42f6b3a77bbaf49926327d9cf68b071206af5434281a9ab7dd1292180d926155",
+            "template": [
+              [
+                3
+              ],
+              [
+                5
+              ]
+            ],
+            "worker_stage": "implement"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "bdcbd8ce2e2d797db5e022470c0bf68d06c3f040ab3e77bd230773dae8316040",
+            "path": [
+              0
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "execute",
+            "operation": "aace246da06b5ac1d06e3b0b58d14169e6d744388ff5a263b35edb8fb3c00d60",
+            "path": [
+              1
+            ],
+            "stage": "context"
+          },
+          {
+            "kind": "execute",
+            "operation": "37563d89c3226377e4e212a5dcd824f4c14a20595ecb4ef571e43cadf7661cde",
+            "path": [
+              2
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "ef1658ab085013ad7be819026ad37ad60d6cba6c79d0063c4ab854dd8b863b06",
+            "path": [
+              3
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "7bf576ad17dc62eaf4522de3c145c724b7ee3942046e3f6aa6a56ad72f4e2b18",
+            "path": [
+              4
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "execute",
+            "operation": "0e8c7129e87af6781c9bed382ec275328fd5dd8a33c978638afe6b9652532fa8",
+            "path": [
+              5
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "ca0183b91c5917bb3002ac625e49ff5724d34fc45eb6c1459f83635fdd890cc1",
+            "path": [
+              6
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 13,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 13,
+      "name": "std.software_factory.kata_self_improve_inloop",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 3,
+            "operation": "c80baeabe2a9e9339c60e079707841fad5a0611619db863c4084ee0aa3375f2b",
+            "path": [
+              16
+            ],
+            "policy": "66e72b6fc1a57d77171e88f7256d9d0d3384a7d63aff713fd44a840d801e78e9",
+            "template": [
+              [
+                5
+              ],
+              [
+                2
+              ],
+              [
+                11
+              ],
+              [
+                4
+              ],
+              [
+                13
+              ],
+              [
+                14
+              ],
+              [
+                3
+              ]
+            ],
+            "worker_stage": "validate"
+          }
+        ],
+        "inputs": [
+          {
+            "operation": "d5b6d5a67329afda1aebe897e3650140b918283a7527b907d9c3123379acdef9",
+            "path": [
+              17
+            ],
+            "request": "ask_human_decision",
+            "selector": "25354805a5a869dad2d9d3368c548146382002a0b46be42c545ee3d26c8ef422",
+            "target_stage": "ask_human_request"
+          }
+        ],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "78b27cd44627ca9aaf158f45368ecf2026149117e1c37b8d23f3caaaff6b77ea",
+            "path": [
+              0
+            ],
+            "stage": "ask_human_request"
+          },
+          {
+            "kind": "execute",
+            "operation": "aef105c35f38fb600f1b574b464efc06fcafaf4e696b72edb463a7ef68b953b5",
+            "path": [
+              1
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "039c3e49085a97b3a69e60f78488fb0fa10cb1706080b52a234bd1390d0952b0",
+            "path": [
+              2
+            ],
+            "stage": "context"
+          },
+          {
+            "kind": "execute",
+            "operation": "6bc0ea5047c14e346fdc6c507349b4eaf873816a838401e1c7f8d080f9b8d6d0",
+            "path": [
+              3
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "ad929ba3d52f06fe11a100b05e6bc44ac468f63d883e33c5152c067e657a399c",
+            "path": [
+              4
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "memory_snapshot",
+            "operation": "27a3e5a3361f4fb6c6c3925d823510b37b9387a99ef694f104698d7e8a13d326",
+            "path": [
+              5
+            ],
+            "stage": "memory_context"
+          },
+          {
+            "kind": "execute",
+            "operation": "3a2cc70c281e8af26ade4dc5662af8dd9c0a4cdc9695bbcb8a8574cd9018dfc0",
+            "path": [
+              6
+            ],
+            "stage": "noop_continue"
+          },
+          {
+            "kind": "execute",
+            "operation": "4572d2ff2354c9928c95044eed2032b0507e3ffdee59ff7aade88fa800209638",
+            "path": [
+              7
+            ],
+            "stage": "noop_reduce_scope"
+          },
+          {
+            "kind": "execute",
+            "operation": "39e95236a4bea7c08b7c8b553acdb4462648becdfb27a5f06739e2a6efbb1387",
+            "path": [
+              8
+            ],
+            "stage": "noop_repair"
+          },
+          {
+            "kind": "execute",
+            "operation": "29ddd92e7a8eb994010601c5644f1f08e8c42bf60d420037ab3e7acaf7199b92",
+            "path": [
+              9
+            ],
+            "stage": "noop_split"
+          },
+          {
+            "kind": "execute",
+            "operation": "c44cb22a96c9567b34e6088dfa223b91b189c85f5931931d1606c2c0eb5c1b72",
+            "path": [
+              10
+            ],
+            "stage": "park_effect"
+          },
+          {
+            "kind": "execute",
+            "operation": "ea0e46a42624e32d9b77e07e505fc93e7f509dd3abb301e051276614a063dc3c",
+            "path": [
+              11
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "execute",
+            "operation": "4f181f83959bcb9238198d1f4f40f6a0987bdb47156e2f12523021dd7fff352a",
+            "path": [
+              12
+            ],
+            "stage": "promote_effect"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "5322c13d1ba4a97b481d5689c54bb461be40a71723e67cc36bc86d4c1916be81",
+            "path": [
+              13
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "8e344674c621d4a4beabaa7cfd20ebc3c94a1dc08742bcc70b8403ee8fddfec8",
+            "path": [
+              14
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "controller",
+            "operation": "db2df8611b98734610dcb9e38d8aa76d6f6349ffd095f79a9de5dd43ce346ec4",
+            "path": [
+              15
+            ],
+            "selector": "23fef48ce20109f0e2830ab2fc074db845b4d03eea39c50d35c889855b959993"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 13,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 13,
+      "name": "std.software_factory.kata_self_improve_inloop_gatesplit",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 3,
+            "operation": "c80baeabe2a9e9339c60e079707841fad5a0611619db863c4084ee0aa3375f2b",
+            "path": [
+              16
+            ],
+            "policy": "66e72b6fc1a57d77171e88f7256d9d0d3384a7d63aff713fd44a840d801e78e9",
+            "template": [
+              [
+                5
+              ],
+              [
+                2
+              ],
+              [
+                11
+              ],
+              [
+                4
+              ],
+              [
+                13
+              ],
+              [
+                14
+              ],
+              [
+                3
+              ]
+            ],
+            "worker_stage": "validate"
+          }
+        ],
+        "inputs": [
+          {
+            "operation": "d5b6d5a67329afda1aebe897e3650140b918283a7527b907d9c3123379acdef9",
+            "path": [
+              17
+            ],
+            "request": "ask_human_decision",
+            "selector": "25354805a5a869dad2d9d3368c548146382002a0b46be42c545ee3d26c8ef422",
+            "target_stage": "ask_human_request"
+          }
+        ],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "78b27cd44627ca9aaf158f45368ecf2026149117e1c37b8d23f3caaaff6b77ea",
+            "path": [
+              0
+            ],
+            "stage": "ask_human_request"
+          },
+          {
+            "kind": "execute",
+            "operation": "aef105c35f38fb600f1b574b464efc06fcafaf4e696b72edb463a7ef68b953b5",
+            "path": [
+              1
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "039c3e49085a97b3a69e60f78488fb0fa10cb1706080b52a234bd1390d0952b0",
+            "path": [
+              2
+            ],
+            "stage": "context"
+          },
+          {
+            "kind": "execute",
+            "operation": "b6c8a3f12143b034c1813e139e28419b6bc0c5810a82f9915a5c18d0966e3604",
+            "path": [
+              3
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "ad929ba3d52f06fe11a100b05e6bc44ac468f63d883e33c5152c067e657a399c",
+            "path": [
+              4
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "memory_snapshot",
+            "operation": "27a3e5a3361f4fb6c6c3925d823510b37b9387a99ef694f104698d7e8a13d326",
+            "path": [
+              5
+            ],
+            "stage": "memory_context"
+          },
+          {
+            "kind": "execute",
+            "operation": "3a2cc70c281e8af26ade4dc5662af8dd9c0a4cdc9695bbcb8a8574cd9018dfc0",
+            "path": [
+              6
+            ],
+            "stage": "noop_continue"
+          },
+          {
+            "kind": "execute",
+            "operation": "4572d2ff2354c9928c95044eed2032b0507e3ffdee59ff7aade88fa800209638",
+            "path": [
+              7
+            ],
+            "stage": "noop_reduce_scope"
+          },
+          {
+            "kind": "execute",
+            "operation": "39e95236a4bea7c08b7c8b553acdb4462648becdfb27a5f06739e2a6efbb1387",
+            "path": [
+              8
+            ],
+            "stage": "noop_repair"
+          },
+          {
+            "kind": "execute",
+            "operation": "29ddd92e7a8eb994010601c5644f1f08e8c42bf60d420037ab3e7acaf7199b92",
+            "path": [
+              9
+            ],
+            "stage": "noop_split"
+          },
+          {
+            "kind": "execute",
+            "operation": "c44cb22a96c9567b34e6088dfa223b91b189c85f5931931d1606c2c0eb5c1b72",
+            "path": [
+              10
+            ],
+            "stage": "park_effect"
+          },
+          {
+            "kind": "execute",
+            "operation": "ea0e46a42624e32d9b77e07e505fc93e7f509dd3abb301e051276614a063dc3c",
+            "path": [
+              11
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "execute",
+            "operation": "4f181f83959bcb9238198d1f4f40f6a0987bdb47156e2f12523021dd7fff352a",
+            "path": [
+              12
+            ],
+            "stage": "promote_effect"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "5322c13d1ba4a97b481d5689c54bb461be40a71723e67cc36bc86d4c1916be81",
+            "path": [
+              13
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "8e344674c621d4a4beabaa7cfd20ebc3c94a1dc08742bcc70b8403ee8fddfec8",
+            "path": [
+              14
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": [
+          {
+            "condition_stage": "controller",
+            "operation": "db2df8611b98734610dcb9e38d8aa76d6f6349ffd095f79a9de5dd43ce346ec4",
+            "path": [
+              15
+            ],
+            "selector": "23fef48ce20109f0e2830ab2fc074db845b4d03eea39c50d35c889855b959993"
+          }
+        ]
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 4,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 4,
+      "name": "std.software_factory.kata_self_improve_preflight",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "af5c27f9961643c32f0bb56e37cf4805569f3ef95fb680a6917a6423d87c7687",
+            "path": [
+              0
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "execute",
+            "operation": "2aba3cf1db7a3795d80114c48bf4f27ecd4e54d9c89e42570cd19b76b5b13885",
+            "path": [
+              1
+            ],
+            "stage": "context"
+          },
+          {
+            "kind": "execute",
+            "operation": "da5a325b9d2960c3aaae2a2d27e0dbbf9a5444ba6202065a0673d76faa54dbf0",
+            "path": [
+              2
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "701e644142b2d3d1c37459e0e8f7bbeeffd5d816f194e6f101da3604257ef338",
+            "path": [
+              3
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "memory_snapshot",
+            "operation": "27a3e5a3361f4fb6c6c3925d823510b37b9387a99ef694f104698d7e8a13d326",
+            "path": [
+              4
+            ],
+            "stage": "memory_context"
+          },
+          {
+            "kind": "execute",
+            "operation": "4de7853f13c8373bc380437577217bee360ea0e472ba7df6bb6e358a3688d85f",
+            "path": [
+              5
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "expand_bounded",
+            "operation": "8f411c227e1d45ba22f2418f69c6cd4d1638e77cc143bbbf9aa5b276ec8034c2",
+            "path": [
+              6
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "8e344674c621d4a4beabaa7cfd20ebc3c94a1dc08742bcc70b8403ee8fddfec8",
+            "path": [
+              7
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 3,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 3,
+      "name": "std.software_factory.smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [
+          {
+            "maximum": 1,
+            "operation": "697b061307919be5eb5c1280fcb2316db200ae545c23b69172dfefbfbdb6b58e",
+            "path": [
+              7
+            ],
+            "policy": "42f6b3a77bbaf49926327d9cf68b071206af5434281a9ab7dd1292180d926155",
+            "template": [
+              [
+                3
+              ],
+              [
+                5
+              ]
+            ],
+            "worker_stage": "implement"
+          }
+        ],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "bdcbd8ce2e2d797db5e022470c0bf68d06c3f040ab3e77bd230773dae8316040",
+            "path": [
+              0
+            ],
+            "stage": "closeout"
+          },
+          {
+            "kind": "execute",
+            "operation": "aace246da06b5ac1d06e3b0b58d14169e6d744388ff5a263b35edb8fb3c00d60",
+            "path": [
+              1
+            ],
+            "stage": "context"
+          },
+          {
+            "kind": "execute",
+            "operation": "37563d89c3226377e4e212a5dcd824f4c14a20595ecb4ef571e43cadf7661cde",
+            "path": [
+              2
+            ],
+            "stage": "controller"
+          },
+          {
+            "kind": "execute",
+            "operation": "ef1658ab085013ad7be819026ad37ad60d6cba6c79d0063c4ab854dd8b863b06",
+            "path": [
+              3
+            ],
+            "stage": "implement"
+          },
+          {
+            "kind": "execute",
+            "operation": "7bf576ad17dc62eaf4522de3c145c724b7ee3942046e3f6aa6a56ad72f4e2b18",
+            "path": [
+              4
+            ],
+            "stage": "plan"
+          },
+          {
+            "kind": "execute",
+            "operation": "0e8c7129e87af6781c9bed382ec275328fd5dd8a33c978638afe6b9652532fa8",
+            "path": [
+              5
+            ],
+            "stage": "review"
+          },
+          {
+            "kind": "execute",
+            "operation": "ca0183b91c5917bb3002ac625e49ff5724d34fc45eb6c1459f83635fdd890cc1",
+            "path": [
+              6
+            ],
+            "stage": "validate"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "subworkflow-child-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "f1d3656316deed22d69fc4a3a8c60156f5a6cc0283d514ec85188dd76f713969",
+            "path": [
+              0
+            ],
+            "stage": "first"
+          },
+          {
+            "kind": "execute",
+            "operation": "1d7d48a3e53f6889d07ffa98d5a25efa67cf87252d0de74950ba97d94b920674",
+            "path": [
+              1
+            ],
+            "stage": "second"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 1,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 1,
+      "name": "subworkflow-parent-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "c7cb6c90521dee4f9ba24418c2f18d9f3ab0040dc126375b1f3c8cba4929c9c6",
+            "path": [
+              0
+            ],
+            "stage": "after"
+          },
+          {
+            "kind": "execute",
+            "operation": "4b48d991f0d5dac0a5ebe599d82b67edf3f268d8485bc3016f824cdf7c60b817",
+            "path": [
+              1
+            ],
+            "stage": "before"
+          },
+          {
+            "kind": "invoke",
+            "operation": "6b9bb2a6ee255c6e0496130beb6430be4030490b779f725f733de0cb9ea95df7",
+            "path": [
+              2
+            ],
+            "stage": "sub"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "test-crate",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "8bdf9f2fe3b2bf731855c3b69c840e9cbc9780f1f463af275f7425271bad33d1",
+            "path": [
+              0
+            ],
+            "stage": "run_tests"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 0,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 0,
+      "name": "work-item-plumbing-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "8974ac0efd4da13e0508fd0fa474adc68ef1bfc4693f0878b6a905ef4d18683f",
+            "path": [
+              0
+            ],
+            "stage": "implement_stub"
+          },
+          {
+            "kind": "execute",
+            "operation": "31a32e20b2dac86a4bf8406c19460d6f546820cb3818fe08284d09f0fb9b6e8d",
+            "path": [
+              1
+            ],
+            "stage": "package_stub"
+          },
+          {
+            "kind": "execute",
+            "operation": "f070a6875cb9ab31d3fa0325373178ffd29817826138335f6f3b52dd43599908",
+            "path": [
+              2
+            ],
+            "stage": "plan_stub"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 1,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 1,
+      "name": "workspace-commit-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "7e84013115324fdcfce7d32a1c855673f8f787d2c1d642ebe46431629194e686",
+            "path": [
+              0
+            ],
+            "stage": "commit"
+          },
+          {
+            "kind": "execute",
+            "operation": "20d94c1650964f46d5c9cde3b72527d624d9ee1f4a073e6df91d46684cde4147",
+            "path": [
+              1
+            ],
+            "stage": "dirty"
+          },
+          {
+            "kind": "execute",
+            "operation": "76c782d17984f0b82bdf276e5bd6b801c8493b55da805433e425404e783ca659",
+            "path": [
+              2
+            ],
+            "stage": "observe"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    },
+    {
+      "diagnostic_count": 2,
+      "error_count": 0,
+      "format": "starlark",
+      "info_count": 2,
+      "name": "workspace-effect-smoke",
+      "passed": true,
+      "status": "pass",
+      "typed_operations": {
+        "expansions": [],
+        "inputs": [],
+        "lowered": [
+          {
+            "kind": "execute",
+            "operation": "2f447f266855211d16b823276273a47552c7d0eeba6c46847d2ecd310478c0e5",
+            "path": [
+              0
+            ],
+            "stage": "change"
+          },
+          {
+            "kind": "execute",
+            "operation": "4b81835f9d8f894a129653183035c6de46a76e31675da7666421fee0532a5fe5",
+            "path": [
+              1
+            ],
+            "stage": "park"
+          },
+          {
+            "kind": "execute",
+            "operation": "50760898fb54b54fc9e1fe072279e9b082000016f31a3a5b07670424c3dca32d",
+            "path": [
+              2
+            ],
+            "stage": "record"
+          }
+        ],
+        "refused": [],
+        "refused_expansions": [],
+        "refused_inputs": [],
+        "refused_selects": [],
+        "schema_version": 9,
+        "selects": []
+      },
+      "warning_count": 0
+    }
+  ]
+}

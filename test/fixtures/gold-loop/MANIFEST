@@ -1,0 +1,21 @@
+# What `scripts/materialize-gold-fixture.sh` copies, and what it becomes.
+#
+# `<source under test/fixtures/gold-loop/repo/>` <whitespace> `<destination in the
+# materialized repository>`. Blank lines and `#` comments are ignored.
+#
+# THE SCRIPT REFUSES IN BOTH DIRECTIONS. A manifest line whose source is missing
+# is a refusal, and — the one that actually bites — a file present under `repo/`
+# that NO line names is also a refusal. Adding a file to the fixture and
+# forgetting the manifest would otherwise materialize a silently incomplete
+# repository, which is the failure mode a copy-the-whole-tree script cannot have
+# and an explicit list can. The refusal is what buys the explicitness back.
+#
+# The one rename is why this file is not `cp -a`: `gitignore.in` must not hide
+# `kata-out/` from kata's own tooling inside this checkout.
+
+gitignore.in     .gitignore
+README.md        README.md
+kata/brief.md    kata/brief.md
+src/tally.sh     src/tally.sh
+tests/check.sh   tests/check.sh
+tests/test_tail.sh  tests/test_tail.sh

@@ -1,0 +1,6 @@
+# execution 01M7869HTBZKK26Q7W00PRB8Z7 (completed): ledger.py record
+tokens_recorded = { input = 14, cache_read = 30038, cache_write = 14239, output = 1769 }
+unmetered_calls = 0
+# cost_recorded: the sum of 2 estimated charge(s), kata's own
+cost_recorded = "estimated"
+cost_recorded_usd = 0.056318

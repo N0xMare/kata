@@ -1,0 +1,204 @@
+kata
+Copyright (c) 2026 N0xMare
+
+kata is dual-licensed under the MIT License (LICENSE-MIT) or the Apache
+License, Version 2.0 (LICENSE-APACHE), at your option.
+
+This file records third-party software that kata builds on, modifies,
+redistributes, pins, or fetches on the user's behalf. It is informational and
+does not change the license of any component listed. Each component remains
+under its own license.
+
+Unless a section says otherwise, the license identifiers for Nix packages are
+the `meta.license` that nixpkgs records at the revision kata pins
+(b6c98e9e6633ee64753b594ff4a5febf0367fc00, in flake.lock and
+nix/nixpkgs-pin.nix).
+
+==============================================================================
+1. youki (OCI container runtime) — modified, pinned, run as a separate program
+==============================================================================
+
+Upstream:  https://github.com/youki-dev/youki
+Version:   0.7.0
+License:   Apache License, Version 2.0
+
+kata runs every stage inside a rootless OCI container started by youki. kata's
+youki provider (`kata-provider-youki`) execs youki as a separate program; no
+kata binary links it. config/youki-pin.toml pins the exact Nix store path and sha256 of the
+youki binary kata will run, and `kata host setup` realises that path.
+
+kata does not use the stock nixpkgs build. nix/youki.nix rebuilds the same
+nixpkgs derivation of the same upstream release with the `seccomp` cargo
+feature enabled ("systemd,seccomp"). Without that feature youki drops a
+bundle's seccomp filter instead of installing it.
+
+Modification. nix/youki-0.7.0-foreground-prereap.patch is authored by kata
+and changes youki's crates/youki/src/commands/run.rs:
+
+  It moves the foreground WNOHANG reap loop into a `reap_children` helper and
+  calls it once right after the signal mask is set, so a container init that
+  exits before the mask is set is reaped and does not leave `youki run`
+  waiting forever.
+
+The patch is a backport of the same fix in upstream youki commit c06504aa7e
+(youki-dev/youki#3639), which had not been released when the patch was
+written. One behavior differs from upstream: a signal-killed init reports the
+bare signal number, as 0.7.0 does, where upstream reports 128 + signal.
+
+Modification. nix/youki-0.7.0-atomic-state-save.patch is authored by kata
+and changes youki's crates/libcontainer/src/container/state.rs:
+
+  `State::save` writes the container's state document to a temporary file in
+  the same directory, syncs it, and renames it over `state.json`, instead of
+  truncating `state.json` and writing it in place, so a concurrent reader sees
+  the previous document or the new one and never a truncated one.
+
+Redistribution. The flake's `youki` package (`nix build .#youki`) is the
+patched binary. `just cache-push` uploads it to kata's binary cache,
+katacode.cachix.org, together with the `kata` package.
+
+libseccomp — LGPL-2.1-only, version 2.6.1, from nixpkgs. The seccomp-enabled
+youki links it dynamically (libseccomp.so.2), so it is part of youki's runtime
+closure. No kata binary links it.
+
+==============================================================================
+2. Commonware libraries — Rust git dependencies of kata's tests
+==============================================================================
+
+Upstream:  https://github.com/commonwarexyz/monorepo
+Revision:  d476a2361ce6840d2b9d0aa6fb30a924429046d4, the v2026.9.0 release
+           (pinned in Cargo.toml)
+License:   MIT OR Apache-2.0
+           (workspace `license` field in the upstream Cargo.toml at that
+           revision; the upstream LICENSE-MIT reads
+           "Copyright (c) 2026 Commonware, Inc.")
+
+Crates kata's tests depend on directly: commonware-runtime (the deterministic
+runtime seeded test runs use), commonware-codec, commonware-conformance (the
+wire conformance harness). Crates pulled in through them (same revision, same
+license): commonware-cryptography, commonware-conformance-macros,
+commonware-macros, commonware-macros-impl, commonware-math,
+commonware-parallel, commonware-utils. No shipped kata binary links any of
+them.
+
+==============================================================================
+3. nanocode — Rust git dependencies; one crate vendored and modified
+==============================================================================
+
+Upstream:  https://github.com/gakonst/nanocode
+Revision:  the `rev` of the three nanocode entries in Cargo.toml
+           (`NANOCODE_REV` in crates/agent-nanocode/src/lib.rs)
+License:   MIT OR Apache-2.0
+           (workspace `license` field in the upstream Cargo.toml at that
+           revision; the upstream LICENSE-MIT and LICENSE-APACHE are copied
+           into vendor/nanocode-code-mode-engine/)
+
+kata embeds nanocode's agent harness as a library: kata-agent-nanocode
+depends on nanocode-backend-codex, nanocode-backend-claude and
+nanocode-process-contracts, fetched from the upstream repository at that
+revision, together with the nanocode crates they depend on (same revision,
+same license). They are statically linked into every kata binary that
+depends on kata-agent-nanocode (`cargo tree -i kata-agent-nanocode` lists
+them).
+
+Vendored and modified. vendor/nanocode-code-mode-engine/ is a copy of
+nanocode's crates/runtime/code-mode-engine (the QuickJS Code Mode worker) at
+that revision, with its Cargo.toml's workspace-inherited fields resolved, and
+Cargo.toml's `[patch]` builds every dependency on that crate from the copy.
+vendor/nanocode-code-mode-engine.patch is authored by kata and is the whole
+of kata's change to it; `just nanocode-vendor-check` refuses a copy that is
+anything else. The patch is described in docs/development/nanocode.md.
+
+The engine builds QuickJS (quickjs-ng) from C through rquickjs and
+rquickjs-sys (crates.io, MIT); QuickJS itself is MIT ("Copyright (c)
+2017-2026 Fabrice Bellard" and others, in rquickjs-sys's quickjs/LICENSE).
+
+==============================================================================
+4. Other Rust dependencies (crates.io) — statically linked into kata
+==============================================================================
+
+The kata binaries statically link crates listed in Cargo.lock; the lock also
+carries the dependencies only kata's tests build. Their licenses are checked by `cargo deny` against the allowlist in deny.toml:
+
+  MIT, Apache-2.0, Apache-2.0 WITH LLVM-exception, BSD-3-Clause,
+  BSD-2-Clause, ISC, Unicode-3.0, Unicode-DFS-2016, CC0-1.0, MPL-2.0, Zlib,
+  CDLA-Permissive-2.0, BSL-1.0
+
+Dependencies that need a specific mention:
+
+  * rustls-platform-verifier (via reqwest) — kata links no root-certificate
+    bundle: TLS trusts the host's certificate store. Cargo.lock still lists
+    webpki-root-certs (CDLA-Permissive-2.0, Mozilla root-certificate data)
+    because the verifier depends on it for wasm32 and its own tests; it is
+    not linked on Linux.
+  * ring (via rustls) — bundles and compiles C and assembly code under ISC,
+    Apache-2.0, MIT and BSD-3-Clause terms. See its license files.
+  * uluru (via gix-pack) — MPL-2.0 (file-level copyleft). kata does not
+    modify its source.
+  * starlark (the workflow language implementation) — Apache-2.0.
+
+`cargo deny list` prints every crate in Cargo.lock with its license. deny.toml
+does not restrict the target platforms, so that listing also names crates
+that are only linked on macOS or Windows.
+
+==============================================================================
+5. Software in the installed kata package's runtime closure
+==============================================================================
+
+The flake's `kata` package (`nix build .#kata`) contains only kata's own
+binaries and files. It does not copy any of the components below into its
+output. It installs share/kata/provider-members.toml, which names the Nix
+store path of the iproute2 `ip` binary, and share/kata/node-environment.toml,
+which names the Nix store paths of the default capsule tool set. Nix therefore
+records the components below as runtime dependencies of the `kata` package:
+each is a separate store path, fetched when kata is installed. iproute2,
+BusyBox, Git, the CA bundle, glibc and the libraries they use come from
+cache.nixos.org. The static NetBSD getent and the NetBSD compat library it
+is built with are not on cache.nixos.org: they are built from nixpkgs, and
+`just cache-push`, which pushes the `kata` and `youki` packages to
+katacode.cachix.org, uploads them there too, because cachix uploads every
+path of a pushed closure that cache.nixos.org does not already serve. kata's
+source tree does not contain these components.
+
+Run as separate programs, not linked into any kata binary:
+
+  Component                         Version   License
+  --------------------------------  --------  ---------------------------------
+  iproute2 `ip`                     7.1.0     GPL-2.0-only
+  BusyBox (static, musl)            1.37.0    GPL-2.0-only
+  getent (NetBSD, static, musl)     9.2       BSD-2-Clause
+  Git (nixpkgs gitMinimal)          2.55.0    GPL-2.0
+  CA certificates (nss-cacert)      3.126     MPL-2.0 (data, not a program)
+
+  * `ip` is not part of the kata package. `kata host setup` copies the
+    unmodified binary from its iproute2 store path into kata's provider
+    store under the project's .kata/providers directory, where kata's OCI
+    hook (`kata-oci-hook`) runs it to bring up the loopback interface inside
+    a capsule's network namespace.
+  * BusyBox, getent and Git run inside capsules: they are the `sh`, `env`,
+    `getent` and `git` a capsule sees. The CA bundle is the only trust store
+    inside a capsule.
+
+`ip` refers to its own iproute2 store path (for its configuration files), so
+the whole iproute2 package is in the closure, together with what that package
+references: libmnl (LGPL-2.1-or-later), libbpf (LGPL-2.1 OR BSD-2-Clause),
+elfutils (nixpkgs lists GPL-2.0-only, LGPL-3.0-or-later and
+GPL-3.0-or-later), the iptables libraries (GPL-2.0-or-later) and Berkeley DB
+5.3.28 (Sleepycat). Git brings curl (curl license), OpenSSL (Apache-2.0),
+zlib-ng (Zlib), expat (MIT), Bash and coreutils (GPL-3.0-or-later). These
+are linked into or run by those programs, not linked into kata.
+`nix-store -qR` on the installed package lists the full closure.
+
+Linked dynamically into the kata binaries themselves:
+
+  * glibc 2.42 — nixpkgs lists LGPL-2.0-or-later
+  * the GCC runtime library (libgcc_s) — GPL-3.0-or-later with the GCC
+    Runtime Library Exception
+
+==============================================================================
+6. Other material
+==============================================================================
+
+The rest of the repository is written by kata's contributors: the Starlark
+workflow packs under workflows/ and the Nix expressions under nix/ apart
+from the third-party sources they fetch.

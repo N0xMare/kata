@@ -1,0 +1,29 @@
+[package]
+name = "kata-agent"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+kata-types.workspace = true
+async-trait.workspace = true
+smol_str.workspace = true
+ulid.workspace = true
+# Typed refusals (`OpenRefusal`) carry sources rather than formatted strings.
+thiserror.workspace = true
+# The `AsyncRead`/`AsyncWrite` streams an `InteractiveProcess` hands an adapter, and
+# nothing else: an adapter never builds a `Command` (see `adapter`'s module doc
+# and the source-derived check in `tests/adapter_contract.rs`) — the
+# worker-side `InteractiveProcess` that does spawn lives in `kata-worker`.
+tokio.workspace = true
+
+[dev-dependencies]
+# `tests/adapter_contract.rs` lexes the adapter sources it bans names in, so a
+# comment or a string literal neither hides code from the scan nor trips it,
+# and a `use` tree can be expanded rather than matched as text.
+proc-macro2 = "1"
+
+[lints]
+workspace = true

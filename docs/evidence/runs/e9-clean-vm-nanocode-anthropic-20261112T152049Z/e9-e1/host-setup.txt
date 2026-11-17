@@ -1,0 +1,27 @@
+[e9-e1] $ systemd-run --user --scope -p Delegate=yes -- kata host setup --install-apparmor
+Running as unit: run-r12899bc0b5f04c9880aaf3e6d8ff3683.scope; invocation ID: a2587e25161346f8abed2933354e1433
+--- kata host setup ---
+config     .kata/kata.toml
+  [in_place] platform
+      linux/x86_64
+  [in_place] nix
+      `nix-store --version` → nix-store (Nix) 2.35.6
+  [in_place] cgroup_v2
+      unified hierarchy; memory+pids delegation measured usable
+  [in_place] userns
+      unprivileged userns allowed; restricted
+  [in_place] youki
+      the pinned bytes are at `/nix/store/dwi0lfqpz41vv8sap08c2ykdga1970nl-youki-seccomp-0.7.0/bin/youki` (sha256 599108f43913c42f383e9a32d44a54bcf2e0fcd8ae7cee647a04bf759e502f8b)
+  [in_place] apparmor
+      profile `youki` is installed (the file is the render byte for byte); the kernel's loaded-profile list needs root to read, and this kernel restricts unprivileged user namespaces, so the pinned runtime starting the rootless container `kata-oci-certify-29467` shows a profile admitting it is in force — the certification's own observation
+  [changed] provider
+      `kata-provider-youki` at `store:867c1efa42b98b1b0e12cbde287b245758aa5c3e947ad4f96d2bc866067ea604` in `/home/[redacted-private_session-1]/e9-e1/.kata/providers` (members from `/home/[redacted-private_session-1]/kata/target/release`, `ip` copied from `/nix/store/1cl0hbvjcgy95vskd4q0cbspc1yly8ir-iproute2-7.1.0/bin/ip`)
+  [changed] env_file
+      wrote the provider exports to `/home/[redacted-private_session-1]/e9-e1/.env`
+  [changed] config
+      declared environment = <the declared closure>; declared egress_allow = []
+  [in_place] doctor
+      0 failed, 4 warning(s)
+changed    yes
+status     complete
+[e9-e1] rc=0

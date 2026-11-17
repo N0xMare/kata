@@ -1,0 +1,150 @@
+[package]
+name = "kata-worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+# Also `kata-agent-nanocode/test-support`: the production registry's mock-model
+# door (`adapter_registry::harness`) points a nanocode adapter elsewhere.
+test-support = ["kata-agent-nanocode/test-support"]
+
+[dependencies]
+tempfile.workspace = true
+kata-types.workspace = true
+kata-transport = { path = "../transport" }
+kata-agent = { path = "../agent" }
+# The embedded nanocode harness: the production registry (`adapter_registry`)
+# installs its Code Mode limits once at worker start and registers its adapter
+# for both kinds; the credential lift builds its in-process carrier
+# (`HarnessAuth`); only a crate above both kata-agent and kata-agent-nanocode can
+# name every adapter.
+kata-agent-nanocode.workspace = true
+# The worker opens its effect membrane's `IdempotencyStore` (kata-core): the
+# membrane identity its enrolled domain binds to, and the recovery hold a
+# capture takes. Cycle-free: kata-core depends only on types/crypto/transport,
+# never on the worker.
+kata-core = { path = "../core" }
+# The LOCAL external-provider wire contract. An absolute leaf
+# (serde + serde_json + thiserror, no internal crates), shared with a provider
+# binary kata does not link — which is the point: the only thing kata and a
+# external provider have in common is the wire.
+kata-provider-protocol.workspace = true
+# The worker <-> kata-toolhost wire, a leaf like the provider protocol: the
+# executor term folds its protocol number and the toolhost's source digest
+# (`executor_term`), and `tests/toolhost_live.rs` speaks its frames to a real
+# toolhost.
+kata-toolhost-protocol.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+anyhow.workspace = true
+toml.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+metrics.workspace = true
+smol_str.workspace = true
+ulid.workspace = true
+base64.workspace = true
+# `agent_credential` parses a vendor login's declared RFC 3339 expiry.
+chrono.workspace = true
+# `provider_store` content-addresses a provider entry's tree (the by-hash
+# store's address is a blake3 digest of its contents).
+blake3.workspace = true
+# `oci_runtime::certify_youki` re-derives the PINNED
+# youki's sha256 and compares it with `config/youki-pin.toml`. sha256, not
+# blake3: the pin field is what `sha256sum` prints, and it is the same value
+# `kata host apparmor-install` and `kata doctor` compare, so a second
+# digest algorithm here would make the four surfaces uncomparable. Adds nothing
+# new to the workspace closure — `kata` (bin) already reads the pin with these.
+sha2.workspace = true
+hex.workspace = true
+nix.workspace = true
+# `materialize.rs` writes every file through
+# `openat`-relative operations from a directory descriptor it proved once, with
+# `O_NOFOLLOW`/`O_EXCL`, so no path is resolved a second time. rustix, not nix
+# 0.28: nix's `openat` hands back a raw fd, and adopting one needs
+# `FromRawFd::from_raw_fd`, which is `unsafe` — and this workspace denies
+# `unsafe_code`. rustix returns an `OwnedFd` safely, and kata-core's backup walk
+# (`store/backup/checkpoint_files.rs`) already does exactly this with it, so this
+# adds no new library to the workspace closure.
+# `net` for the egress handoff: `egress_handoff` reads the createContainer hook's
+# `SCM_RIGHTS` message through `rustix::net::recvmsg` — the hook side
+# (`bin/kata-oci-hook`) uses the same feature for the send half.
+rustix = { workspace = true, features = ["net"] }
+# `LocalCasBlobSource` opens the node's `cas.db` READ-ONLY
+# (`SQLITE_OPEN_READ_ONLY`, no pragma) and verifies bytes
+# through `kata_core::store::cas::CasStore::read_verified`, which takes the
+# already-open connection. Nothing here writes to the database, and kata-core —
+# already this crate's dependency — brings the same bundled rusqlite.
+rusqlite.workspace = true
+libc.workspace = true
+# `sandbox_posture::ContainmentLever` derives `EnumIter` so the reported
+# containment-lever rows are DERIVED from the enum rather than typed out beside
+# it — a hand-maintained list lets a lever steer `kata doctor` while appearing
+# in no report. Adds nothing to this crate's closure:
+# kata-types already depends on strum with the same `derive` feature.
+strum = { workspace = true, features = ["derive"] }
+# `oci_bundle::spec_for` builds the rootless `config.json`
+# as an `oci_spec::runtime::Spec` value, so a renamed or retyped OCI field is a
+# compile error rather than a container youki starts differently. Runtime half
+# only; see the workspace entry.
+oci-spec.workspace = true
+# `work_delta`'s walk matches each post-run path against
+# the tree's own `.gitignore` files — `gix-ignore`'s `Search`, which is the
+# git-semantics matcher (negation, dir-only, anchoring, per-directory
+# precedence). Pinned to the versions jj-lib's gix already resolved, so these
+# add nothing to the workspace closure.
+gix-ignore.workspace = true
+gix-glob.workspace = true
+bstr.workspace = true
+# The git-view scratch repository is read back with `gix`
+# for the bounded commit evidence (`git_view::scratch_commits`).
+gix.workspace = true
+
+[dev-dependencies]
+# Self dev-dependency turns on `test-support` for this crate's own `tests/`, which is
+# how `capsule_frame::OpenCasBlobSource` — the rig-only blob source, gated so it cannot
+# become a second production door — is reachable from `tests/`. Same shape as
+# `kata-transport`'s and `kata-workflow`'s.
+kata-worker = { path = ".", features = ["test-support"] }
+# A test binary whose nanocode turns run Code Mode cells re-executes itself as
+# their interpreter process (`kata_code_mode_host::interpreter_entry!`), and the
+# executor term's harness cell reads the interpreter's filter digest.
+kata-code-mode-host.workspace = true
+# kata-core's `test-support` feature, DEV-only: the tests seed state through its
+# gated accessors (`OperationalDb::dispatch_attempt`, `OccurrenceBinding::for_test`,
+# `work_tree::publish_scratch_tree_head`). The production closure carries kata-core
+# without it.
+kata-core = { path = "../core", features = ["test-support"] }
+tokio = { workspace = true, features = ["test-util"] }
+kata-test-utils.workspace = true
+metrics-util = { workspace = true }
+# The tests' mock adapters implement the async adapter traits.
+async-trait.workspace = true
+# The git view's LIVE cell (`tests/git_view_live.rs`) produces the history
+# artifact through the REAL producer — `committed_base_git_history` over a
+# jj-adopted fixture repo — because the live cell is the one place the whole
+# host-repo → artifact → mount → guest chain is proven together. DEV-only:
+# the worker itself never plans a history, so jj-lib enters this crate's
+# closure only here, through kata-vcs (its `test-support` resolves the trunk
+# target the producer is handed).
+kata-vcs = { path = "../vcs", features = ["test-support"] }
+# The same cell drives that producer through the provider trait and its key.
+kata-effects-contract.workspace = true
+# `adapter_registry`'s cell reads the installed Code Mode limits back out of the
+# engine's own setter.
+nanocode-code-mode-engine.workspace = true
+# `agent_turn_capsule`'s and `nanocode_capsule_live`'s nanocode cells: the adapter
+# pointed at the mock provider (`test-support`'s `with_endpoint`), and the mock's
+# WebSocket half (`crates/agent-nanocode/tests/fixtures/mock_provider.rs`, shared by
+# `#[path]`), at the version nanocode's codex client already locks.
+kata-agent-nanocode = { workspace = true, features = ["test-support"] }
+tokio-tungstenite.workspace = true
+futures.workspace = true
+
+[lints]
+workspace = true

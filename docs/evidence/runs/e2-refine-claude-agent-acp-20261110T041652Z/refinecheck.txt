@@ -1,0 +1,8 @@
+PASS variant
+PASS gate-bound
+PASS gate-unseen
+PASS refined
+PASS final-gate
+INFO refine_cause = suite+gate (iteration 0's feedback)
+INFO iter0_gate_fails = C1-command-header C2-manifest C3-suite-footer
+refinecheck: 0 failed

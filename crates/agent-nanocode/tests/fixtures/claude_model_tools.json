@@ -1,0 +1,4 @@
+{
+  "direct": ["exec", "wait"],
+  "nested": ["Bash", "Edit", "Read", "TaskOutput", "TaskStop", "Write"]
+}

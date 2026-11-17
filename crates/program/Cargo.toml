@@ -1,0 +1,58 @@
+[package]
+name = "kata-program"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "kata's authoring toolchain: the Starlark frontend, the checked program and its lowering, static analysis and the program hash."
+
+[features]
+# Exposes the fixture-agent installers (`test_harness::install_rig_agents`,
+# `test_harness::rig_agent_backend_config`) to the rigs downstream. Off in
+# shipped builds; `kata-workflow`'s `test-support` turns it on.
+test-support = []
+
+[dependencies]
+kata-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+starlark.workspace = true
+allocative.workspace = true
+derive_more.workspace = true
+tracing.workspace = true
+# `unstable_machinery` exposes the template AST: `kata check`'s
+# `template_untrusted_in_run` walk (target_namespace.rs) reads it. It carries no
+# semver guarantee, so the workspace pins minijinja to one exact version and a
+# bump is a review of the walk. A bump that adds a statement or expression
+# variant fails to compile here (the walk matches both exhaustively); one that
+# changes what an existing variant means does not, which is why it is pinned.
+minijinja = { workspace = true, features = ["unstable_machinery"] }
+dashmap.workspace = true
+smol_str.workspace = true
+indexmap.workspace = true
+ulid.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+blake3.workspace = true
+# Resolve a stage's declared `reads=` globs to concrete worktree paths
+# for the precise closure content-hash.
+glob.workspace = true
+# VALUE-CONSTRAINT contracts: the `string(pattern=..)` DSL kwarg compiles
+# its regex at author time so a malformed pattern is a clear DSL error, keeping
+# the invariant that a lowered contract schema is always validator-accepted.
+regex.workspace = true
+# `strum::VariantArray` derives the closed variant lists the DSL catalog
+# publishes, so a new variant cannot be missing from a hand-written list.
+strum.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+# Adversarial-draw conformance: `arbitrary`-driven conformance harnesses for the
+# untrusted-input parsers (the Starlark workflow DSL frontend). Deterministic,
+# fixed sample budget so they ride the gate. See the `conformance` modules in
+# `starlark_eval_tests.rs` / `starlark_eval.rs`.
+arbitrary.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,40 @@
+[package]
+name = "kata-toolhost"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "The init of a nanocode agent capsule: serves the kata-toolhost protocol over the worker-owned FIFOs, running every tool call inside the capsule. Built static (x86_64-unknown-linux-musl). Not a release artifact on its own."
+
+[[bin]]
+name = "kata-toolhost"
+path = "src/main.rs"
+
+# Pure Rust and nothing of kata's type system: this binary runs inside the
+# capsule as its first process, and it links the wire it speaks
+# (`kata-toolhost-protocol`, whose one internal dependency is
+# `kata-provider-protocol`'s frame codec), a current-thread tokio and the
+# syscalls it needs (rustix; libc, already linked through tokio, for `signal`,
+# which rustix has no form of, and for `fcntl(F_SETFD)` on the raw descriptors
+# it inherits). No C dependency, so the musl target links it static without a
+# musl C compiler. `tests/manifest.rs` refuses any other internal crate in this
+# manifest and any crate in its build that compiles C; each internal crate's
+# own manifest test holds the rest of the closure.
+#
+# tokio's features are named here rather than taken from the workspace's
+# `full`: the musl build of this crate alone resolves only what it asks for,
+# and the multi-thread scheduler is not among it.
+[dependencies]
+kata-toolhost-protocol.workspace = true
+libc.workspace = true
+rustix = { workspace = true, features = ["fs", "process"] }
+tokio = { version = "1", default-features = false, features = ["io-util", "macros", "net", "rt", "signal", "sync", "time"] }
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

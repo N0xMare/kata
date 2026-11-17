@@ -1,0 +1,15 @@
+control 1: KATA_FAULT_INJECT=operational.after_capsule_dispatched_before_send
+execution 01M7855F50690BB7Y6RT1JDTSV
+control 2 (the abort line in the killed main's log): [kata-fault-inject] crash point reached: operational.after_capsule_dispatched_before_send (KATA_FAULT_INJECT=operational.after_capsule_dispatched_before_send, action=abort); aborting process now
+control 3 (wait status): ExitStatus(unix_wait_status(6)), signal Some(6)
+raw plan attempt state at the crash: Some("dispatched") (the window: dispatched)
+kata run show status: failed
+raw failed `plan` transition: Some("{\"delivery\":{\"awaiting_approval_at_ms\":null,\"child_execution_id\":null,\"dispatched_at_ms\":1794496445770,\"finished_at_ms\":1794496446478,\"last_checkpoint\":null,\"stage_name\":\"plan\",\"started_at_ms\":null,\"worker_id\":\"local-worker-0\"},\"reason\":\"the main restarted. PROVEN AMBIGUOUS: the main cannot observe whether this capsule's container ran, so the stage may have done anything it was asked. The attempt is settled terminal and NOT re-delivered (capsule re-delivery is not implemented)\",\"terminal_charge\":{\"token_usage\":{\"cache_read\":0,\"cache_savings_micro_usd\":0,\"cache_write\":0,\"cost\":{\"backend\":\"nanocode_openai\",\"model\":\"gpt-6-luna\",\"quality\":\"unavailable\"},\"input\":0,\"output\":0}},\"verdict\":\"proven_ambiguous\"}")
+after 10 s: plan claimed transitions 1, plan attempt rows 1
+spend: issued calls of the agent attempts that never completed 0 (unmetered_calls; started 0, completed 0, unclosed 0, open false); the case kills no model call, so 0
+transcript: plan progress frames 0 (zero model calls for the attempt)
+git: parked/01M7855F50690BB7Y6RT1JDTSV = Some("1d4d37fe6794479031ab9392bb7016e6087ba68b")
+assert_no_mutation: trunk unmoved, no kata/<exec> on the remote, the fake gh ran nothing, no commit/promote/export resolved
+assert_no_container_residue: no live container, no kata.* cgroup
+kata's known tokens (completed plan/implement attempts, raw accepting transitions; [input, cache_read, cache_write, output]): [0, 0, 0, 0]
+outcome: pass: settled proven-ambiguous, every oracle held

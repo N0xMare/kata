@@ -1,0 +1,16 @@
+[toolchain]
+# The latest stable release, by policy: a new stable is adopted when it ships,
+# with its new lints fixed in the same change. Exact, so rustup and the flake's
+# rust-overlay resolve the same release (the flake refuses one its lock does not
+# know). The workspace `rust-version` (Cargo.toml) names the same minor release,
+# so the tree declares one toolchain. Only rustfmt runs elsewhere, under the
+# dated nightly .config/audit-nightly names.
+#
+# `x86_64-unknown-linux-musl` builds `kata-toolhost` and the factory smokes'
+# in-capsule `kata` static: the first is an agent capsule's init, the second
+# what a capsule's stages exec, and a capsule's root filesystem is its Nix
+# closure plus mappings, with no dynamic loader for a glibc binary to find.
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+targets = ["x86_64-unknown-linux-musl"]
+profile = "minimal"
