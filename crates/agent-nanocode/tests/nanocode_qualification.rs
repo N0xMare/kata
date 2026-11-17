@@ -61,8 +61,7 @@ use mock_provider::{
     code_reply, empty_reply, exec_command_reply, message_reply, usage,
 };
 use openai_turn::{
-    MODEL, TURN_BOUND, bounded, cancellable_turn, openai,
-    openai_prompt, scope, scope_with, turn,
+    MODEL, TURN_BOUND, bounded, cancellable_turn, openai, openai_prompt, scope, scope_with, turn,
 };
 use serde_json::{Value, json};
 use toolhost_double::{
@@ -2752,9 +2751,9 @@ async fn a_still_running_code_mode_cell_is_ended_at_the_turn_end() {
         "// @exec: {\"yield_time_ms\": 200}\nwhile (true) {}",
         usage(1, 0, 1),
     )];
-    script.extend(failed_to_the_budget(Reply::DropAfter(
-        Duration::from_secs(2),
-    )));
+    script.extend(failed_to_the_budget(Reply::DropAfter(Duration::from_secs(
+        2,
+    ))));
     let mock = MockProvider::start(script).await;
     let (mut session, _witness) = open(&openai(&mock.url, None), DoubleConfig::default());
     let prompt = openai_prompt("spin");
@@ -4244,7 +4243,11 @@ async fn a_call_answered_503_every_time_ends_on_the_attempt_budget() {
         else {
             panic!("{kind:?}: expected ProviderFailed, got {outcome:?}");
         };
-        assert_eq!(*class, ProviderFailureClass::Transient, "{kind:?}: {reason}");
+        assert_eq!(
+            *class,
+            ProviderFailureClass::Transient,
+            "{kind:?}: {reason}"
+        );
         assert!(
             reason.contains("HTTP 503") && reason.contains("mock overloaded"),
             "{kind:?}: the provider's answer, not kata's refusal: {reason}"
@@ -4300,7 +4303,11 @@ async fn a_429_asking_two_minutes_is_waited_at_most_the_wires_cap() {
         else {
             panic!("{kind:?}: expected ProviderFailed, got {outcome:?}");
         };
-        assert_eq!(*class, ProviderFailureClass::Transient, "{kind:?}: {reason}");
+        assert_eq!(
+            *class,
+            ProviderFailureClass::Transient,
+            "{kind:?}: {reason}"
+        );
         assert!(reason.contains("HTTP 429"), "{kind:?}: {reason}");
         assert_eq!(*charge, FailedTurnCharge::Nothing, "{kind:?}");
         assert_eq!(requests, WIRE_ATTEMPTS, "{kind:?}: the mock's own log");
@@ -4411,8 +4418,15 @@ async fn a_completed_turn_with_a_cut_attempt_is_charged_unknown() {
         let TurnOutcome::Completed { usage, .. } = &outcome else {
             panic!("{kind:?}: expected Completed, got {outcome:?}");
         };
-        assert_eq!(*usage, None, "{kind:?}: the cut attempt's billing is unseen");
-        assert_eq!(mock.requests().len(), 2, "{kind:?}: the cut, then its re-send");
+        assert_eq!(
+            *usage, None,
+            "{kind:?}: the cut attempt's billing is unseen"
+        );
+        assert_eq!(
+            mock.requests().len(),
+            2,
+            "{kind:?}: the cut, then its re-send"
+        );
 
         let mock = MockProvider::start(vec![answer]).await;
         let (mut session, _witness) = open(&kind.adapter(&mock), DoubleConfig::default());

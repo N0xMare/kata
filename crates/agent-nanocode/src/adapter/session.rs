@@ -196,11 +196,11 @@ use nanocode_process_contracts::ShellExecutor;
 
 use super::events::Observed;
 use super::seam::{Seam, WORKSPACE};
-use super::wire::{ResponsesWireLayer, Wire};
 use super::toolhost_client::{
     HandshakeRefusal, ProtocolLatch, ToolhostClient, ToolhostReader, ToolhostWriter, TurnGate,
     handshake,
 };
+use super::wire::{ResponsesWireLayer, Wire};
 use super::{Endpoint, HarnessAuth};
 
 /// The `text.format.name` a turn's strict output schema is sent under.
@@ -1899,9 +1899,9 @@ mod tests {
             system.remove(0);
             let blocks = system.len();
             system.retain(|block| {
-                !block["text"]
-                    .as_str()
-                    .is_some_and(|text| text.starts_with("While bypass permissions mode is active:"))
+                !block["text"].as_str().is_some_and(|text| {
+                    text.starts_with("While bypass permissions mode is active:")
+                })
             });
             assert_eq!(
                 system.len() + usize::from(steered),

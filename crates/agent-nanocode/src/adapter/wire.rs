@@ -253,8 +253,7 @@ impl Wire {
                 state.usage.input = state.usage.input.saturating_add(usage.input);
                 state.usage.output = state.usage.output.saturating_add(usage.output);
                 state.usage.cache_read = state.usage.cache_read.saturating_add(usage.cache_read);
-                state.usage.cache_write =
-                    state.usage.cache_write.saturating_add(usage.cache_write);
+                state.usage.cache_write = state.usage.cache_write.saturating_add(usage.cache_write);
             }
             Charge::Nothing => {}
             Charge::Unknown => state.unknown = true,
@@ -578,9 +577,7 @@ pub(crate) fn send_messages<'a>(
 ) -> layer::BoxFuture<'a, Result<layer::Response, layer::Error>> {
     let key = blake3::hash(&request.body).to_hex().to_string();
     if let Err(refusal) = wire.admit(&key) {
-        return Box::pin(async move {
-            Err(layer::Error::new(refusal.message()).unsent(true))
-        });
+        return Box::pin(async move { Err(layer::Error::new(refusal.message()).unsent(true)) });
     }
     let wire = Arc::clone(wire);
     let sent = next.send(super::session::without_claude_code_blocks(request));
@@ -802,10 +799,16 @@ impl Sse {
         let Ok(event) = serde_json::from_str::<serde_json::Value>(data) else {
             return;
         };
-        let stated = |usage: Option<&serde_json::Value>| usage.and_then(serde_json::Value::as_object).cloned();
+        let stated = |usage: Option<&serde_json::Value>| {
+            usage.and_then(serde_json::Value::as_object).cloned()
+        };
         match event.get("type").and_then(serde_json::Value::as_str) {
             Some("message_start") => {
-                self.usage = stated(event.get("message").and_then(|message| message.get("usage")));
+                self.usage = stated(
+                    event
+                        .get("message")
+                        .and_then(|message| message.get("usage")),
+                );
             }
             Some("message_delta") => {
                 if let Some(delta) = stated(event.get("usage")) {
@@ -837,7 +840,12 @@ impl Sse {
     /// classes, disjoint as kata's are.
     fn usage(&self) -> Option<TokenUsage> {
         let usage = self.usage.as_ref()?;
-        let count = |field: &str| usage.get(field).and_then(serde_json::Value::as_u64).unwrap_or(0);
+        let count = |field: &str| {
+            usage
+                .get(field)
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0)
+        };
         Some(TokenUsage {
             input: count("input_tokens"),
             output: count("output_tokens"),
