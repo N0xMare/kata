@@ -1640,10 +1640,10 @@ async fn a_turn_whose_cells_end_their_interpreter_completes_and_records_each_end
             signal: Some("SIGKILL".into()),
         };
         assert_eq!(ended, [&killed, &killed], "{kind:?}: {evidence:?}");
+        let left = quickjs_threads::interpreters();
         assert!(
-            quickjs_threads::interpreters().is_empty(),
-            "{kind:?}: every interpreter process was reaped: {:?}",
-            quickjs_threads::interpreters()
+            left.is_empty(),
+            "{kind:?}: every interpreter process was reaped: {left:?}"
         );
     }
 }

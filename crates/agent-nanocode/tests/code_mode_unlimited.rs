@@ -80,11 +80,8 @@ async fn without_limits_a_cell_allocates_emits_and_waits_past_every_test_limit()
         "woke after {:?}",
         wait.elapsed
     );
-    assert!(
-        interpreters().is_empty(),
-        "an interpreter process ran: {:?}",
-        interpreters()
-    );
+    let left = interpreters();
+    assert!(left.is_empty(), "an interpreter process ran: {left:?}");
     host.terminate().await;
 }
 

@@ -159,7 +159,8 @@ needs:
   sender of the events it reads, `Events`; the failure it returns once that sender
   is gone, `startup`; and `Stopped`, which `terminate` awaits), and every method of
   the host (`start_cell`, `read_event`, `send_tool_result`, `hold`, `release`,
-  `terminate`) goes to the backend: the host runs no cell itself. A spawn the
+  `terminate`, and its drop, which ends the backend as `terminate` does and
+  blocks until `Stopped`) goes to the backend: the host runs no cell itself. A spawn the
   backend refuses fails with the backend's text. Without a backend, every host is
   upstream's. Under a backend, `take_stored` returns nothing: a cell's writes reach
   the host with its terminal event, so a cell its host terminated keeps none. This
@@ -389,7 +390,14 @@ runs a cell in the hosting process; there is no fallback.
   between cells ends no cell and is recorded nowhere. A cell journaled by nanocode is refused (kata
   installs none). `terminate` and a dropped host kill the interpreter and reap it
   before the host stops counting as live, so a cell inside a native step does
-  not outlive its turn's shutdown.
+  not outlive its turn's shutdown. A dropped host's drop blocks until then (the
+  patch's `Drop for Remote`): nanocode drops, without terminating it, the host of
+  every cell that completed or failed in its script, and returns that cell's
+  result only once the drop has run, so no interpreter outlives its cell's
+  result. A drop that only signalled the supervisor left the reap unordered with
+  the turn: under load, a completed turn's evidence recorded
+  `CodeModeWorkersLive{live: 1}` and its interpreter outlived `close` (MEASURED
+  at 91bd6532, 78 of 100 runs with 256 CPU hogs on 128 cores).
 - Its standard error is a socket the supervisor drains on a thread of its own
   (`code-mode-err`), keeping the interpreter's last `STDERR_CAP` (64 KiB) bytes
   and counting what it drops; nothing of it reaches the hosting process's
@@ -462,7 +470,8 @@ runs a cell in the hosting process; there is no fallback.
 `crates/code-mode-host/tests/` drives the supervisor through the engine's host:
 `interpreter_process.rs` (cells in one child, which the kernel charges a spinning
 cell's CPU to, not this process; a
-terminate that kills a native step and reaps it; the count held until the reap; a
+terminate that kills a native step and reaps it; a drop that reaps before it
+returns; the count held until the reap; a
 parent killed by SIGKILL leaving no interpreter, the interpreter stopped so only
 its parent-death signal can end it; the kernel's account of its limits, OOM score
 and dumpability; programs that cannot start or end before `Ready`; a session

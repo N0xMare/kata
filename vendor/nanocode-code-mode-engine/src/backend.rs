@@ -243,11 +243,32 @@ impl Remote {
     /// Ends whatever the backend runs for this host, and waits until it says
     /// nothing does.
     pub(crate) async fn terminate(&mut self) {
+        if let Some(stopped) = self.shut_down() {
+            let _ = stopped.await;
+        }
+    }
+
+    /// Sends `Shutdown`, once; what then says the backend stopped, unless a
+    /// `terminate` already took it.
+    fn shut_down(&mut self) -> Option<oneshot::Receiver<()>> {
         if let Some(commands) = self.commands.take() {
             let _ = commands.send(HostCommand::Shutdown);
         }
-        if let Some(stopped) = self.stopped.take() {
-            let _ = stopped.await;
+        self.stopped.take()
+    }
+}
+
+/// A dropped host ends what the backend runs for it as `terminate` does, and
+/// blocks until the backend says nothing does. nanocode drops the host of a
+/// cell that completed or failed in its script without terminating it
+/// (`run_cell_actor`, on native targets), and returns that cell's result only
+/// once the drop has run, so the drop is all that orders the backend's end
+/// before the turn goes on. Upstream's host frees its engine in its drop on
+/// the calling thread too.
+impl Drop for Remote {
+    fn drop(&mut self) {
+        if let Some(stopped) = self.shut_down() {
+            let _ = stopped.blocking_recv();
         }
     }
 }

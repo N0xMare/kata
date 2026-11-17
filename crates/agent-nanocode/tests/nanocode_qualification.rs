@@ -2378,10 +2378,10 @@ async fn a_cancel_during_a_native_step_is_confirmed_behind_kata_backend() {
         close.harness_acknowledged_cancel(),
         "nanocode confirmed the cancel: {close:?}"
     );
+    let left = quickjs_threads::interpreters();
     assert!(
-        quickjs_threads::interpreters().is_empty(),
-        "the step's interpreter was reaped: {:?}",
-        quickjs_threads::interpreters()
+        left.is_empty(),
+        "the step's interpreter was reaped: {left:?}"
     );
 }
 
@@ -3079,10 +3079,10 @@ async fn close_reports_the_turn_end_it_ran_for_a_dropped_future() {
         witness.stdin_closed(),
         "the unconfirmed KillAll dropped the toolhost's stdin"
     );
+    let left = quickjs_threads::interpreters();
     assert!(
-        quickjs_threads::interpreters().is_empty(),
-        "close's shutdown reaped the sort's interpreter: {:?}",
-        quickjs_threads::interpreters()
+        left.is_empty(),
+        "close's shutdown reaped the sort's interpreter: {left:?}"
     );
     let reported = close.turn_end();
     assert!(

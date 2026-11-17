@@ -321,10 +321,10 @@ async fn a_cell_whose_interpreter_is_killed_fails_to_the_model_and_the_turn_comp
     );
     let close = session.close().await;
     assert!(close.is_confirmed(), "anthropic: {close:?}");
+    let left = interpreters();
     assert!(
-        interpreters().is_empty(),
-        "anthropic: every interpreter process was reaped: {:?}",
-        interpreters()
+        left.is_empty(),
+        "anthropic: every interpreter process was reaped: {left:?}"
     );
 
     let killed = Gate::default();
@@ -397,10 +397,10 @@ async fn a_cell_whose_interpreter_is_killed_fails_to_the_model_and_the_turn_comp
     );
     let close = session.close().await;
     assert!(close.is_confirmed(), "openai: {close:?}");
+    let left = interpreters();
     assert!(
-        interpreters().is_empty(),
-        "openai: every interpreter process was reaped: {:?}",
-        interpreters()
+        left.is_empty(),
+        "openai: every interpreter process was reaped: {left:?}"
     );
 }
 

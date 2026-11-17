@@ -517,6 +517,47 @@ async fn a_worker_counts_as_live_until_its_interpreter_is_reaped() {
     }
 }
 
+/// **Dropping a host kills and reaps its interpreter before the drop
+/// returns.** nanocode drops the host of a cell that completed or failed in
+/// its script without terminating it (`run_cell_actor` at 8ec3b215, on native
+/// targets, where it spawns a host per cell), and its `exec` returns that
+/// cell's result only once that drop has run, so nothing but the drop orders
+/// the interpreter's reap before the model's next request and the turn's end.
+/// Each round runs a cell to its `Done` (an idle interpreter, as nanocode
+/// leaves it) or leaves one spinning, drops the host, and at once finds no
+/// child of this process, not even a zombie, and no live worker.
+///
+/// **Would red if:** the drop only signalled the supervisor and returned
+/// (watched: the patch's `Remote` with no `Drop` failed the first round, the
+/// interpreter still listed), or the live-worker count were released after
+/// the drop returned.
+#[tokio::test]
+async fn dropping_a_host_reaps_its_interpreter_before_the_drop_returns() {
+    installed();
+    for round in 0..20 {
+        let mut host = EmbeddedHost::spawn().expect("a host");
+        if round % 2 == 0 {
+            let done = run(&mut host, 1, "notify(\"ran\");").await;
+            assert_eq!(done.error, None, "round {round}");
+        } else {
+            spinning(&mut host, 1).await;
+        }
+        assert_eq!(children().len(), 1, "round {round}: {:?}", children());
+        drop(host);
+        let listed = children();
+        assert!(
+            listed.is_empty(),
+            "round {round}: interpreter {listed:?} outlived its host's drop, as {:?}",
+            listed.iter().map(|pid| state_of(*pid)).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            live_workers(),
+            0,
+            "round {round}: a live worker after the drop"
+        );
+    }
+}
+
 /// Limits under which a cell can store and load tens of MiB.
 const ROOMY: CodeModeLimits = CodeModeLimits {
     memory_bytes: 256 * MIB,
