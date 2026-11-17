@@ -6568,7 +6568,7 @@ binary = "interpreter_process"
 test = "images_up_to_the_cells_limit_pass_and_past_it_the_engine_ends_the_cell"
 kind = "host-free"
 layer = "L1"
-pins = "under a 1 MiB output limit, ten 100,000-byte image data URLs (within 46 KB of the limit as the engine charges them) complete and eleven fail on the interpreter's own `Code Mode cell output exceeded its 1048576-byte limit`, not a kill: the supervisor charges no more than the interpreter (red with each string charged twice: the ten-image cell killed)"
+pins = "under a 1 MiB output limit, ten 100,000-byte image data URLs (within 46 KB of the limit as the engine charges them) complete and eleven fail on the engine's own `Code Mode cell output exceeded its 1048576-byte limit`, not a kill: the supervisor charges no more than the engine (red with each string charged twice: the ten-image cell killed)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -7072,7 +7072,7 @@ binary = "code_mode_limits"
 test = "the_output_limit_admits_its_last_byte_and_refuses_the_next"
 kind = "host-free"
 layer = "L1"
-pins = "behind kata's interpreter process under a 1 MiB output limit, output exactly at the limit as the interpreter charges it (`wire::Event::charge`) completes the cell, and one byte past it fails the cell with the interpreter's `Code Mode cell output exceeded its 1048576-byte limit` as its error and its report, and the next cell runs (red with the interpreter's cap check admitting the byte past the limit or refusing at the limit, or `Event::charge` charging an event wrongly)"
+pins = "behind kata's interpreter process under a 1 MiB output limit, output exactly at the limit as the engine charges it (`wire::Event::charge_of`, installed by the interpreter through the patch's `set_output_limit`) completes the cell, and one byte past it fails the cell with the engine's `Code Mode cell output exceeded its 1048576-byte limit` as its error and its report, and the next cell runs (red with `ExecutionState::queue`'s cap check admitting the byte past the limit or refusing at the limit, or `Event::charge_of` charging an event wrongly)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14951,10 +14951,18 @@ pins = "behind kata's interpreter process, an uncaught recursion past djs's stac
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "code_mode_limits"
+test = "a_flood_of_large_chunks_ends_at_the_output_limit_before_the_interpreter_grows"
+kind = "host-free"
+layer = "L1"
+pins = "behind kata's interpreter process under an 8 MiB output limit and a 16 MiB heap, floods of 1 MiB notifications, 256 KiB notifications and 256 KiB texts each fail with the engine's `Code Mode cell output exceeded its 8388608-byte limit` as error and report, having delivered something and at most the limit, inside the wall, the interpreter's VmHWM growing less than the heap plus twice the limit past its resident size (MEASURED 7,292 KiB), and the next cell runs in the same interpreter (red before the charge moved into the engine: the 1 MiB flood ended the interpreter by SIGABRT, `memory allocation of 1048576 bytes failed`; red with the interpreter's `set_output_limit` not installed)"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
+binary = "code_mode_limits"
 test = "the_output_limit_admits_its_last_byte_and_refuses_the_next"
 kind = "host-free"
 layer = "L1"
-pins = "behind kata's interpreter process under a 1 MiB output limit, output exactly at the limit as the interpreter charges it (`wire::Event::charge`) completes the cell, and one byte past it fails the cell with the interpreter's `Code Mode cell output exceeded its 1048576-byte limit` as its error and its report, and the next cell runs (red with the interpreter's cap check admitting the byte past the limit or refusing at the limit, or `Event::charge` charging an event wrongly)"
+pins = "behind kata's interpreter process under a 1 MiB output limit, output exactly at the limit as the engine charges it (`wire::Event::charge_of`, installed by the interpreter through the patch's `set_output_limit`) completes the cell, and one byte past it fails the cell with the engine's `Code Mode cell output exceeded its 1048576-byte limit` as its error and its report, and the next cell runs (red with `ExecutionState::queue`'s cap check admitting the byte past the limit or refusing at the limit, or `Event::charge_of` charging an event wrongly)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"

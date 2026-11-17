@@ -247,8 +247,9 @@ pub const HOST_SET_CLAUDE: [&str; 6] = ["Read", "Write", "Edit", "Bash", "TaskOu
 /// an interpreter one at a time, as a cell loads them.
 ///
 /// Every heap, wall, output and stack hit is reported as a Code Mode
-/// notification of its own just before the cell's error (the heap's by the
-/// engine, as kata patches it; the rest by the interpreter process), and the
+/// notification of its own just before the cell's error (the heap's and the
+/// output's by the engine, as kata patches it; the wall's and the stack's by
+/// the interpreter process), and the
 /// adapter records every report as `CodeModeLimit`, and the live-worker refusal
 /// off the `exec` result, whatever the model is shown (`adapter::events`). djs
 /// ends a heap hit uncatchably, so every hit a cell's own code makes is

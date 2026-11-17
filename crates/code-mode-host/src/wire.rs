@@ -314,6 +314,30 @@ impl Event {
         crate::CELL_EVENT_BYTES.saturating_add(payload)
     }
 
+    /// What the engine's `event` costs the cell's output limit: exactly
+    /// [`Event::charge`] of its wire form ([`Event::encode`]). The interpreter
+    /// process installs it as the engine's output charge
+    /// (`set_output_limit`), so each event is charged as the cell makes it. A
+    /// content item that does not serialize is charged as an empty one; it
+    /// cannot be sent either (`Event::encode`).
+    pub fn charge_of(event: &RuntimeEvent) -> usize {
+        let payload = match event {
+            RuntimeEvent::Notify { text, .. } => text.len(),
+            RuntimeEvent::Content { content, .. } => serde_json::to_value(content)
+                .map_or(0, |content| {
+                    crate::supervisor::content_payload_bytes(&content)
+                }),
+            RuntimeEvent::ToolCall { .. } | RuntimeEvent::Yielded { .. } => 0,
+            RuntimeEvent::Done { .. }
+            | RuntimeEvent::Error { .. }
+            | RuntimeEvent::Held { .. }
+            | RuntimeEvent::Waiting { .. }
+            | RuntimeEvent::Replayed { .. }
+            | RuntimeEvent::Diverged { .. } => return 0,
+        };
+        crate::CELL_EVENT_BYTES.saturating_add(payload)
+    }
+
     pub fn encode(event: RuntimeEvent) -> Result<Self, serde_json::Error> {
         Ok(match event {
             RuntimeEvent::ToolCall {

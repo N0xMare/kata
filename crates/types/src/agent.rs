@@ -410,8 +410,9 @@ pub enum SessionEvidenceEvent {
     /// refused the cell a worker) — read off the vendored guard's own report of
     /// the hit, a harness notification that the harness's truncation of the
     /// model's view of the cell does not reach, or for `workers` off the
-    /// refused `exec` result; the turn went on. A wall or output hit is
-    /// reported from the interpreter's own budget, every heap hit by the
+    /// refused `exec` result; the turn went on. A wall hit is reported from
+    /// the interpreter's own budget, an output hit by the engine as the cell
+    /// makes the event that crosses it, every heap hit by the
     /// engine (djs ends it uncatchably), and a stack hit by djs's own error
     /// heading the failure; a stack hit the cell rethrows inside an error of
     /// its own is not reported, and a cell's own notification of a report's

@@ -340,9 +340,10 @@ impl ToolResultStatus {
 ///
 /// Just before the error of a cell that failed on its wall, output, memory or
 /// interpreter stack limit, a report of that limit is sent as a Code Mode
-/// notification of its own (the heap's by the vendored engine,
-/// `vendor/nanocode-code-mode-engine.patch`: `report_out_of_memory`; the rest
-/// by the interpreter process, `kata_code_mode_host`'s `interpreter`), and
+/// notification of its own (the heap's and the output's by the vendored
+/// engine, `vendor/nanocode-code-mode-engine.patch`: `report_out_of_memory`,
+/// `ExecutionState::queue`; the wall's and the stack's by the interpreter
+/// process, `kata_code_mode_host`'s `interpreter`), and
 /// nanocode emits every notification as a `tool.notification` event on both
 /// kinds, whatever it then shows the model.
 /// So the report reaches this fold however much text the cell emitted before

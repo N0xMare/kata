@@ -898,8 +898,9 @@ OOM killer, and last a seccomp allow-list of the system calls it was measured to
 on every thread under no-new-privs. No cell runs in the hosting process: an interpreter
 that cannot start fails its cell, naming why, and one that cannot install its filter
 cannot start. The cell runs in djs, nanocode's own engine; the interpreter sets the
-cell's heap on it and enforces the wall and the output limit itself, and the
-supervisor counts the live interpreters. Through the adapter, a cell that allocates
+cell's heap and its output limit on it (the engine, as kata patches it, charges each
+event as the cell makes it, so a flood ends at the limit before anything queues past
+it) and enforces the wall itself, and the supervisor counts the live interpreters. Through the adapter, a cell that allocates
 past the heap limit, spins in JavaScript past the wall limit or needs an interpreter
 past the process's live-interpreter cap fails to the model and the turn goes on, and a
 cell after an ended host runs on a new one. A wall, output, heap or live-interpreter-cap

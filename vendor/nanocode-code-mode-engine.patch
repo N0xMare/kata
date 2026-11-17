@@ -1,12 +1,13 @@
 diff --git b/src/backend.rs b/src/backend.rs
 new file mode 100644
-index 0000000000000000000000000000000000000000..dee61a525954c5f31cba4674588e0ef0ebbe8c6f
+index 0000000000000000000000000000000000000000..9c87b213445191ad60b9a835764f9e8b9f778677
 --- /dev/null
 +++ b/src/backend.rs
-@@ -0,0 +1,220 @@
+@@ -0,0 +1,253 @@
 +//! kata's seams in the engine: a backend that runs each [`EmbeddedHost`]'s
 +//! cells somewhere other than the calling thread, a loader for the stored
-+//! values a cell's `start_cell` was not given, and the report of a heap hit.
++//! values a cell's `start_cell` was not given, a limit on what a cell emits,
++//! charged as it emits it, and the report of a heap hit.
 +//!
 +//! Without [`set_worker_backend`], every [`EmbeddedHost`] runs its cells on the
 +//! task that polls it, as upstream's does; nothing below changes that host.
@@ -121,6 +122,38 @@ index 0000000000000000000000000000000000000000..dee61a525954c5f31cba4674588e0ef0
 +    STORED_LOADER.get().and_then(|loader| loader(key))
 +}
 +
++/// What a cell may emit and what each of its events costs it, for the cells
++/// this process's hosts run themselves ([`set_output_limit`]).
++pub struct OutputLimit {
++    /// What a cell's events may cost in all.
++    pub bytes: usize,
++    /// What one event costs.
++    pub charge: fn(&RuntimeEvent) -> usize,
++}
++
++static OUTPUT_LIMIT: OnceLock<OutputLimit> = OnceLock::new();
++
++/// Installs `limit` for every cell the hosts of this process run themselves.
++/// Each event a cell makes is charged as it is made, inside the step that
++/// makes it, before it is queued: the event that takes the cell past
++/// `limit.bytes` is not queued, nor is any after it, the cell's script is
++/// stopped as its `exit` stops it, and the cell ends with the report of the
++/// limit as a notification of its own and an `Error` of it, keeping none of
++/// its writes. Once only: a later call changes nothing and returns its
++/// `limit`. Without it, a cell's output is unlimited, as upstream's is.
++pub fn set_output_limit(limit: OutputLimit) -> Result<(), OutputLimit> {
++    OUTPUT_LIMIT.set(limit)
++}
++
++pub(crate) fn output_limit() -> Option<&'static OutputLimit> {
++    OUTPUT_LIMIT.get()
++}
++
++/// The report of a cell whose output passed `bytes`.
++pub(crate) fn output_report(bytes: usize) -> String {
++    format!("Code Mode cell output exceeded its {bytes}-byte limit")
++}
++
 +/// The report of a cell's heap hit, sent as a notification of its own just
 +/// before the cell's `Error`: nanocode delivers a notification beside the
 +/// cell's result, where its truncation of that result does not reach it.
@@ -225,10 +258,87 @@ index 0000000000000000000000000000000000000000..dee61a525954c5f31cba4674588e0ef0
 +    }
 +}
 diff --git a/src/cell.rs b/src/cell.rs
-index 6573341172657919d99c5054842e9e2ffae29a4e..4d6517d5a779d5a509c9cc8567549918dcb0794e 100644
+index 6573341172657919d99c5054842e9e2ffae29a4e..369ff7bbddf828b9b892aa6261782f9741149592 100644
 --- a/src/cell.rs
 +++ b/src/cell.rs
-@@ -616,8 +616,11 @@ impl ExecutionState {
+@@ -353,6 +353,12 @@ pub(crate) struct ExecutionState {
+     started: Instant,
+     monotonic_base: f64,
+     monotonic_floor: f64,
++    /// What the cell's events cost so far, as the installed output limit
++    /// charges them (`backend::set_output_limit`).
++    emitted: usize,
++    /// The cell's output passed its limit: it queues nothing more, and its
++    /// script is stopped.
++    spent: bool,
+ }
+ 
+ struct Replay {
+@@ -397,6 +403,8 @@ impl ExecutionState {
+             started: nanocode_platform::now(),
+             monotonic_base: 0.0,
+             monotonic_floor: 0.0,
++            emitted: 0,
++            spent: false,
+         }
+     }
+ 
+@@ -562,19 +570,52 @@ impl ExecutionState {
+         if let Some(journal) = &mut self.journal {
+             journal.publish();
+         }
+-        self.events.push_back(event);
++        self.queue(event);
+     }
+ 
+     pub(crate) fn flush_text(&mut self) {
+         let Some(text) = self.pending_text.take() else {
+             return;
+         };
+-        self.events.push_back(RuntimeEvent::Content {
++        self.queue(RuntimeEvent::Content {
+             cell_id: self.execution_id,
+             content: ToolOutputContent::InputText { text },
+         });
+     }
+ 
++    /// Queues `event`, charged against the installed output limit as it is
++    /// made: the event that takes the cell past it is not queued, nor is any
++    /// after it; the limit's report and the cell's `Error` are, in its place.
++    fn queue(&mut self, event: RuntimeEvent) {
++        if self.spent {
++            return;
++        }
++        if let Some(limit) = crate::backend::output_limit() {
++            self.emitted = self.emitted.saturating_add((limit.charge)(&event));
++            if self.emitted > limit.bytes {
++                self.spent = true;
++                self.pending_text = None;
++                let report = crate::backend::output_report(limit.bytes);
++                self.events.push_back(RuntimeEvent::Notify {
++                    cell_id: self.execution_id,
++                    text: report.clone(),
++                });
++                self.events.push_back(RuntimeEvent::Error {
++                    cell_id: self.execution_id,
++                    message: report,
++                    stored: HashMap::new(),
++                });
++                return;
++            }
++        }
++        self.events.push_back(event);
++    }
++
++    /// Whether the cell's output passed its limit, which ends its script.
++    pub(crate) const fn spent(&self) -> bool {
++        self.spent
++    }
++
+     fn push_text(&mut self, text: String) {
+         let text = without_data_urls(text);
+         match self.pending_text.as_mut() {
+@@ -616,8 +657,11 @@ impl ExecutionState {
              }
              LOAD => {
                  let key = text(call, 0)?;
@@ -242,7 +352,7 @@ index 6573341172657919d99c5054842e9e2ffae29a4e..4d6517d5a779d5a509c9cc8567549918
                  }))
              }
              STORE => {
-@@ -1073,6 +1076,21 @@ const DESCRIPTION_FIELD: &str = "description";
+@@ -1073,6 +1117,21 @@ const DESCRIPTION_FIELD: &str = "description";
  const SCHEMA_FIELDS: [&str; 2] = ["input_schema", "output_schema"];
  
  impl CellTools {
@@ -265,7 +375,7 @@ index 6573341172657919d99c5054842e9e2ffae29a4e..4d6517d5a779d5a509c9cc8567549918
          struct Definition<'a>(&'a Value);
  
 diff --git a/src/host.rs b/src/host.rs
-index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ecdaffc982 100644
+index 90ef234b6f70ecc040d25097d73e81142979f434..8205c2622ed9ff73eb463e7adf4ab20dab1866ae 100644
 --- a/src/host.rs
 +++ b/src/host.rs
 @@ -12,6 +12,7 @@ use nanocode_platform::Instant;
@@ -284,7 +394,29 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
                      state.send(RuntimeEvent::Error {
                          cell_id: state.execution_id,
                          message: OUT_OF_MEMORY.to_owned(),
-@@ -225,6 +227,7 @@ impl Machine {
+@@ -142,6 +144,10 @@ impl Machine {
+                         instance.abort();
+                         return ended(state, &encoded);
+                     }
++                    if state.spent() {
++                        instance.abort();
++                        return Ok(Ran::Finished);
++                    }
+                     if instance.fuel_used().saturating_sub(started) >= slice {
+                         return Ok(Ran::Sliced);
+                     }
+@@ -168,6 +174,10 @@ impl Machine {
+                         continue;
+                     }
+                     state.flush_text();
++                    if state.spent() {
++                        instance.abort();
++                        return Ok(Ran::Finished);
++                    }
+                     self.phase = Phase::Idle(nanocode_platform::now());
+                     return Ok(Ran::Idle);
+                 }
+@@ -225,6 +235,7 @@ impl Machine {
                  Ok(false) => {}
                  Err(djs_embed::Error::OutOfMemory) => {
                      let stored = state.take_written();
@@ -292,7 +424,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
                      state.send(RuntimeEvent::Error {
                          cell_id: state.execution_id,
                          message: OUT_OF_MEMORY.to_owned(),
-@@ -366,14 +369,19 @@ pub struct EmbeddedHost {
+@@ -366,14 +377,19 @@ pub struct EmbeddedHost {
      state: ExecutionState,
      machine: Option<Machine>,
      failure: Option<String>,
@@ -312,7 +444,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
          })
      }
  
-@@ -392,6 +400,16 @@ impl EmbeddedHost {
+@@ -392,6 +408,16 @@ impl EmbeddedHost {
          journaling: Option<CellJournaling>,
          interrupt: Interrupt,
      ) -> Result<(), String> {
@@ -329,7 +461,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
          self.machine = None;
          let prepared = prepared(&tools, prelude.as_ref());
          self.state.begin(execution_id, stored, tools, journaling);
-@@ -436,6 +454,9 @@ impl EmbeddedHost {
+@@ -436,6 +462,9 @@ impl EmbeddedHost {
      }
  
      pub async fn read_event(&mut self) -> Result<RuntimeEvent, String> {
@@ -339,7 +471,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
          loop {
              if let Some(event) = self.state.events.pop_front() {
                  return Ok(event);
-@@ -594,6 +615,9 @@ impl EmbeddedHost {
+@@ -594,6 +623,9 @@ impl EmbeddedHost {
          encoded: String,
          success: bool,
      ) -> Result<(), String> {
@@ -349,7 +481,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
          if self.state.execution_id == execution_id
              && let Some(machine) = self.machine.as_mut()
          {
-@@ -603,6 +627,9 @@ impl EmbeddedHost {
+@@ -603,6 +635,9 @@ impl EmbeddedHost {
      }
  
      pub fn hold(&mut self, execution_id: u64) -> Result<(), String> {
@@ -359,7 +491,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
          if self.state.execution_id == execution_id
              && let Some(machine) = self.machine.as_mut()
              && !machine.held
-@@ -615,7 +642,10 @@ impl EmbeddedHost {
+@@ -615,7 +650,10 @@ impl EmbeddedHost {
          Ok(())
      }
  
@@ -371,7 +503,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
          if self.state.execution_id == execution_id
              && let Some(machine) = self.machine.as_mut()
              && machine.held
-@@ -627,9 +657,14 @@ impl EmbeddedHost {
+@@ -627,9 +665,14 @@ impl EmbeddedHost {
      }
  
      pub async fn terminate(&mut self) {
@@ -387,7 +519,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..160dda564a988ee48e983000892cd3ec
          self.state.take_written()
      }
 diff --git a/src/lib.rs b/src/lib.rs
-index 1bf89fb8ca50da4ee324106ea6cc4a8aca852fe0..ebba745d2d2ef8bdf95f7b83353719df5f32f579 100644
+index 1bf89fb8ca50da4ee324106ea6cc4a8aca852fe0..599f81e4eb1665d48e909984d2b06a09cb5a8b58 100644
 --- a/src/lib.rs
 +++ b/src/lib.rs
 @@ -1,4 +1,5 @@
@@ -401,8 +533,8 @@ index 1bf89fb8ca50da4ee324106ea6cc4a8aca852fe0..ebba745d2d2ef8bdf95f7b83353719df
  mod setup;
  
 +pub use backend::{
-+    Events, HostCommand, StartExecution, Stopped, StoredLoader, WorkerBackend, WorkerEnds,
-+    set_stored_loader, set_worker_backend,
++    Events, HostCommand, OutputLimit, StartExecution, Stopped, StoredLoader, WorkerBackend,
++    WorkerEnds, set_output_limit, set_stored_loader, set_worker_backend,
 +};
  pub use cell::{
      CellTools, RuntimeEvent, SnapshotStore, cell_memory, set_cell_memory, set_snapshot_store,

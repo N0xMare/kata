@@ -14,8 +14,9 @@
 //! Each limit hit must be a CELL outcome: the cell ends with an `Error` event
 //! the model reads, and the same host runs the next cell, in the same
 //! interpreter process. Just before that `Error` comes the report of the limit
-//! as a `Notify` of its own (`Cell::reported`): the engine's for the heap (kata's
-//! patch), the interpreter process's for the wall, the output and the stack.
+//! as a `Notify` of its own (`Cell::reported`): the engine's for the heap and
+//! the output (kata's patch), the interpreter process's for the wall and the
+//! stack.
 //! What a cell cost is read from outside kata: the events, the wall clock, and
 //! the kernel's account of the interpreter process in `/proc` (its pid, its
 //! resident memory, its CPU time).
@@ -327,12 +328,11 @@ async fn idle_time_between_cells_is_not_charged_to_the_wall() {
 /// having delivered at most the limit's bytes and something, well inside its
 /// wall; the next cell runs in the same interpreter process.
 ///
-/// **Would red if:** the interpreter did not charge its cell's output
-/// (`interpreter::forward`'s `running.charged > limits.cell_emitted_bytes`
-/// check removed): the supervisor's own check then kills the interpreter past
-/// the limit and its report allowance, so the cell fails with the
-/// supervisor's `Code Mode's interpreter process ended by SIGKILL` and the
-/// next cell runs in a new interpreter process.
+/// **Would red if:** the engine did not charge its cell's output (the
+/// interpreter's `set_output_limit` not installed): the supervisor's own check
+/// then kills the interpreter past the limit and its report allowance, so the
+/// cell fails with the supervisor's `Code Mode's interpreter process ended by
+/// SIGKILL` and the next cell runs in a new interpreter process.
 #[tokio::test]
 async fn an_output_flood_hits_the_emitted_cap_and_the_next_cell_runs() {
     let mut host = installed_for_floods();
@@ -373,6 +373,99 @@ async fn an_output_flood_hits_the_emitted_cap_and_the_next_cell_runs() {
     assert_next_cell_runs_in(&mut host, 5, pid).await;
 }
 
+/// [`FLOOD_LIMITS`] with kata's own output limit, 8 MiB
+/// (`CODE_MODE_LIMITS.cell_emitted_bytes`): the limits of a flood of large
+/// chunks, several of which fit.
+const LARGE_FLOOD_LIMITS: CodeModeLimits = CodeModeLimits {
+    cell_emitted_bytes: 8 * MIB,
+    ..FLOOD_LIMITS
+};
+
+/// What the interpreter process may grow past its resident size while a flood
+/// of large chunks runs into the output limit: the cell's heap, and the
+/// output queued up to the limit and its copy on the way to the wire
+/// (MEASURED: 7,292 KiB, the three floods together, debug build).
+const LARGE_FLOOD_GROWTH: usize =
+    LARGE_FLOOD_LIMITS.memory_bytes + 2 * LARGE_FLOOD_LIMITS.cell_emitted_bytes;
+
+/// **A flood of large chunks ends at the output limit before the interpreter
+/// grows, and the next cell runs in the same interpreter.** Under the 8 MiB
+/// output limit, three floods: 1 MiB notifications, 256 KiB notifications
+/// and 256 KiB texts. A step runs 200,000 fuel, enough to make thousands of
+/// events, and a host call's fuel does not grow with its payload: charged only
+/// when an event is read off the engine, a flood queues gigabytes inside one
+/// step (MEASURED before the charge moved into the engine: the 1 MiB and
+/// the 256 KiB text floods ended the interpreter by SIGABRT on `RLIMIT_AS`,
+/// `memory allocation of 1048576 bytes failed`, and the 256 KiB notification
+/// flood grew it to a 1,089 MiB high-water mark). Each fails with the output
+/// report as its error, exactly, and the report before it, having delivered
+/// at most the limit's bytes and something, well inside its wall; the
+/// interpreter's resident high-water mark grows less than
+/// [`LARGE_FLOOD_GROWTH`] past its resident size before the floods; the next
+/// cell runs in the same interpreter process.
+///
+/// **Would red if:** the engine did not charge an event as the cell makes it
+/// (`ExecutionState::queue`'s charge in `vendor/nanocode-code-mode-engine.patch`
+/// removed, or the interpreter's `set_output_limit` not installed): the
+/// supervisor's own count then kills the interpreter past the limit, or the
+/// interpreter dies on its address-space limit first.
+#[tokio::test]
+async fn a_flood_of_large_chunks_ends_at_the_output_limit_before_the_interpreter_grows() {
+    let mut host = install_limits(LARGE_FLOOD_LIMITS);
+    let first = run(&mut host, 1, TRIVIAL).await;
+    assert_eq!(first.error, None);
+    let pid = the_interpreter();
+    let (rss_before, _) = resident_of(pid);
+    let report = format!(
+        "Code Mode cell output exceeded its {}-byte limit",
+        LARGE_FLOOD_LIMITS.cell_emitted_bytes
+    );
+
+    for (id, flood) in [
+        (
+            2,
+            "const chunk = \"x\".repeat(1 << 20); for (;;) notify(chunk);",
+        ),
+        (
+            3,
+            "const chunk = \"x\".repeat(256 << 10); for (;;) notify(chunk);",
+        ),
+        (
+            4,
+            "const chunk = \"x\".repeat(256 << 10); for (;;) text(chunk);",
+        ),
+    ] {
+        let cell = run(&mut host, id, flood).await;
+
+        let emitted = cell.notified_bytes() + cell.text_bytes;
+        assert_eq!(cell.error.as_ref(), Some(&report), "flood {id}");
+        assert_eq!(cell.reported.as_ref(), Some(&report), "flood {id}");
+        let (_, hwm) = resident_of(pid);
+        eprintln!(
+            "large flood {id}: emitted {emitted} bytes in {:?}; interpreter {pid} VmHWM {} KiB, \
+             {} KiB past its resident size before the floods",
+            cell.elapsed,
+            hwm / 1024,
+            hwm.saturating_sub(rss_before) / 1024,
+        );
+        assert!(
+            emitted <= LARGE_FLOOD_LIMITS.cell_emitted_bytes && emitted > 0,
+            "flood {id} emitted {emitted} bytes"
+        );
+        assert!(
+            cell.elapsed < LARGE_FLOOD_LIMITS.cell_wall,
+            "flood {id} ended by the wall, not the cap, after {:?}",
+            cell.elapsed
+        );
+        assert!(
+            hwm.saturating_sub(rss_before) < LARGE_FLOOD_GROWTH,
+            "flood {id}: the interpreter grew {} KiB",
+            hwm.saturating_sub(rss_before) / 1024
+        );
+    }
+    assert_next_cell_runs_in(&mut host, 5, pid).await;
+}
+
 /// **The output limit admits a cell's output up to its last byte and refuses
 /// the next one.** A text of at least the engine's 64 KiB pending buffer goes
 /// out at once and costs its bytes plus one event (`CELL_EVENT_BYTES`); a text
@@ -382,10 +475,11 @@ async fn an_output_flood_hits_the_emitted_cap_and_the_next_cell_runs() {
 /// the cell completes; the same cell with an empty text after them costs the
 /// limit plus one byte, and fails on the joined text with the output report.
 ///
-/// **Would red if:** the interpreter refused output that costs exactly the
-/// limit (`interpreter::forward`'s `>` made `>=`: the first cell fails),
-/// admitted one byte past it (the second completes), or charged a content
-/// item more or less than its bytes plus one event (`wire::Event::charge`).
+/// **Would red if:** the engine refused output that costs exactly the limit
+/// (`ExecutionState::queue`'s `>` in `vendor/nanocode-code-mode-engine.patch`
+/// made `>=`: the first cell fails), admitted one byte past it (the second
+/// completes), or charged a content item more or less than its bytes plus one
+/// event (`wire::Event::charge_of`).
 #[tokio::test]
 async fn the_output_limit_admits_its_last_byte_and_refuses_the_next() {
     let mut host = installed();
@@ -430,8 +524,9 @@ async fn the_output_limit_admits_its_last_byte_and_refuses_the_next() {
 /// having sent at most `cell_emitted_bytes / CELL_EVENT_BYTES` events and at
 /// most `cell_emitted_bytes` of payload.
 ///
-/// **Would red if:** `wire::Event::charge` charged an event its payload alone
-/// (no `CELL_EVENT_BYTES`): the yield and tool-call floods end on the wall.
+/// **Would red if:** `wire::Event::charge_of` charged an event its payload
+/// alone (no `CELL_EVENT_BYTES`): the yield and tool-call floods end on the
+/// wall.
 #[tokio::test]
 async fn every_event_a_cell_emits_is_charged_and_the_next_cell_runs() {
     let mut host = installed_for_floods();

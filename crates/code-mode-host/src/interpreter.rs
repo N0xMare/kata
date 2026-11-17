@@ -46,10 +46,15 @@
 //!   ends the cell, between two slices, with its report and an `Error` of it.
 //!   A step that does not return (one long native operation) is ended by the
 //!   supervisor, which kills this process `WALL_GRACE` later.
-//! * The output: each event is charged as the supervisor charges it
-//!   ([`wire::Event::charge`]); the event that would take the cell past
-//!   `cell_emitted_bytes` is not sent, and the cell ends with the report of
-//!   the limit and an `Error` of it.
+//! * The output: `set_output_limit(cell_emitted_bytes)`, before any cell, with
+//!   the supervisor's charge ([`wire::Event::charge_of`]). The engine charges
+//!   each event as the cell makes it, inside the step, before it queues it
+//!   (kata's patch): the event that would take the cell past the limit is
+//!   never queued, the script stops, and the cell ends with the report of the
+//!   limit and an `Error` of it. Charged when the loop reads an event instead,
+//!   a step of 200,000 fuel would queue every event it makes first: a loop
+//!   that notifies one 1 MiB string queues gigabytes, and the process dies on
+//!   `RLIMIT_AS` before its first event is read.
 //! * The stack: djs keeps a script's call stack in its heap and throws a
 //!   catchable `RangeError` past its own slot limit; a cell that fails on one
 //!   gets the stack report before its `Error`.
@@ -84,7 +89,8 @@ use std::sync::{Arc, Mutex, PoisonError, mpsc as std_mpsc};
 use std::time::{Duration, Instant, SystemTime};
 
 use nanocode_code_mode_engine::{
-    CellTools, EmbeddedHost, Interrupt, RuntimeEvent, platform, set_cell_memory, set_stored_loader,
+    CellTools, EmbeddedHost, Interrupt, OutputLimit, RuntimeEvent, platform, set_cell_memory,
+    set_output_limit, set_stored_loader,
 };
 use serde_json::value::RawValue;
 use tokio::sync::mpsc;
@@ -218,6 +224,13 @@ pub fn serve() -> i32 {
         );
     }
     set_cell_memory(limits.memory_bytes);
+    let output = OutputLimit {
+        bytes: limits.cell_emitted_bytes,
+        charge: Event::charge_of,
+    };
+    if set_output_limit(output).is_err() {
+        return refuse("this process already had an output limit");
+    }
     if platform::install(&CELL_PLATFORM).is_err() {
         return refuse("this process already had a platform host");
     }
@@ -379,12 +392,10 @@ enum Next {
     Wall,
 }
 
-/// The cell the host runs: its id, when its wall passes, and what it emitted
-/// so far as [`wire::Event::charge`] counts it.
+/// The cell the host runs: its id, and when its wall passes.
 struct Running {
     id: u64,
     until: tokio::time::Instant,
-    charged: usize,
 }
 
 /// What the loop does after an event.
@@ -429,7 +440,6 @@ async fn run(
                 cell = Some(Running {
                     id: execution_id,
                     until: tokio::time::Instant::now() + limits.cell_wall,
-                    charged: 0,
                 });
                 let [definitions, descriptions, schemas] = tools;
                 let started = host.start_cell(
@@ -464,7 +474,7 @@ async fn run(
                 Some(running) => end_cell(running.id, None, &message),
                 None => return refuse_with(&message),
             },
-            Next::Engine(Ok(event)) => match forward(event, cell.as_mut(), &limits) {
+            Next::Engine(Ok(event)) => match forward(event) {
                 Ok(after) => after,
                 Err(code) => return code,
             },
@@ -489,13 +499,10 @@ async fn wall(until: Option<tokio::time::Instant>) {
     }
 }
 
-/// Sends one of the running cell's events to the parent, charged against its
-/// output limit, with the stack report before a stack failure.
-fn forward(
-    event: RuntimeEvent,
-    running: Option<&mut Running>,
-    limits: &CodeModeLimits,
-) -> Result<After, i32> {
+/// Sends one of the running cell's events to the parent, with the stack
+/// report before a stack failure. The engine charged it against the cell's
+/// output limit when the cell made it.
+fn forward(event: RuntimeEvent) -> Result<After, i32> {
     let cell_id = event.cell_id();
     let mut terminal = matches!(
         event,
@@ -509,16 +516,6 @@ fn forward(
     let Ok(event) = Event::encode(event) else {
         return Err(EXIT_UNENCODABLE);
     };
-    if let Some(running) = running {
-        running.charged = running.charged.saturating_add(event.charge());
-        if running.charged > limits.cell_emitted_bytes {
-            let report = format!(
-                "Code Mode cell output exceeded its {}-byte limit",
-                limits.cell_emitted_bytes
-            );
-            return Ok(end_cell(cell_id, Some(&report), &report));
-        }
-    }
     if stack_hit {
         notify(cell_id, STACK_REPORT).map_err(|_| EXIT_BROKEN)?;
     }

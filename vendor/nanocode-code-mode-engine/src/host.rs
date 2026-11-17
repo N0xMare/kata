@@ -144,6 +144,10 @@ impl Machine {
                         instance.abort();
                         return ended(state, &encoded);
                     }
+                    if state.spent() {
+                        instance.abort();
+                        return Ok(Ran::Finished);
+                    }
                     if instance.fuel_used().saturating_sub(started) >= slice {
                         return Ok(Ran::Sliced);
                     }
@@ -170,6 +174,10 @@ impl Machine {
                         continue;
                     }
                     state.flush_text();
+                    if state.spent() {
+                        instance.abort();
+                        return Ok(Ran::Finished);
+                    }
                     self.phase = Phase::Idle(nanocode_platform::now());
                     return Ok(Ran::Idle);
                 }

@@ -353,6 +353,12 @@ pub(crate) struct ExecutionState {
     started: Instant,
     monotonic_base: f64,
     monotonic_floor: f64,
+    /// What the cell's events cost so far, as the installed output limit
+    /// charges them (`backend::set_output_limit`).
+    emitted: usize,
+    /// The cell's output passed its limit: it queues nothing more, and its
+    /// script is stopped.
+    spent: bool,
 }
 
 struct Replay {
@@ -397,6 +403,8 @@ impl ExecutionState {
             started: nanocode_platform::now(),
             monotonic_base: 0.0,
             monotonic_floor: 0.0,
+            emitted: 0,
+            spent: false,
         }
     }
 
@@ -562,17 +570,50 @@ impl ExecutionState {
         if let Some(journal) = &mut self.journal {
             journal.publish();
         }
-        self.events.push_back(event);
+        self.queue(event);
     }
 
     pub(crate) fn flush_text(&mut self) {
         let Some(text) = self.pending_text.take() else {
             return;
         };
-        self.events.push_back(RuntimeEvent::Content {
+        self.queue(RuntimeEvent::Content {
             cell_id: self.execution_id,
             content: ToolOutputContent::InputText { text },
         });
+    }
+
+    /// Queues `event`, charged against the installed output limit as it is
+    /// made: the event that takes the cell past it is not queued, nor is any
+    /// after it; the limit's report and the cell's `Error` are, in its place.
+    fn queue(&mut self, event: RuntimeEvent) {
+        if self.spent {
+            return;
+        }
+        if let Some(limit) = crate::backend::output_limit() {
+            self.emitted = self.emitted.saturating_add((limit.charge)(&event));
+            if self.emitted > limit.bytes {
+                self.spent = true;
+                self.pending_text = None;
+                let report = crate::backend::output_report(limit.bytes);
+                self.events.push_back(RuntimeEvent::Notify {
+                    cell_id: self.execution_id,
+                    text: report.clone(),
+                });
+                self.events.push_back(RuntimeEvent::Error {
+                    cell_id: self.execution_id,
+                    message: report,
+                    stored: HashMap::new(),
+                });
+                return;
+            }
+        }
+        self.events.push_back(event);
+    }
+
+    /// Whether the cell's output passed its limit, which ends its script.
+    pub(crate) const fn spent(&self) -> bool {
+        self.spent
     }
 
     fn push_text(&mut self, text: String) {

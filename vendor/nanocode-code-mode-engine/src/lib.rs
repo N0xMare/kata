@@ -8,8 +8,8 @@ mod memory;
 mod setup;
 
 pub use backend::{
-    Events, HostCommand, StartExecution, Stopped, StoredLoader, WorkerBackend, WorkerEnds,
-    set_stored_loader, set_worker_backend,
+    Events, HostCommand, OutputLimit, StartExecution, Stopped, StoredLoader, WorkerBackend,
+    WorkerEnds, set_output_limit, set_stored_loader, set_worker_backend,
 };
 pub use cell::{
     CellTools, RuntimeEvent, SnapshotStore, cell_memory, set_cell_memory, set_snapshot_store,

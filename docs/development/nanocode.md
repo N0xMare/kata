@@ -144,6 +144,18 @@ needs:
   with none and loads each key from its parent as the cell asks (below).
 - `CellTools::encoded` and `CellTools::from_encoded`: a cell's encoded tool catalog
   (definitions, descriptions, schemas), so it crosses to the interpreter process.
+- `set_output_limit(..)`: what a cell may emit and what each event costs it
+  (kata's `wire::Event::charge_of`). The engine charges each event as the cell
+  makes it, inside the step that makes it, before it queues it: the event that
+  takes the cell past the limit is never queued, nor is any after it, the script
+  is stopped as its `exit` stops it, and the cell ends with `Code Mode cell
+  output exceeded its <n>-byte limit` as a `Notify` of its own and an `Error` of
+  the same text, keeping none of its writes. Charged where the interpreter reads
+  an event instead, a step (200,000 fuel, whose host calls cost the same fuel
+  whatever their payload) queues every event it makes first: a loop notifying
+  one 1 MiB string queued gigabytes and the interpreter died on `RLIMIT_AS`
+  before its first event was read (MEASURED; `code_mode_limits.rs`'s
+  `a_flood_of_large_chunks_ends_at_the_output_limit_before_the_interpreter_grows`).
 - The heap's report. Just before the `Error` of a cell djs ended on its heap cap
   (`Script stopped: the cell ran out of memory.`, which no script can catch: djs
   runs with `fatal_out_of_memory`), the engine sends `Code Mode cell exceeded its
@@ -180,10 +192,12 @@ the engine's. kata's values are `CODE_MODE_LIMITS` in
   yield is charged `CELL_EVENT_BYTES` (256) beside its payload (a notification its
   text, a content item every string in it but its `type`; a tool call's input is
   not charged), so a cell sends at most `cell_emitted_bytes / 256` events and at
-  most `cell_emitted_bytes` of payload (`wire::Event::charge`). The engine joins a
-  cell's texts into one item of up to 64 KiB before it sends them. The event that
-  would cross the cap is not sent; the cell ends with the report `Code Mode cell
-  output exceeded its <n>-byte limit` and an `Error` of it.
+  most `cell_emitted_bytes` of payload (`wire::Event::charge_of`). The engine joins a
+  cell's texts into one item of up to 64 KiB before it sends them. The interpreter
+  installs the limit on the engine (`set_output_limit`, above), which charges each
+  event as the cell makes it: the event that would cross the cap is never queued;
+  the cell ends with the report `Code Mode cell output exceeded its <n>-byte
+  limit` and an `Error` of it.
 - `live_workers`, 8: hosts live in the process at once, each counted from its spawn
   until its interpreter process is reaped (`kata_code_mode_host::live_workers`). A
   spawn past it fails (`this process already runs <n> Code Mode workers, its
@@ -282,7 +296,8 @@ runs a cell in the hosting process; there is no fallback.
 - It runs the engine's own host (no backend installed there) on a thread of
   `thread_stack_bytes`, under a current-thread tokio runtime that waits on the
   host's events, its parent's frames and the cell's wall at once; it enforces the
-  wall, the output limit and the stack report there (above). It runs ONE host per
+  wall and the stack report there (above), and the engine the output limit it
+  installed. It runs ONE host per
   cell: after each terminal event it terminates that host, starts the next and
   answers `Ready`, so nothing of a cell (a timer, a queued job, a value) reaches
   the next. Since nanocode spawns a host per cell, one interpreter process runs

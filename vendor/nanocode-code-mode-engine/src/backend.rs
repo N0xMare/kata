@@ -1,6 +1,7 @@
 //! kata's seams in the engine: a backend that runs each [`EmbeddedHost`]'s
 //! cells somewhere other than the calling thread, a loader for the stored
-//! values a cell's `start_cell` was not given, and the report of a heap hit.
+//! values a cell's `start_cell` was not given, a limit on what a cell emits,
+//! charged as it emits it, and the report of a heap hit.
 //!
 //! Without [`set_worker_backend`], every [`EmbeddedHost`] runs its cells on the
 //! task that polls it, as upstream's does; nothing below changes that host.
@@ -113,6 +114,38 @@ pub fn set_stored_loader(loader: StoredLoader) -> Result<(), StoredLoader> {
 
 pub(crate) fn load_stored(key: &str) -> Option<Arc<RawValue>> {
     STORED_LOADER.get().and_then(|loader| loader(key))
+}
+
+/// What a cell may emit and what each of its events costs it, for the cells
+/// this process's hosts run themselves ([`set_output_limit`]).
+pub struct OutputLimit {
+    /// What a cell's events may cost in all.
+    pub bytes: usize,
+    /// What one event costs.
+    pub charge: fn(&RuntimeEvent) -> usize,
+}
+
+static OUTPUT_LIMIT: OnceLock<OutputLimit> = OnceLock::new();
+
+/// Installs `limit` for every cell the hosts of this process run themselves.
+/// Each event a cell makes is charged as it is made, inside the step that
+/// makes it, before it is queued: the event that takes the cell past
+/// `limit.bytes` is not queued, nor is any after it, the cell's script is
+/// stopped as its `exit` stops it, and the cell ends with the report of the
+/// limit as a notification of its own and an `Error` of it, keeping none of
+/// its writes. Once only: a later call changes nothing and returns its
+/// `limit`. Without it, a cell's output is unlimited, as upstream's is.
+pub fn set_output_limit(limit: OutputLimit) -> Result<(), OutputLimit> {
+    OUTPUT_LIMIT.set(limit)
+}
+
+pub(crate) fn output_limit() -> Option<&'static OutputLimit> {
+    OUTPUT_LIMIT.get()
+}
+
+/// The report of a cell whose output passed `bytes`.
+pub(crate) fn output_report(bytes: usize) -> String {
+    format!("Code Mode cell output exceeded its {bytes}-byte limit")
 }
 
 /// The report of a cell's heap hit, sent as a notification of its own just

@@ -32,10 +32,10 @@
 //! reaches the cell its end fails, bounded ([`STDERR_CAP`]), never the hosting
 //! process's own.
 //!
-//! The limits ([`CodeModeLimits`]) are enforced here, not by the engine: the
-//! child sets the heap on the engine and ends a cell at its wall or output
-//! limit itself; the supervisor counts the live hosts and kills a child whose
-//! step outlives the wall.
+//! The limits ([`CodeModeLimits`]) are set here: the child sets the heap and
+//! the output limit on the engine (which charges each event as the cell makes
+//! it, kata's patch) and ends a cell at its wall itself; the supervisor counts
+//! the live hosts and kills a child whose step outlives the wall.
 //!
 //! The child's last confinement step is a syscall filter (`syscall_filter`):
 //! a compromised interpreter (code execution through an engine defect) cannot
@@ -103,8 +103,9 @@ impl Program {
 
 /// What one Code Mode cell's interpreter process may take, and how many may
 /// be live in this process at once. Each is enforced outside the engine's
-/// script: the heap by djs (`set_cell_memory` in the interpreter), the rest by
-/// the interpreter's loop and its supervisor here.
+/// script: the heap by djs (`set_cell_memory` in the interpreter), the output
+/// by the engine (`set_output_limit` in the interpreter), the rest by the
+/// interpreter's loop and its supervisor here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CodeModeLimits {
     /// The cell's djs heap (`set_cell_memory`): an allocation past it ends
@@ -122,8 +123,8 @@ pub struct CodeModeLimits {
     pub cell_wall: Duration,
     /// What one cell may emit: every notification, content item, tool call
     /// and yield is charged [`CELL_EVENT_BYTES`] beside its payload (a tool
-    /// call's input excepted). The event that crosses it is not sent, and the
-    /// cell fails.
+    /// call's input excepted), as the cell makes it. The event that crosses it
+    /// is never queued, and the cell fails.
     pub cell_emitted_bytes: usize,
     /// Interpreter processes live in this process at once, each one host's:
     /// spawning a host past it fails, so the cell that needed it fails.
