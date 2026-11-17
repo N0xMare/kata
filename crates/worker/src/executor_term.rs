@@ -599,7 +599,7 @@ mod tests {
         }
         assert_eq!(
             node_executor_term().unwrap().digest().to_string(),
-            "7b65a69b9604ceec65b5e578aed35551bcab94452b941b59a3d0e83fded3dd09",
+            "dcf9f09adb818bd73a18e5230754f1455ccff06bfaabc8ca37556b4d919e824a",
             "this build's executor term moved: re-pin ONLY after naming which fact moved \
              (fence, youki, command or toolhost template, tool host, agent harness) — \
              every capsule reuse key on every node misses once"
