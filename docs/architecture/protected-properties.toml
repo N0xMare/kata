@@ -2077,7 +2077,7 @@ binary = "interpreter_process"
 test = "terminate_kills_a_cell_in_a_native_step_and_reaps_it"
 kind = "host-free"
 layer = "L1"
-pins = "a Code Mode cell inside one long sort, seen started, is ended by `terminate` in under 2 s; by its return the test process has no child and the engine counts no live worker, and the interpreter's `/proc` entry is gone within 1 s"
+pins = "a Code Mode cell inside one long sort, witnessed running in that one step off the kernel (its interpreter charged at least 10 CPU ticks across a second, 2 s after it is listed, while the host has delivered no event, not even the `notify` queued before the sort), is ended by `terminate` in under 2 s; by its return the test process has no child and the engine counts no live worker, and the interpreter's `/proc` entry is gone within 1 s (red with the patch's `Remote::terminate` returning at once: the interpreter still listed)"
 
 [[property.cell]]
 package = "kata-code-mode-host"

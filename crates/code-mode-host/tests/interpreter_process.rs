@@ -84,7 +84,9 @@ async fn cells_run_in_one_child_and_burn_no_cpu_here() {
 /// references to two distinct 1 MiB strings of equal bytes, so every compare is
 /// a whole 1 MiB `memcmp` (`kata-agent-nanocode`'s
 /// `quickjs_threads::A_LONG_NATIVE_STEP`, MEASURED there on djs at nanocode
-/// 8ec3b215 at about 35 s).
+/// 8ec3b215 at about 35 s). Its `notify` before the sort is queued in the
+/// same step as the sort, so it reaches the host only once the sort is done
+/// (MEASURED at a tenth of the length: both notifications at 3.16 s).
 const A_LONG_NATIVE_STEP: &str = "const one = \"x\".repeat(1 << 20);\n\
      const other = \"x\".repeat(1 << 20);\n\
      const strings = Array.from({ length: 200000 }, (_, i) => (i % 2 ? one : other));\n\
@@ -93,13 +95,19 @@ const A_LONG_NATIVE_STEP: &str = "const one = \"x\".repeat(1 << 20);\n\
      notify(\"sorted\");";
 
 /// **`terminate` ends a cell inside one long native step at once, and reaps
-/// its interpreter before it returns.** The cell runs [`A_LONG_NATIVE_STEP`]; once it is seen running,
-/// `terminate().await` returns, and by then this process has no child left
-/// (not even a zombie) and the engine counts no live worker.
+/// its interpreter before it returns.** The cell runs [`A_LONG_NATIVE_STEP`].
+/// Two seconds after its interpreter is listed, the kernel charges that
+/// interpreter CPU time across a further second while the host has delivered
+/// no event at all, not even the `notify` the cell queued before its sort: the
+/// cell is inside the one step that sorts, and running. Then
+/// `terminate().await` returns within 2 s, and by then this process has no
+/// child left (not even a zombie), the engine counts no live worker, and the
+/// interpreter's `/proc` entry is gone.
 ///
-/// **Would red if:** `terminate` waited for the step (a worker thread here,
-/// or an interpreter not killed), or the live-worker count were released
-/// after the reap was not done.
+/// **Would red if:** `terminate` did not end the interpreter (watched:
+/// `Remote::terminate` in the patch returning at once, the interpreter still
+/// listed), waited for the step (a worker thread here, or an interpreter not
+/// killed), or the live-worker count were released before the reap.
 #[tokio::test]
 async fn terminate_kills_a_cell_in_a_native_step_and_reaps_it() {
     installed();
@@ -114,13 +122,28 @@ async fn terminate_kills_a_cell_in_a_native_step_and_reaps_it() {
         Interrupt::new(),
     )
     .expect("the cell starts");
-    let event = host.read_event().await.expect("an event");
     assert!(
-        matches!(&event, nanocode_code_mode_engine::RuntimeEvent::Notify { text, .. } if text == "sorting"),
-        "the cell's first event is its notification"
+        eventually(Duration::from_secs(30), || children().len() == 1).await,
+        "an interpreter: {:?}",
+        children()
     );
     let interpreter = children();
-    assert_eq!(interpreter.len(), 1, "{interpreter:?}");
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let pid = interpreter[0].to_string();
+    let before = cpu_ticks(&pid).expect("the interpreter's CPU time");
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    let after = cpu_ticks(&pid).expect("the interpreter's CPU time");
+    assert!(
+        after.saturating_sub(before) >= 10,
+        "the interpreter ran {} ticks in a second: not running",
+        after.saturating_sub(before)
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(50), host.read_event())
+            .await
+            .is_err(),
+        "the host delivered an event: the cell's step had ended"
+    );
     let started = std::time::Instant::now();
     host.terminate().await;
     let took = started.elapsed();
