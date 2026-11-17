@@ -801,8 +801,8 @@ and is never re-run; its twin
 `a_provider_cutting_its_response_mid_turn_is_re_run_then_falls_back_live` pins the
 mid-body cut's settlement on a real node: PROVEN NOT PERFORMED, `transient`, charged
 `unavailable`, re-run twice on the same agent and then on the fallback panel's next
-member, which completes (MEASURED at `8ec3b215`: 172 s, the runner's 30 s and 120 s
-re-run backoffs among it).
+member, which completes (MEASURED at `8ec3b215` under kata's wire: 197.8 s, the
+runner's 30 s and 120 s re-run backoffs and the wire's backoff among it).
 
 ## Bumping nanocode
 
