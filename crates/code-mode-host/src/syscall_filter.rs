@@ -637,13 +637,20 @@ mod tests {
         );
         // A thread: clone3 (answered ENOSYS), then clone with CLONE_THREAD, and
         // in the new thread rseq, set_robust_list, prctl(PR_SET_NAME),
-        // sched_getaffinity, sigaltstack, getrandom, exit.
+        // sched_getaffinity, sigaltstack, getrandom, exit. `clone` reports what
+        // the kernel's clone returns its caller, the new thread's id (its own
+        // gettid), by which the parent tells the joined thread from the live
+        // ones.
         let joined = std::thread::Builder::new()
             .name("adversary-thread".to_owned())
-            .spawn(|| 7)
+            .spawn(|| raw(libc::SYS_gettid, [0; 6]))
             .map(std::thread::JoinHandle::join);
-        out.insert("clone", if matches!(joined, Ok(Ok(7))) { 0 } else { -1 });
-        out.insert("exit", if matches!(joined, Ok(Ok(7))) { 0 } else { -1 });
+        let (clone, exit) = match joined {
+            Ok(Ok(thread)) if thread > 0 => (thread, 0),
+            _ => (-1, -1),
+        };
+        out.insert("clone", clone);
+        out.insert("exit", exit);
         out.insert("clone3", raw(libc::SYS_clone3, [0; 6]));
         out.insert("rseq", raw(libc::SYS_rseq, [0; 6]));
         out.insert("set_robust_list", raw(libc::SYS_set_robust_list, [0; 6]));
@@ -1199,8 +1206,14 @@ mod tests {
     /// libtest and never called `seccomp(2)`, so only
     /// `SECCOMP_FILTER_FLAG_TSYNC` puts it under the filter; and `adversary`,
     /// libtest's thread that installed the filter and issued the calls (its
-    /// `prctl(PR_SET_NAME)` named it). The calls reported are exactly the
-    /// list's.
+    /// `prctl(PR_SET_NAME)` named it). The thread it joined, known by the id
+    /// its `clone` reported, may still be listed: the kernel wakes the joiner
+    /// when it clears the thread's id (`exit_mm`), before `exit_notify` marks
+    /// it exited, so `/proc` can show it `R` after the join — preempted there
+    /// under load, it was (`[adversary, adversary-threa, exe]`, three in 3,200
+    /// runs pinned one per CPU). Listed, it is in mode 2 under no-new-privs
+    /// too, and runs no code of its own again. The calls reported are exactly
+    /// the list's.
     ///
     /// **Would red if:** the filter were not installed (watched: `clone3`
     /// EINVAL, `openat` a descriptor, `Seccomp: 0`), it were installed without
@@ -1209,38 +1222,15 @@ mod tests {
     /// cell does not issue.
     #[test]
     fn every_listed_call_runs_and_every_thread_is_filtered() {
-        let mut threads = Vec::new();
+        // Each task listed: (tid, its status, or why it could not be read).
+        let mut tasks: Vec<(i64, Result<String, std::io::Error>)> = Vec::new();
         let (report, status) = adversary("allowed", |pid| {
             for task in std::fs::read_dir(format!("/proc/{pid}/task"))
                 .expect("its threads")
                 .flatten()
             {
-                // `adversary-thread` is joined once the kernel clears its tid,
-                // which precedes the removal of its task entry: listed here, it
-                // can be gone by this read (`NotFound`, or `ESRCH` once its
-                // task is released mid-read), or still listed as exited. A
-                // gone or exited thread runs nothing.
-                let state = match std::fs::read_to_string(task.path().join("status")) {
-                    Err(error)
-                        if error.kind() == std::io::ErrorKind::NotFound
-                            || error.raw_os_error() == Some(libc::ESRCH) =>
-                    {
-                        continue;
-                    }
-                    read => read.expect("a status"),
-                };
-                let field = |name: &str| {
-                    state
-                        .lines()
-                        .find_map(|line| line.strip_prefix(name))
-                        .map(str::trim)
-                        .unwrap_or_default()
-                        .to_owned()
-                };
-                if matches!(field("State:").chars().next(), Some('Z' | 'X')) {
-                    continue;
-                }
-                threads.push((field("Name:"), field("Seccomp:"), field("NoNewPrivs:")));
+                let tid = task.file_name().to_string_lossy().parse().expect("a tid");
+                tasks.push((tid, std::fs::read_to_string(task.path().join("status"))));
             }
         });
         assert_eq!(status.code(), Some(0), "the adversary ended {status:?}");
@@ -1268,12 +1258,52 @@ mod tests {
         listed.sort_unstable();
         let issued: Vec<&str> = returned.keys().map(String::as_str).collect();
         assert_eq!(issued, listed, "the calls issued are the list's");
-        threads.sort();
+        let joined = returned["clone"];
+        let field = |state: &str, name: &str| {
+            state
+                .lines()
+                .find_map(|line| line.strip_prefix(name))
+                .map(str::trim)
+                .unwrap_or_default()
+                .to_owned()
+        };
         let filtered = |name: &str| (name.to_owned(), "2".to_owned(), "1".to_owned());
+        let mut live = Vec::new();
+        for (tid, read) in &tasks {
+            let state = match read {
+                // The joined thread, released between the listing and this
+                // read: gone, it runs nothing.
+                Err(error)
+                    if *tid == joined
+                        && (error.kind() == std::io::ErrorKind::NotFound
+                            || error.raw_os_error() == Some(libc::ESRCH)) =>
+                {
+                    continue;
+                }
+                Err(error) => panic!("task {tid} of {tasks:?}: its status ({error})"),
+                Ok(state) => state,
+            };
+            let seen = (
+                field(state, "Name:"),
+                field(state, "Seccomp:"),
+                field(state, "NoNewPrivs:"),
+            );
+            if *tid == joined {
+                assert_eq!(
+                    seen,
+                    filtered("adversary-threa"),
+                    "the joined thread {tid}, still listed, is filtered: {tasks:?}"
+                );
+            } else {
+                live.push(seen);
+            }
+        }
+        live.sort();
         assert_eq!(
-            threads,
+            live,
             [filtered("adversary"), filtered("exe")],
-            "each live thread, by name, filtered under no-new-privs"
+            "each live thread, by name, filtered under no-new-privs; the joined \
+             thread is {joined}; every task listed: {tasks:?}"
         );
     }
 
