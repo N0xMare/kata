@@ -15,7 +15,8 @@
 //! 3. `oom_score_adj` 1000: under memory pressure the kernel's OOM killer picks
 //!    an interpreter before the process that hosts the worker.
 //! 4. `RLIMIT_AS` at [`address_space_limit`]: whatever escapes djs's own heap
-//!    accounting fails an allocation here, which ends only this process.
+//!    accounting (a native builtin's buffers) fails an allocation here, which
+//!    ends only this process, by SIGABRT.
 //! 5. No core dump: `RLIMIT_CORE` 0 and not dumpable. The limit stops only a
 //!    dump to a file; the kernel checks dumpability before any dump, so only
 //!    not dumpable also stops a dump that `core_pattern` pipes to a helper such
@@ -113,12 +114,18 @@ pub const EXIT_PANICKED: i32 = 101;
 /// What `RLIMIT_AS` allows beside `memory_bytes` and the cell thread's stack:
 /// the executable and its libraries mapped, the allocator's arenas, the other
 /// threads' stacks, a moment's second copy of the djs arena as it grows (the
-/// allocator moves a growing block), and what the engine allocates outside
-/// djs's accounting (frames, stored values, events in flight). MEASURED (debug
-/// test binary, djs at `8ec3b215`, a cell filling its whole 256 MiB heap with
-/// typed arrays, objects or strings until the heap cap ends it): `VmPeak` 474
-/// to 486 MiB, `VmHWM` 270 to 279 MiB, so about 220 MiB past `memory_bytes`
-/// and the thread stack; this is over four times that.
+/// allocator moves a growing block), and what the engine and djs's native
+/// builtins allocate outside djs's accounting (frames, stored values, events
+/// in flight, a builtin's working buffers). MEASURED (debug test binary, djs at
+/// `8ec3b215`, a cell filling its whole 256 MiB heap with typed arrays, objects
+/// or strings until the heap cap ends it): `VmPeak` 474 to 486 MiB, `VmHWM` 270
+/// to 279 MiB, so about 220 MiB past `memory_bytes` and the thread stack; this
+/// is over four times that. Those cells fill the heap; a native builtin's own
+/// buffers are bounded by nothing but this limit (MEASURED: `normalize` of 40
+/// million characters completes at a 608 MiB resident peak under a 256 MiB
+/// heap, and of 80 million fails an allocation here and ends the process by
+/// SIGABRT), so the address space, not `memory_bytes`, is what bounds an
+/// interpreter's memory.
 pub const ADDRESS_SPACE_OVERHEAD: u64 = 1 << 30;
 
 /// The address space an interpreter process under `limits` may map.
@@ -129,6 +136,11 @@ pub fn address_space_limit(limits: &CodeModeLimits) -> u64 {
         .saturating_add(bytes(limits.thread_stack_bytes))
         .saturating_add(ADDRESS_SPACE_OVERHEAD)
 }
+
+/// The name of the interpreter's thread that runs the cells, on a stack of
+/// `thread_stack_bytes`: the thread Rust's stack-overflow handler names when a
+/// native recursion overflows that stack (`supervisor`).
+pub(crate) const CELL_THREAD: &str = "code-mode-cell";
 
 /// The report of a cell that failed on djs's call-stack limit; djs's slot
 /// limit is its own (`ExecOptions::max_stack`), so the report names no size.
@@ -240,7 +252,7 @@ pub fn serve() -> i32 {
         return refuse("this process already had a stored-value loader");
     }
     let cells = std::thread::Builder::new()
-        .name("code-mode-cell".to_owned())
+        .name(CELL_THREAD.to_owned())
         .stack_size(limits.thread_stack_bytes)
         .spawn(move || {
             let runtime = match tokio::runtime::Builder::new_current_thread()

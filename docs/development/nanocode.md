@@ -161,7 +161,11 @@ needs:
   runs with `fatal_out_of_memory`), the engine sends `Code Mode cell exceeded its
   <n>-byte memory limit` as a `Notify` of its own, `<n>` being the cap
   (`cell_memory`). Every heap hit a cell's own code makes is reported: the hit
-  is never a JavaScript exception. A heap too small for the engine's bootstrap
+  is never a JavaScript exception, and one in a call the engine makes between
+  two steps (handing the cell a tool's result or failure, a reply) ends the
+  cell the same way (`EmbeddedHost::fail`; before kata's patch it failed the
+  host with `embedded Code Mode execution failed: out of memory` and no
+  report). A heap too small for the engine's bootstrap
   (under about 360 KiB) fails every cell with the bootstrap's own `out of memory`
   and no report.
 - `platform`: the engine's re-export of `nanocode_platform`, so kata can install
@@ -204,7 +208,8 @@ the engine's. kata's values are `CODE_MODE_LIMITS` in
   limit: ...`), which nanocode fails the cell with. Each host has an interpreter
   process of its own under `memory_bytes` and an address-space limit, so this
   bounds the interpreter heap the process can hold at `live_workers` x
-  `memory_bytes` (2 GiB). The cap is the process's: one attempt's running cells
+  `memory_bytes` (2 GiB), and the interpreters' memory at `live_workers` x
+  `address_space_limit` (about 10 GiB; below). The cap is the process's: one attempt's running cells
   can leave another's next cell without a host until one ends.
 - The stack's report: a cell whose `Error`'s first line ends with `RangeError:
   Maximum call stack size exceeded` gets `Code Mode cell exceeded its interpreter
@@ -230,7 +235,19 @@ tool set that carries them).
 
 What the limits bound is the interpreters, not the hosting process: at most
 `live_workers` interpreter processes, each under `memory_bytes` and an address-space
-limit. Rust-side copies of a cell's `stored` values and of events already sent are
+limit. The heap bounds what a cell's JavaScript allocates in djs; djs's native
+builtins allocate outside it (MEASURED: `normalize` of 40 million characters
+completes at a 608 MiB resident peak under the 256 MiB heap, and of 80 million
+fails an allocation on `RLIMIT_AS`), so the real bound on one interpreter's
+memory is `address_space_limit`, 1,288 MiB under kata's limits, and on the
+process's interpreters together `live_workers` times it, about 10 GiB. A native
+allocation past it ends that interpreter by SIGABRT (`memory allocation of <n>
+bytes failed`), its cell failing with the supervisor's report of the end, not a
+limit's: the address space is no limit of `CodeModeLimits`, and an allocation
+that fails there is not told apart from one the host refused
+(`interpreter_process.rs`'s
+`a_native_allocation_past_the_address_space_ends_only_its_interpreter`).
+Rust-side copies of a cell's `stored` values and of events already sent are
 outside the djs heap; the session's stored values stay in the hosting process, and
 an interpreter holds only the values its cell loaded.
 
@@ -278,8 +295,8 @@ runs a cell in the hosting process; there is no fallback.
 - It confines itself before it answers anything: it closes every descriptor
   above 2, arms a parent-death SIGKILL and checks its parent is the one that
   started it, sets `oom_score_adj` 1000, `RLIMIT_AS` (`memory_bytes` + the
-  thread stack + 1 GiB; MEASURED `VmPeak` at a full 256 MiB djs heap: 474 to
-  486 MiB),
+  thread stack + 1 GiB, 1,288 MiB under kata's limits; MEASURED `VmPeak` at a
+  full 256 MiB djs heap: 474 to 486 MiB),
   `RLIMIT_CORE` 0 and not dumpable, and last installs its syscall filter
   (`syscall_filter.rs`, below) on every thread. Its environment holds only an
   empty `TZ`, which the parent sets after clearing the rest: the engine reads a
@@ -453,8 +470,9 @@ cell runs in an interpreter of its own and the turn goes on.
 SIGSEGV) is a heap hit on both kinds under djs, recorded once and ending no
 interpreter; and a cell whose interpreter is killed from outside while it waits
 (SIGKILL, as the kernel's OOM killer would, since an interpreter runs at
-`oom_score_adj` 1000; no cell-reachable way to end a djs interpreter by a signal
-is known) fails to the model with the supervisor's report `Code Mode's
+`oom_score_adj` 1000; a cell can also end one itself by SIGABRT, a native
+recursion past its stack or a native allocation past its address space, both
+pinned in `kata-code-mode-host`'s `interpreter_process.rs`) fails to the model with the supervisor's report `Code Mode's
 interpreter process ended by SIGKILL`, the evidence records exactly
 `CodeModeInterpreterEnded{SIGKILL}`, the next cell runs and the turn completes, on
 both kinds. These binaries install kata's limits through kata's installer, so
@@ -611,7 +629,18 @@ under shrunk cell-thread stacks: djs runs a script's frames on its heap, so
 `sort`, `setTimeout`, plain recursion, `Proxy` traps, `bind`, a prototype chain
 and `JSON.parse` complete on 64 KiB, and the native recursion of djs's own parsers
 and builtins (nested source, regular-expression groups, `JSON.stringify`,
-`String`, a linked-list collection) sets the need, each bounded by djs. A search
+`String`, a linked-list collection) sets the need, each bounded by djs. Not every
+native recursion is: `instanceof` against a chain of bound functions recurses
+natively once per link (MEASURED: 20,000 links complete; 100,000 overflow the
+8 MiB stack), so a cell can overflow any thread stack. The overflow ends the
+interpreter by SIGABRT (Rust's `thread 'code-mode-cell' (<tid>) has overflowed
+its stack`), and the supervisor, reading that line off the interpreter's
+standard error, sends `Code Mode cell exceeded its <n>-byte native stack limit`
+before its report of the end: the evidence records `CodeModeLimit{stack}` and
+`CodeModeInterpreterEnded{SIGABRT}` (`interpreter_process.rs`'s
+`a_native_recursion_past_the_thread_stack_ends_only_its_interpreter_and_is_reported`).
+The line is the interpreter's own text, so a compromised interpreter can write
+it, as it can any report. A search
 finds the smallest stack every shape completes on: MEASURED, 372 KiB (368 KiB
 overflows, on regular-expression groups at djs's 211-group bound); kata's 8 MiB
 is 22 times it, and the cell is red if `thread_stack_bytes` drops below twice the

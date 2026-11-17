@@ -851,3 +851,139 @@ async fn the_answers_an_interpreter_keeps_stay_within_their_bound() {
     );
     host.terminate().await;
 }
+
+/// A native recursion no djs limit stops: `instanceof` against a chain of
+/// 100,000 bound functions recurses natively once per link (MEASURED: 20,000
+/// links complete; 100,000 overflow an 8 MiB cell-thread stack).
+const A_NATIVE_RECURSION: &str = "let f = function () {};\n\
+     for (let i = 0; i < 100000; i++) f = f.bind(null);\n\
+     notify(String(({}) instanceof f));";
+
+/// **A native recursion past the cell thread's stack ends only its
+/// interpreter, and is reported as the stack limit before the end.** The cell
+/// runs [`A_NATIVE_RECURSION`]: the guard page below the 8 MiB cell thread
+/// stops it, Rust's handler names the thread and aborts, and the cell fails
+/// with two notifications, the native stack report and then the report of the
+/// interpreter's end by SIGABRT, and an error carrying the handler's line; the
+/// next cell runs in a new interpreter.
+///
+/// **Would red if:** the supervisor did not read the overflow off the end
+/// (`End::overflowed_the_cell_thread` answering `false`: the end's report
+/// alone), or read it off a thread other than the cell thread.
+#[tokio::test]
+async fn a_native_recursion_past_the_thread_stack_ends_only_its_interpreter_and_is_reported() {
+    installed();
+    let mut host = EmbeddedHost::spawn().expect("a host");
+    let first = run(&mut host, 1, "notify('ran');").await;
+    assert_eq!(
+        (first.error, first.notified),
+        (None, vec!["ran".to_owned()])
+    );
+    let before = children();
+
+    let cell = run(&mut host, 2, A_NATIVE_RECURSION).await;
+
+    assert_eq!(
+        cell.notified,
+        [
+            "Code Mode cell exceeded its 8388608-byte native stack limit",
+            "Code Mode's interpreter process ended by SIGABRT",
+        ],
+        "{:?}",
+        cell.error
+    );
+    let error = cell.error.expect("the cell fails");
+    assert!(
+        error.starts_with("Code Mode's interpreter process ended by SIGABRT; its standard error")
+            && error.contains("thread 'code-mode-cell' (")
+            && error.contains(" has overflowed its stack"),
+        "{error}"
+    );
+    let next = run(&mut host, 3, "notify('next');").await;
+    assert_eq!((next.error, next.notified), (None, vec!["next".to_owned()]));
+    let after = children();
+    assert!(
+        after.len() == 1 && after != before,
+        "the next cell ran in a new interpreter: {before:?} then {after:?}"
+    );
+    host.terminate().await;
+}
+
+/// A native step that allocates outside the djs heap: NFC-normalizing 80
+/// million characters of `A` and a combining ring (a 160 MiB string, inside a
+/// 256 MiB heap) allocates hundreds of MiB natively (MEASURED under
+/// [`ROOMY`]: 40 million characters complete at a 608 MiB resident peak; 80
+/// million end the interpreter, `memory allocation of 335544320 bytes
+/// failed`).
+const A_NATIVE_ALLOCATION: &str = "const s = \"A\\u030a\".repeat(40 << 20);\n\
+     notify(String(s.normalize(\"NFC\").length));";
+
+/// **A native allocation past the address-space limit ends only its
+/// interpreter; the djs heap does not bound it.** Under [`ROOMY`] (a 256 MiB
+/// heap) the cell runs [`A_NATIVE_ALLOCATION`]: the interpreter's resident
+/// peak, sampled off `/proc`, passes the heap, the allocation fails on
+/// `RLIMIT_AS` (`address_space_limit`), the process aborts, and the cell fails
+/// with the report of the interpreter's end by SIGABRT alone (no limit report:
+/// the address space is no limit of `CodeModeLimits`) and an error naming the
+/// failed allocation; the next cell runs in a new interpreter.
+///
+/// **Would red if:** the interpreter set no address-space limit (watched: the
+/// normalize completes and the cell notifies its length).
+#[tokio::test]
+async fn a_native_allocation_past_the_address_space_ends_only_its_interpreter() {
+    install(ROOMY, Program::this_executable()).expect("the only backend this process installs");
+    let mut host = EmbeddedHost::spawn().expect("a host");
+    let first = run(&mut host, 1, "notify('ran');").await;
+    assert_eq!(first.error, None);
+    let before = children();
+    let interpreter = before[0];
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let sampler = {
+        let stop = std::sync::Arc::clone(&stop);
+        std::thread::spawn(move || {
+            let mut peak = 0;
+            while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                let read = std::fs::read_to_string(format!("/proc/{interpreter}/status"));
+                if let Some(kib) = read.ok().as_deref().and_then(|status| {
+                    status
+                        .lines()
+                        .find_map(|line| line.strip_prefix("VmHWM:"))
+                        .and_then(|kib| kib.trim().trim_end_matches(" kB").parse::<u64>().ok())
+                }) {
+                    peak = peak.max(kib);
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            peak
+        })
+    };
+
+    let cell = run(&mut host, 2, A_NATIVE_ALLOCATION).await;
+
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let peak_kib = sampler.join().expect("the sampler");
+    eprintln!(
+        "native allocation: resident peak {peak_kib} KiB, address-space limit {} KiB; {:?}",
+        address_space_limit(&ROOMY) / 1024,
+        cell.error
+    );
+    assert_eq!(
+        cell.notified,
+        ["Code Mode's interpreter process ended by SIGABRT"],
+        "{:?}",
+        cell.error
+    );
+    let error = cell.error.expect("the cell fails");
+    assert!(
+        error.contains("memory allocation of ") && error.contains(" bytes failed"),
+        "{error}"
+    );
+    assert!(
+        peak_kib * 1024 > u64::try_from(ROOMY.memory_bytes).expect("bytes"),
+        "the native step stayed inside the heap: {peak_kib} KiB"
+    );
+    let next = run(&mut host, 3, "notify('next');").await;
+    assert_eq!((next.error, next.notified), (None, vec!["next".to_owned()]));
+    assert_ne!(children(), before, "the next cell ran in a new interpreter");
+    host.terminate().await;
+}

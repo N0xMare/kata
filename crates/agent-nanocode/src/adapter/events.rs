@@ -354,7 +354,11 @@ impl ToolResultStatus {
 /// <n> ms wall-time limit`, `Code Mode cell output exceeded its <n>-byte
 /// limit`, `Code Mode cell exceeded its <n>-byte memory limit`, `Code Mode cell
 /// exceeded its interpreter stack limit` (djs's stack limit is its own, a
-/// slot count, so its report names no size).
+/// slot count, so its report names no size), and `Code Mode cell exceeded its
+/// <n>-byte native stack limit`, the supervisor's report of a native recursion
+/// that overflowed the interpreter's cell thread (`thread_stack_bytes`) and so
+/// ended the interpreter, sent just before its report of that end
+/// (`kata_code_mode_host::native_stack_report`): both are `stack`.
 ///
 /// What else reads as a report, stated: a cell whose own `notify` sends one of
 /// those texts (recorded as a hit, though none happened), and a cell that
@@ -387,7 +391,11 @@ fn guard_report(text: &str) -> Option<&'static str> {
         Some("wall")
     } else if rest.strip_suffix("-byte memory limit").is_some_and(limit) {
         Some("memory")
-    } else if rest == "interpreter stack limit" {
+    } else if rest == "interpreter stack limit"
+        || rest
+            .strip_suffix("-byte native stack limit")
+            .is_some_and(limit)
+    {
         Some("stack")
     } else {
         None
@@ -517,7 +525,9 @@ mod tests {
     }
 
     /// **A guard report names its limit, and nothing else does.** Each of the
-    /// four reports, as a whole text, is its limit; the same words with a
+    /// five reports, as a whole text, is its limit (both stack reports,
+    /// djs's call-stack limit's and the supervisor's of the cell thread's
+    /// native stack, are `stack`); the same words with a
     /// prefix (as a failed cell's `Script error:`), a suffix, a number that is
     /// not one, the stack report in its old sized form, or an engine's own
     /// out-of-memory and stack messages are none.
@@ -541,9 +551,14 @@ mod tests {
                 Some("stack"),
             ),
             (
+                "Code Mode cell exceeded its 8388608-byte native stack limit",
+                Some("stack"),
+            ),
+            (
                 "Code Mode cell exceeded its 1048576-byte interpreter stack limit",
                 None,
             ),
+            ("Code Mode cell exceeded its native stack limit", None),
             ("Code Mode cell exceeded its stack limit", None),
             ("RangeError: Maximum call stack size exceeded", None),
             (
@@ -565,6 +580,11 @@ mod tests {
         ] {
             assert_eq!(guard_report(text), which, "{text}");
         }
+        let native = kata_code_mode_host::native_stack_report(1 << 23);
+        assert_eq!(
+            native, "Code Mode cell exceeded its 8388608-byte native stack limit",
+            "the supervisor's report is the text read above"
+        );
     }
 
     /// **A worker refusal is read off a failed `exec` result's last text, and

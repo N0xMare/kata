@@ -607,6 +607,19 @@ impl EmbeddedHost {
     }
 
     fn fail(&mut self, error: String) {
+        if error == failure(djs_embed::Error::OutOfMemory) {
+            // kata: a heap hit in a call the machine makes between steps (a
+            // reply, a resolve) ends the cell as one inside a step does.
+            let stored = self.state.take_written();
+            report_out_of_memory(&mut self.state);
+            self.state.send(RuntimeEvent::Error {
+                cell_id: self.state.execution_id,
+                message: OUT_OF_MEMORY.to_owned(),
+                stored,
+            });
+            self.stop();
+            return;
+        }
         nanocode_trace::error!(
             target: "nanocode_code_mode",
             %error,

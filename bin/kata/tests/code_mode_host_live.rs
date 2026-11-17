@@ -9,9 +9,12 @@
 //!   `kata-worker` daemon over `local_socket`. The model's first cell waits on
 //!   a timer, and this test kills that cell's interpreter by SIGKILL, as the
 //!   kernel's OOM killer would (an interpreter runs at `oom_score_adj` 1000).
-//!   No cell-reachable way to end a djs interpreter by a signal is known (under
-//!   QuickJS a bind flood ended it by SIGSEGV; under djs it is a heap hit), so
-//!   the end comes from outside. kata runs every cell in an interpreter
+//!   Cells can end a djs interpreter by SIGABRT (MEASURED: a native recursion
+//!   past its cell thread's stack, a native allocation past its address-space
+//!   limit; `kata-code-mode-host`'s `interpreter_process.rs`), but the end
+//!   here comes from outside, the one way that needs no cell's cooperation and
+//!   ends a waiting cell at a moment the test picks. kata runs every cell in an
+//!   interpreter
 //!   process, a confined child of the hosting process (`kata_code_mode_host`),
 //!   so the end is that child's; the cell fails to the model naming the
 //!   signal. The model's second cell runs in a fresh interpreter, and the turn

@@ -25,7 +25,8 @@
 //! end (any signal, a panic, a native stack overflow, an address-space or OOM
 //! kill, an exit) ends only the child. A death while a cell runs ends that cell
 //! with an error naming it (the supervisor's own report, a Code Mode
-//! notification the adapter records as `CodeModeInterpreterEnded`), and the
+//! notification the adapter records as `CodeModeInterpreterEnded`, after the
+//! native stack report when a native recursion overflowed the cell thread), and the
 //! next cell runs in a new child; a death after a cell's terminal event ends no
 //! cell. A cell's stored values stay in the hosting process and cross one at a
 //! time, as the cell loads them. What the child writes to its standard error
@@ -63,7 +64,9 @@ use std::time::Duration;
 use nanocode_code_mode_engine::set_worker_backend;
 
 pub use interpreter::{ADDRESS_SPACE_OVERHEAD, address_space_limit};
-pub use supervisor::{ENDED_BY, EXITED_WITH, STDERR_CAP, WALL_GRACE, signal_name};
+pub use supervisor::{
+    ENDED_BY, EXITED_WITH, STDERR_CAP, WALL_GRACE, native_stack_report, signal_name,
+};
 pub use wire::FRAME_CAP;
 
 /// The arguments an interpreter process is started with, after its program.

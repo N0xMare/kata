@@ -375,7 +375,7 @@ index 6573341172657919d99c5054842e9e2ffae29a4e..369ff7bbddf828b9b892aa6261782f97
          struct Definition<'a>(&'a Value);
  
 diff --git a/src/host.rs b/src/host.rs
-index 90ef234b6f70ecc040d25097d73e81142979f434..8205c2622ed9ff73eb463e7adf4ab20dab1866ae 100644
+index 90ef234b6f70ecc040d25097d73e81142979f434..7bb64c814e27bab14b48cf50dc8731c50287b857 100644
 --- a/src/host.rs
 +++ b/src/host.rs
 @@ -12,6 +12,7 @@ use nanocode_platform::Instant;
@@ -471,7 +471,27 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..8205c2622ed9ff73eb463e7adf4ab20d
          loop {
              if let Some(event) = self.state.events.pop_front() {
                  return Ok(event);
-@@ -594,6 +623,9 @@ impl EmbeddedHost {
+@@ -578,6 +607,19 @@ impl EmbeddedHost {
+     }
+ 
+     fn fail(&mut self, error: String) {
++        if error == failure(djs_embed::Error::OutOfMemory) {
++            // kata: a heap hit in a call the machine makes between steps (a
++            // reply, a resolve) ends the cell as one inside a step does.
++            let stored = self.state.take_written();
++            report_out_of_memory(&mut self.state);
++            self.state.send(RuntimeEvent::Error {
++                cell_id: self.state.execution_id,
++                message: OUT_OF_MEMORY.to_owned(),
++                stored,
++            });
++            self.stop();
++            return;
++        }
+         nanocode_trace::error!(
+             target: "nanocode_code_mode",
+             %error,
+@@ -594,6 +636,9 @@ impl EmbeddedHost {
          encoded: String,
          success: bool,
      ) -> Result<(), String> {
@@ -481,7 +501,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..8205c2622ed9ff73eb463e7adf4ab20d
          if self.state.execution_id == execution_id
              && let Some(machine) = self.machine.as_mut()
          {
-@@ -603,6 +635,9 @@ impl EmbeddedHost {
+@@ -603,6 +648,9 @@ impl EmbeddedHost {
      }
  
      pub fn hold(&mut self, execution_id: u64) -> Result<(), String> {
@@ -491,7 +511,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..8205c2622ed9ff73eb463e7adf4ab20d
          if self.state.execution_id == execution_id
              && let Some(machine) = self.machine.as_mut()
              && !machine.held
-@@ -615,7 +650,10 @@ impl EmbeddedHost {
+@@ -615,7 +663,10 @@ impl EmbeddedHost {
          Ok(())
      }
  
@@ -503,7 +523,7 @@ index 90ef234b6f70ecc040d25097d73e81142979f434..8205c2622ed9ff73eb463e7adf4ab20d
          if self.state.execution_id == execution_id
              && let Some(machine) = self.machine.as_mut()
              && machine.held
-@@ -627,9 +665,14 @@ impl EmbeddedHost {
+@@ -627,9 +678,14 @@ impl EmbeddedHost {
      }
  
      pub async fn terminate(&mut self) {

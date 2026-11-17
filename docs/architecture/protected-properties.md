@@ -907,9 +907,10 @@ cell after an ended host runs on a new one. A wall, output, heap or live-interpr
 hit is recorded in its evidence (`CodeModeLimit`) whatever the model was shown, whether
 the failure reaches the model in the cell's `exec` result or, for a cell that yielded
 first, in a later `wait` on it, and so is a stack hit whose failure reaches the cell's
-end with djs's own `RangeError` on its first line. Every heap hit a cell's own code
-makes is reported: djs ends it uncatchably, and the engine (as kata patches it) sends
-the report. Each report is a harness notification of its own, which the harness emits
+end with djs's own `RangeError` on its first line, or that overflowed the cell
+thread's native stack. Every heap hit a cell's own code makes is reported: djs ends it
+uncatchably, and the engine (as kata patches it) sends the report, also for a hit in a
+call the engine makes between two steps (handing the cell a tool's failure). Each report is a harness notification of its own, which the harness emits
 as an event the adapter reads; the live-interpreter-cap refusal is the refused cell's
 whole result. A stack hit the cell catches and rethrows inside an error of its own
 fails to the model as that error and is not recorded, and a cell's own notification
@@ -920,9 +921,16 @@ nothing an earlier cell left in its interpreter is reachable from it (cells shar
 what they `store`). The operations under which QuickJS ended its process on an
 exhausted heap (`Function.prototype.bind`, `eval` of a class, `Array.fromAsync`) fail
 the cell on its heap under djs, at every headroom of the same sweep, and end no
-interpreter (MEASURED, behind the interpreter process). An interpreter that ends while
-its cell runs, which no cell is known to cause under djs (pinned by killing one from
-outside, as the OOM killer would), ends only itself: its cell fails to the model with
+interpreter (MEASURED, behind the interpreter process). A cell can end its interpreter
+by SIGABRT: a native recursion djs does not bound (`instanceof` against a chain of
+100,000 bound functions) overflows the cell thread's 8 MiB stack, which the supervisor
+also reports as the stack limit (`Code Mode cell exceeded its <n>-byte native stack
+limit`, read off Rust's overflow line in the interpreter's standard error); and a native
+builtin allocates outside the djs heap (`normalize` of 80 million characters) until it
+fails on the address-space limit, so that limit (1,288 MiB per interpreter, about 10 GiB
+across the 8 live ones), not the 256 MiB heap, bounds an interpreter's memory (both
+pinned behind the interpreter process). An interpreter that ends while its cell runs
+(also pinned by killing one from outside, as the OOM killer would) ends only itself: its cell fails to the model with
 the supervisor's report of the end (`Code Mode's interpreter process ended by
 SIGKILL`, read off its reap, which no core dump holds: a probe child on a host piping
 its core dumps to apport is reaped 0.3 ms after its `abort()` not dumpable, and

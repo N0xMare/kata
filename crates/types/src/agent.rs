@@ -405,8 +405,9 @@ pub enum SessionEvidenceEvent {
     /// `unknown`). Never the output itself. Recorded on both kinds.
     ToolResult { id: SmolStr, status: SmolStr },
     /// The embedded harness: a Code Mode cell failed on one of kata's Code Mode
-    /// limits — `which` is `wall`, `output`, `memory`, `stack` (the
-    /// interpreter's stack limit) or `workers` (the process's live-worker cap
+    /// limits — `which` is `wall`, `output`, `memory`, `stack` (djs's
+    /// call-stack limit, or the interpreter's cell-thread native stack, whose
+    /// overflow also ends the interpreter) or `workers` (the process's live-worker cap
     /// refused the cell a worker) — read off the vendored guard's own report of
     /// the hit, a harness notification that the harness's truncation of the
     /// model's view of the cell does not reach, or for `workers` off the

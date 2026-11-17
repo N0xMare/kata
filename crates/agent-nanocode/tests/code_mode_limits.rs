@@ -195,6 +195,84 @@ async fn an_allocation_past_the_memory_limit_fails_the_cell_and_the_next_cell_ru
     );
 }
 
+/// The `noop` tool a cell below calls, and whose result the test answers.
+fn noop_tool() -> Vec<serde_json::Value> {
+    vec![serde_json::json!({ "name": "noop", "tool_name": "noop", "kind": "function" })]
+}
+
+/// Runs `source` as cell `id` with the [`noop_tool`], answers its first tool
+/// call with `result` (`success` or failed), and reads the cell to its end.
+async fn run_answering(
+    host: &mut EmbeddedHost,
+    id: u64,
+    source: &str,
+    result: String,
+    success: bool,
+) -> code_mode_engine::Cell {
+    let started = start_with_tools(host, id, source, noop_tool());
+    let call = loop {
+        let event = tokio::time::timeout(code_mode_engine::EVENT_WITHIN, host.read_event())
+            .await
+            .unwrap_or_else(|_| panic!("cell {id}: no tool call"))
+            .unwrap_or_else(|error| panic!("cell {id}: the worker ended: {error}"));
+        match event {
+            nanocode_code_mode_engine::RuntimeEvent::ToolCall { id: call, .. } => break call,
+            nanocode_code_mode_engine::RuntimeEvent::Done { .. } => {
+                panic!("cell {id} completed before its tool call")
+            }
+            nanocode_code_mode_engine::RuntimeEvent::Error { message, .. } => {
+                panic!("cell {id} failed before its tool call: {message}")
+            }
+            _ => {}
+        }
+    };
+    host.send_tool_result(id, call, result, success)
+        .expect("the host takes the result");
+    collect(host, id, started).await
+}
+
+/// **A failed tool result whose text the heap cannot hold fails the cell with
+/// the engine's error and the memory report, and the next cell runs.** Under
+/// the 16 MiB heap a cell holds 12 MiB, calls a tool and catches its failure;
+/// the failure's text is a 6 MiB string, which the engine hands the cell's
+/// bootstrap (`Machine::deliver`'s `resolve`, a call the machine makes between
+/// two steps) and djs cannot allocate: the cell fails with `Script stopped: the
+/// cell ran out of memory.` and the memory report before it, as a heap hit
+/// inside a step does, and the next cell runs in the same interpreter.
+///
+/// **Would red if:** the engine failed its host on that heap hit rather than
+/// ending the cell (`EmbeddedHost::fail`'s out-of-memory arm in
+/// `vendor/nanocode-code-mode-engine.patch` removed: watched, the cell fails
+/// with `embedded Code Mode execution failed: out of memory` and no report).
+#[tokio::test]
+async fn a_failed_tool_result_past_the_heap_fails_the_cell_with_the_memory_report() {
+    let mut host = installed();
+    let first = run(&mut host, 1, TRIVIAL).await;
+    assert_eq!(first.error, None);
+    let pid = the_interpreter();
+    let failure = serde_json::Value::String("x".repeat(6 * MIB)).to_string();
+
+    let cell = run_answering(
+        &mut host,
+        2,
+        "const keep = new Uint8Array(12 << 20).fill(1);
+         try { await tools.noop({}); } catch (error) { notify(`caught ${String(error).length}`); }",
+        failure,
+        false,
+    )
+    .await;
+
+    assert_eq!(
+        (cell.error.as_deref(), cell.reported, cell.notified),
+        (
+            Some(OUT_OF_MEMORY),
+            Some(memory_report()),
+            Vec::<String>::new()
+        )
+    );
+    assert_next_cell_runs_in(&mut host, 3, pid).await;
+}
+
 /// **A spinning cell ends at its wall, by the interpreter process, which then
 /// runs the next cell.** Two spinners: a plain loop, and a microtask that
 /// queues its successor before it spins. While each spins the kernel charges

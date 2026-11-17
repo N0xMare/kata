@@ -7,11 +7,13 @@
 //! Under QuickJS a model-written bind flood met its out-of-memory defect in
 //! `Function.prototype.bind` and ended the process running the cell by
 //! SIGSEGV. Under djs a heap hit is uncatchable and the patched engine reports
-//! it, so the flood is a heap hit like any other: it ends no interpreter. No
-//! cell-reachable path that ends a djs interpreter is MEASURED, so the cell
-//! whose interpreter ends has it ended from outside, by SIGKILL, as the
-//! kernel's OOM killer ends one (every interpreter runs at `oom_score_adj`
-//! 1000, the first the killer picks).
+//! it, so the flood is a heap hit like any other: it ends no interpreter. A
+//! cell can end a djs interpreter by SIGABRT (a native recursion past its cell
+//! thread's stack, a native allocation past its address-space limit: MEASURED
+//! in `kata-code-mode-host`'s `interpreter_process.rs`); here the cell whose
+//! interpreter ends has it ended from outside, by SIGKILL, as the kernel's OOM
+//! killer ends one (every interpreter runs at `oom_score_adj` 1000, the first
+//! the killer picks), so the end lands while the cell waits.
 //!
 //! The witnesses do not share the adapter's code: the mock's log of the
 //! request bodies it received (what the model was told), and the kernel's

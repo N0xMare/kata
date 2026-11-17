@@ -6488,7 +6488,7 @@ binary = "code_mode_interpreter_through_adapter"
 test = "a_cell_whose_interpreter_is_killed_fails_to_the_model_and_the_turn_completes_on_both_kinds"
 kind = "host-free"
 layer = "L1"
-pins = "through the adapter on both kinds under kata's limits, a waiting cell whose interpreter process is killed from outside by SIGKILL (the OOM killer's stand-in; no cell-reachable way to end a djs interpreter by a signal is known) fails to the model with `Code Mode's interpreter process ended by SIGKILL`, the next cell runs, the turn completes, the evidence holds exactly `CodeModeInterpreterEnded{SIGKILL}`, and no interpreter is left after close (red with the adapter's `Ended::from_report` read removed)"
+pins = "through the adapter on both kinds under kata's limits, a waiting cell whose interpreter process is killed from outside by SIGKILL (the OOM killer's stand-in; a cell can end one itself by SIGABRT, pinned host-free by `a_native_recursion_past_the_thread_stack_ends_only_its_interpreter_and_is_reported` and `a_native_allocation_past_the_address_space_ends_only_its_interpreter`) fails to the model with `Code Mode's interpreter process ended by SIGKILL`, the next cell runs, the turn completes, the evidence holds exactly `CodeModeInterpreterEnded{SIGKILL}`, and no interpreter is left after close (red with the adapter's `Ended::from_report` read removed)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -6520,7 +6520,7 @@ binary = "code_mode_host_live"
 test = "a_killed_interpreter_ends_only_itself_under_the_worker_daemon_live"
 kind = "live"
 layer = "L1"
-pins = "a `nanocode_anthropic` stage in a real rootless capsule whose first Code Mode cell waits on a timer and whose second is one text (mock Messages model, the test-support door confirmed in the daemon's log before the submit), on a main whose worker is an external `kata-worker` daemon over `local_socket`: the test kills the waiting cell's interpreter, a child of the daemon, by SIGKILL (the OOM killer's stand-in; no cell-reachable way to end a djs interpreter by a signal is known); the daemon and the main are alive off `/proc` after it, the stage's `event_accepted|completed` is read through a second read-only handle, the mock's own log carries the killed interpreter's end naming `SIGKILL` and the next cell's text, the killed interpreter is reaped, and no interpreter child of the daemon is left alive or unreaped (red at 8ec3b215 with the supervisor reading the interpreter's end without reaping it: an unreaped child of the daemon)"
+pins = "a `nanocode_anthropic` stage in a real rootless capsule whose first Code Mode cell waits on a timer and whose second is one text (mock Messages model, the test-support door confirmed in the daemon's log before the submit), on a main whose worker is an external `kata-worker` daemon over `local_socket`: the test kills the waiting cell's interpreter, a child of the daemon, by SIGKILL (the OOM killer's stand-in; a cell can end one itself by SIGABRT, pinned host-free by `a_native_recursion_past_the_thread_stack_ends_only_its_interpreter_and_is_reported` and `a_native_allocation_past_the_address_space_ends_only_its_interpreter`); the daemon and the main are alive off `/proc` after it, the stage's `event_accepted|completed` is read through a second read-only handle, the mock's own log carries the killed interpreter's end naming `SIGKILL` and the next cell's text, the killed interpreter is reaped, and no interpreter child of the daemon is left alive or unreaped (red at 8ec3b215 with the supervisor reading the interpreter's end without reaping it: an unreaped child of the daemon)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -6976,7 +6976,7 @@ binary = "lib"
 test = "adapter::events::tests::a_guard_report_names_its_limit_and_nothing_else_does"
 kind = "host-free"
 layer = "L1"
-pins = "each of the vendored guard's four reports, as a whole text, names its limit (`wall`, `output`, `memory`, `stack`); the same words behind `Script error:`, with a suffix, without a number or with one that is not decimal digits, the stack report in its old sized form, an engine's own out-of-memory and stack messages, and the live-worker refusal name none"
+pins = "each of the five reports, as a whole text, names its limit (`wall`, `output`, `memory`, and `stack` for both djs's stack report and the supervisor's `Code Mode cell exceeded its <n>-byte native stack limit`, whose producer `native_stack_report` spells exactly the text read); the same words behind `Script error:`, with a suffix, without a number or with one that is not decimal digits, the stack report in its old sized form, an engine's own out-of-memory and stack messages, and the live-worker refusal name none"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -13958,7 +13958,7 @@ binary = "lib"
 test = "adapter::events::tests::a_guard_report_names_its_limit_and_nothing_else_does"
 kind = "host-free"
 layer = "L1"
-pins = "each of the vendored guard's four reports, as a whole text, names its limit (`wall`, `output`, `memory`, `stack`); the same words behind `Script error:`, with a suffix, without a number or with one that is not decimal digits, the stack report in its old sized form, an engine's own out-of-memory and stack messages, and the live-worker refusal name none"
+pins = "each of the five reports, as a whole text, names its limit (`wall`, `output`, `memory`, and `stack` for both djs's stack report and the supervisor's `Code Mode cell exceeded its <n>-byte native stack limit`, whose producer `native_stack_report` spells exactly the text read); the same words behind `Script error:`, with a suffix, without a number or with one that is not decimal digits, the stack report in its old sized form, an engine's own out-of-memory and stack messages, and the live-worker refusal name none"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14762,7 +14762,7 @@ binary = "code_mode_host_live"
 test = "a_killed_interpreter_ends_only_itself_under_the_worker_daemon_live"
 kind = "live"
 layer = "L1"
-pins = "a `nanocode_anthropic` stage in a real rootless capsule whose first Code Mode cell waits on a timer and whose second is one text (mock Messages model, the test-support door confirmed in the daemon's log before the submit), on a main whose worker is an external `kata-worker` daemon over `local_socket`: the test kills the waiting cell's interpreter, a child of the daemon, by SIGKILL (the OOM killer's stand-in; no cell-reachable way to end a djs interpreter by a signal is known); the daemon and the main are alive off `/proc` after it, the stage's `event_accepted|completed` is read through a second read-only handle, the mock's own log carries the killed interpreter's end naming `SIGKILL` and the next cell's text, the killed interpreter is reaped, and no interpreter child of the daemon is left alive or unreaped (red at 8ec3b215 with the supervisor reading the interpreter's end without reaping it: an unreaped child of the daemon)"
+pins = "a `nanocode_anthropic` stage in a real rootless capsule whose first Code Mode cell waits on a timer and whose second is one text (mock Messages model, the test-support door confirmed in the daemon's log before the submit), on a main whose worker is an external `kata-worker` daemon over `local_socket`: the test kills the waiting cell's interpreter, a child of the daemon, by SIGKILL (the OOM killer's stand-in; a cell can end one itself by SIGABRT, pinned host-free by `a_native_recursion_past_the_thread_stack_ends_only_its_interpreter_and_is_reported` and `a_native_allocation_past_the_address_space_ends_only_its_interpreter`); the daemon and the main are alive off `/proc` after it, the stage's `event_accepted|completed` is read through a second read-only handle, the mock's own log carries the killed interpreter's end naming `SIGKILL` and the next cell's text, the killed interpreter is reaped, and no interpreter child of the daemon is left alive or unreaped (red at 8ec3b215 with the supervisor reading the interpreter's end without reaping it: an unreaped child of the daemon)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -14947,6 +14947,30 @@ test = "a_recursion_past_the_stack_limit_fails_the_cell_with_its_report"
 kind = "host-free"
 layer = "L1"
 pins = "behind kata's interpreter process, an uncaught recursion past djs's stack limit ends the cell with djs's `RangeError: Maximum call stack size exceeded`, the interpreter reports `Code Mode cell exceeded its interpreter stack limit`, and the next cell runs"
+
+[[construct.cell]]
+package = "kata-code-mode-host"
+binary = "interpreter_process"
+test = "a_native_recursion_past_the_thread_stack_ends_only_its_interpreter_and_is_reported"
+kind = "host-free"
+layer = "L1"
+pins = "under an 8 MiB cell thread stack, `instanceof` against a chain of 100,000 bound functions ends the interpreter by SIGABRT; the cell's notifications are exactly the supervisor's `Code Mode cell exceeded its 8388608-byte native stack limit` then `Code Mode's interpreter process ended by SIGABRT`, its error carries Rust's `thread 'code-mode-cell' (` ... ` has overflowed its stack` line, and the next cell runs in a new interpreter (red with `End::overflowed_the_cell_thread` answering false: the end's report alone)"
+
+[[construct.cell]]
+package = "kata-code-mode-host"
+binary = "interpreter_process"
+test = "a_native_allocation_past_the_address_space_ends_only_its_interpreter"
+kind = "host-free"
+layer = "L1"
+pins = "under a 256 MiB heap, NFC-normalizing 80 million characters drives the interpreter's sampled VmHWM past the heap and fails an allocation on RLIMIT_AS: the cell's one notification is `Code Mode's interpreter process ended by SIGABRT` (no limit report), its error names `memory allocation of <n> bytes failed`, and the next cell runs in a new interpreter (red with RLIMIT_AS not set: the normalize completes, VmHWM 1,238,520 KiB)"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
+binary = "code_mode_limits"
+test = "a_failed_tool_result_past_the_heap_fails_the_cell_with_the_memory_report"
+kind = "host-free"
+layer = "L1"
+pins = "under a 16 MiB heap, a cell holding 12 MiB whose tool call is answered failed with a 6 MiB text fails with the engine's `Script stopped: the cell ran out of memory.` and the memory report before it, notifying nothing, and the next cell runs in the same interpreter (red with `EmbeddedHost::fail`'s out-of-memory arm removed from the patch: `embedded Code Mode execution failed: out of memory`, no report)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"

@@ -206,17 +206,27 @@ pub const HOST_SET_CLAUDE: [&str; 6] = ["Read", "Write", "Edit", "Bash", "TaskOu
 ///   not depend on the machine. djs keeps a script's call stack in this heap
 ///   (a `RangeError` past djs's own slot limit), so it bounds the stack too:
 ///   kata has no separate interpreter-stack limit since nanocode moved from
-///   QuickJS to djs.
+///   QuickJS to djs. The heap bounds what djs allocates for the script; djs's
+///   native builtins allocate outside it (MEASURED: `normalize` of 40 million
+///   characters completes at a 608 MiB resident peak), so one interpreter's
+///   memory is bounded by its address-space limit
+///   (`kata_code_mode_host::address_space_limit`, 1,288 MiB here), past which
+///   a native allocation ends that interpreter by SIGABRT.
 /// - `thread_stack_bytes`, 8 MiB: the stack of the interpreter's thread that
 ///   runs the cells, explicit rather than the inherited `RLIMIT_STACK`. djs runs
 ///   a script's frames on its heap, not on this stack; what a cell can push onto
-///   it is the native recursion of djs's own parsers and builtins, each bounded
-///   by djs. MEASURED (`tests/code_mode_stack_through_adapter.rs`): every shape
-///   measured completes on a 372 KiB thread stack (368 KiB overflows), the need
-///   set by djs's regular-expression parser at its 211 nested groups; `sort`,
+///   it is the native recursion of djs's own parsers and builtins. MEASURED
+///   (`tests/code_mode_stack_through_adapter.rs`): every shape measured there
+///   completes on a 372 KiB thread stack (368 KiB overflows), the need set by
+///   djs's regular-expression parser at its 211 nested groups; `sort`,
 ///   `setTimeout`, plain recursion and `JSON.parse` complete on 64 KiB. 8 MiB is
-///   22 times the need; that binary is red below twice it, and shows a thread
-///   stack too small ending only the interpreter (SIGABRT).
+///   22 times that need; that binary is red below twice it. Not every native
+///   recursion is bounded by djs: `instanceof` against a chain of bound
+///   functions recurses once per link, and 100,000 links overflow 8 MiB
+///   (MEASURED, `kata-code-mode-host`'s `interpreter_process.rs`). An overflow
+///   ends only the interpreter (SIGABRT), and its supervisor reports this limit
+///   (`Code Mode cell exceeded its <n>-byte native stack limit`, recorded as
+///   `CodeModeLimit{stack}`) before the end.
 /// - `cell_wall`, 300 s: the interpreter ends a cell running, waiting on a tool
 ///   or a timer past it, between two slices of its JavaScript. One long native
 ///   step (a split or join of hundreds of megabytes) runs to its end first; the
@@ -232,9 +242,9 @@ pub const HOST_SET_CLAUDE: [&str; 6] = ["Read", "Write", "Edit", "Bash", "TaskOu
 ///   events, not that cost.
 /// - `live_workers`, 8: Code Mode hosts live in this process at once, each
 ///   counted until its interpreter process is reaped. So the process's
-///   interpreters hold at most 8 x 256 MiB = 2 GiB of heap, each also under an
-///   address-space limit (`kata_code_mode_host::address_space_limit`), whatever
-///   the number of attempts or cells. A cell that would need a ninth host fails
+///   interpreters hold at most 8 x 256 MiB = 2 GiB of heap and 8 x 1,288 MiB,
+///   about 10 GiB, of address space (`kata_code_mode_host::address_space_limit`),
+///   whatever the number of attempts or cells. A cell that would need a ninth host fails
 ///   to the model. The cap is the process's, so concurrent attempts share it:
 ///   one attempt's running cells can leave another's next cell without a host
 ///   until one ends.

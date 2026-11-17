@@ -8,10 +8,12 @@
 //! a journal event, a `Held` no `Hold` asked for, more output than the cell's
 //! limit, a `Load` while no cell runs or while two answers are still being
 //! written), and kills it once a cell outlives its wall by [`WALL_GRACE`]. Its
-//! own reports of an interpreter's end are the only texts it writes into a
-//! cell's events, and a report's `Notify` is the report alone; the `Error`
-//! after it also carries, labelled, what the interpreter wrote to its standard
-//! error, which is the interpreter's text, not the supervisor's.
+//! own reports of an interpreter's end, and of the native stack overflow that
+//! ended one ([`native_stack_report`], read off its standard error), are the
+//! only texts it writes into a cell's events, and a report's `Notify` is the
+//! report alone; the `Error` after it also carries, labelled, what the
+//! interpreter wrote to its standard error, which is the interpreter's text,
+//! not the supervisor's.
 //!
 //! The supervisor never waits on the interpreter: what it sends goes to a
 //! writer thread of that interpreter's, so an interpreter that stops reading
@@ -668,6 +670,12 @@ impl Supervisor {
                 ..
             } => {}
             Phase::Running(cell) => {
+                if end.overflowed_the_cell_thread() {
+                    self.events.send(RuntimeEvent::Notify {
+                        cell_id: cell.id,
+                        text: native_stack_report(self.config.limits.thread_stack_bytes),
+                    });
+                }
                 let report = ended(end.status);
                 let message = match why {
                     Some(why) => format!("{report} ({why})"),
@@ -754,6 +762,38 @@ struct End {
     stderr: Stderr,
 }
 
+impl End {
+    /// Whether the interpreter ended on its cell thread's stack: by SIGABRT,
+    /// with Rust's stack-overflow handler's line for that thread
+    /// ([`crate::interpreter::CELL_THREAD`]) in what its standard error kept.
+    /// The guard page below that thread's `thread_stack_bytes` stops the
+    /// recursion; the handler names the thread and aborts. The line is the
+    /// interpreter's own text, so an interpreter that writes it and aborts
+    /// reads the same: a compromised one can report a stack hit that did not
+    /// happen, as it can any report.
+    fn overflowed_the_cell_thread(&self) -> bool {
+        let aborted = self
+            .status
+            .and_then(|status| status.signal())
+            .is_some_and(|signal| signal == libc::SIGABRT);
+        let named = format!("thread '{}' ", crate::interpreter::CELL_THREAD);
+        aborted
+            && self
+                .stderr
+                .lines()
+                .iter()
+                .any(|line| line.starts_with(&named) && line.ends_with(" has overflowed its stack"))
+    }
+}
+
+/// The report of a cell whose native recursion overflowed its interpreter's
+/// cell thread, a stack of `bytes`: sent before the report of the
+/// interpreter's end, which that overflow is.
+#[must_use]
+pub fn native_stack_report(bytes: usize) -> String {
+    format!("Code Mode cell exceeded its {bytes}-byte native stack limit")
+}
+
 /// What a drain kept of an interpreter's standard error: the last
 /// [`STDERR_CAP`] bytes, and how many it dropped before them.
 #[derive(Default)]
@@ -772,6 +812,15 @@ impl Stderr {
                 .dropped
                 .saturating_add(u64::try_from(excess).unwrap_or(u64::MAX));
         }
+    }
+
+    /// The lines of what was kept.
+    fn lines(&self) -> Vec<String> {
+        let kept: Vec<u8> = self.kept.iter().copied().collect();
+        String::from_utf8_lossy(&kept)
+            .lines()
+            .map(str::to_owned)
+            .collect()
     }
 
     /// `message`, followed by what was kept, when anything was, labelled as
