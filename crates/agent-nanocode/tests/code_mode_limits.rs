@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use code_mode_engine::{
     ALLOCATE_64_MIB, MIB, REQUEUEING_SPINNER, TRIVIAL, collect, resident_of, run, start,
-    start_with_tools,
+    start_with_tools, stored_after_terminate,
 };
 use kata_code_mode_host::{CELL_EVENT_BYTES, CodeModeLimits, Program, install};
 use nanocode_code_mode_engine::EmbeddedHost;
@@ -897,5 +897,27 @@ fn the_limits_install_once() {
         install(other, Program::this_executable()),
         Err((LIMITS, Program::this_executable())),
         "different limits are refused and the installed ones named"
+    );
+}
+
+/// **A cell its host terminates keeps none of its writes under kata's
+/// backend.** The cell stores `k`, says so, and spins; the host is terminated
+/// as nanocode terminates a cell its turn abandons, and `take_stored`, what
+/// nanocode merges into the session for a terminated cell, gives nothing: the
+/// interpreter process sends a cell's writes only with its terminal event, and
+/// a killed interpreter sends none. This DIVERGES from upstream at 8ec3b215,
+/// whose own host keeps the write (`code_mode_unlimited`'s
+/// `upstreams_host_keeps_a_terminated_cells_writes`, the same cell through the
+/// same helper): under kata, no write of a cell outlives the cell.
+///
+/// **Would red if:** a terminated cell's writes reached the host under kata's
+/// backend. Its twin is the falsifier: the same helper, on upstream's host,
+/// reads `["k"]` (watched).
+#[tokio::test]
+async fn a_cell_its_host_terminated_keeps_none_of_its_writes() {
+    let mut host = installed();
+    assert_eq!(
+        stored_after_terminate(&mut host, 1).await,
+        Vec::<String>::new()
     );
 }

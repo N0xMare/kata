@@ -143,10 +143,17 @@ needs:
   backend refuses fails with the backend's text. Without a backend, every host is
   upstream's. Under a backend, `take_stored` returns nothing: a cell's writes reach
   the host with its terminal event, so a cell its host terminated keeps none. This
-  differs from upstream at `8ec3b215`, which keeps a terminated cell's writes
+  DIVERGES from upstream at `8ec3b215`, which keeps a terminated cell's writes
   (`CellTerminal::Terminated { stored }`, filled from `take_stored`); at `2ac77424`
-  nanocode kept none either. A model whose cell kata terminates (its wall, a turn's
-  end) and that reads a value the cell wrote finds it absent under kata.
+  nanocode kept none either. kata keeps its behaviour on purpose: no work of a cell
+  outlives the cell, and a write the cell made before kata killed it (its wall, a
+  turn's end) is part of that work. A model that reads such a value finds it absent
+  under kata. Pinned by `code_mode_limits`'s
+  `a_cell_its_host_terminated_keeps_none_of_its_writes` (kata's backend: nothing
+  kept) and its twin `code_mode_unlimited`'s
+  `upstreams_host_keeps_a_terminated_cells_writes` (upstream's host, the same cell:
+  the write kept), which reds when upstream stops keeping it and this divergence is
+  gone.
 - `set_stored_loader(..)`: what answers a cell's `load` of a key the stored values
   its `start_cell` was given lack. kata's interpreter process starts every cell
   with none and loads each key from its parent as the cell asks (below).

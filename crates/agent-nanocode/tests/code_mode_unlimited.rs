@@ -17,7 +17,7 @@ mod quickjs_threads;
 
 use std::time::Duration;
 
-use code_mode_engine::{ALLOCATE_64_MIB, MIB, resident, run};
+use code_mode_engine::{ALLOCATE_64_MIB, MIB, resident, run, stored_after_terminate};
 use nanocode_code_mode_engine::EmbeddedHost;
 use quickjs_threads::interpreters;
 
@@ -86,4 +86,20 @@ async fn without_limits_a_cell_allocates_emits_and_waits_past_every_test_limit()
         interpreters()
     );
     host.terminate().await;
+}
+
+/// **Upstream's host keeps a terminated cell's writes** (nanocode 8ec3b215):
+/// the cell stores `k`, says so and spins, the host is terminated, and
+/// `take_stored` gives `k`, which nanocode merges into the session. kata's
+/// backend keeps none (`code_mode_limits`'s
+/// `a_cell_its_host_terminated_keeps_none_of_its_writes`, the same cell and
+/// helper); this twin shows the helper reads a kept write where one exists.
+///
+/// **Would red if:** upstream stopped keeping a terminated cell's writes (as
+/// at 2ac77424), when kata's divergence, and its statement in
+/// `docs/development/nanocode.md`, would be gone.
+#[tokio::test]
+async fn upstreams_host_keeps_a_terminated_cells_writes() {
+    let mut host = EmbeddedHost::spawn().expect("a host");
+    assert_eq!(stored_after_terminate(&mut host, 1).await, ["k"]);
 }

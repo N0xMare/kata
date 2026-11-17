@@ -195,3 +195,32 @@ pub const TRIVIAL: &str = "notify(\"next cell ran\");";
 pub const REQUEUEING_SPINNER: &str = "function spin() { Promise.resolve().then(spin); for (;;) {} }\n\
      Promise.resolve().then(spin);\n\
      await new Promise(() => {});";
+
+/// A cell that stores `k` and says so, then spins.
+pub const STORE_THEN_SPIN: &str = "store('k', 'v'); notify('stored'); for (;;) {}";
+
+/// Runs [`STORE_THEN_SPIN`] as cell `id` until it has said it stored `k`,
+/// terminates the host as nanocode does a cell its turn abandons, and answers
+/// the keys `take_stored` then gives, which nanocode merges into the session
+/// (`CellTerminal::Terminated { stored }`).
+pub async fn stored_after_terminate(host: &mut EmbeddedHost, id: u64) -> Vec<String> {
+    start(host, id, STORE_THEN_SPIN);
+    loop {
+        let event = tokio::time::timeout(EVENT_WITHIN, host.read_event())
+            .await
+            .unwrap_or_else(|_| panic!("cell {id}: no event in {EVENT_WITHIN:?}"))
+            .unwrap_or_else(|error| panic!("cell {id}: the host ended: {error}"));
+        match event {
+            RuntimeEvent::Notify { text, .. } if text == "stored" => break,
+            RuntimeEvent::Done { .. } => panic!("cell {id} ended before it was terminated"),
+            RuntimeEvent::Error { message, .. } => {
+                panic!("cell {id} failed before it was terminated: {message}")
+            }
+            _ => {}
+        }
+    }
+    host.terminate().await;
+    let mut keys: Vec<String> = host.take_stored().into_keys().collect();
+    keys.sort();
+    keys
+}

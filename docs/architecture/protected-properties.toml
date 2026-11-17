@@ -6460,6 +6460,22 @@ pins = "behind kata's interpreter process, a thrown TypeError and thrown errors 
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
+binary = "code_mode_limits"
+test = "a_cell_its_host_terminated_keeps_none_of_its_writes"
+kind = "host-free"
+layer = "L1"
+pins = "behind kata's interpreter process, a cell that stored `k`, said so and spins, terminated by its host, leaves `take_stored` (what nanocode merges into the session for a terminated cell) empty: no write outlives its cell under kata, where upstream at 8ec3b215 keeps it (its falsifier is the twin `code_mode_unlimited::upstreams_host_keeps_a_terminated_cells_writes`: the same cell and helper on upstream's host read `[\"k\"]`)"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
+binary = "code_mode_unlimited"
+test = "upstreams_host_keeps_a_terminated_cells_writes"
+kind = "host-free"
+layer = "L1"
+pins = "without kata's backend, upstream's own host at 8ec3b215 keeps a terminated cell's write: the cell stored `k`, said so and spun, the host was terminated, and `take_stored` gives `k` — the divergence kata's backend makes, stated in docs/development/nanocode.md"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
 binary = "code_mode_context_failure"
 test = "every_cell_under_a_heap_too_small_for_its_bootstrap_fails_and_the_next_is_answered"
 kind = "host-free"

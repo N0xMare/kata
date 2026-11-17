@@ -62,8 +62,10 @@ mod toolhost_client;
 pub use session::NanocodeSession;
 
 pub(crate) use seam::{WORKSPACE, host_tool_definitions};
+#[cfg(test)]
+pub(crate) use session::BYPASS_STEERS;
 pub(crate) use session::{
-    BYPASS_STEERS, CAPSULE_SHELL, CAPSULE_STATEMENT, PLATFORM, TIMEZONE, removed_system_blocks,
+    CAPSULE_SHELL, CAPSULE_STATEMENT, PLATFORM, TIMEZONE, removed_system_blocks,
 };
 
 /// The credential the worker loads for a harness turn, carried to the adapter
