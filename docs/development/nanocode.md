@@ -6,10 +6,12 @@ one upstream commit and tracks nanocode's `master` by moving that pin deliberate
 
 ## What kata takes from nanocode
 
-- **Four direct git dependencies** in the workspace `Cargo.toml`:
+- **Five direct git dependencies** in the workspace `Cargo.toml`:
   `nanocode-backend-codex`, `nanocode-backend-claude`,
-  `nanocode-process-contracts` and `nanocode-sync` (the stream trait of an HTTP
-  layer's response body, which kata's wire implements), all at one `rev`. `NANOCODE_REV` in
+  `nanocode-process-contracts`, `nanocode-sync` (the stream trait of an HTTP
+  layer's response body, which kata's wire implements) and `nanocode-http` (the
+  gzip codec of nanocode's Messages transport, with which kata's wire edit reads
+  and re-encodes a compressed body), all at one `rev`. `NANOCODE_REV` in
   `crates/agent-nanocode/src/lib.rs` names the same commit.
   `crates/agent-nanocode/tests/nanocode_seam.rs` refuses a `Cargo.lock` that
   resolves any nanocode package to another commit, and a host tool set that moved.
@@ -31,7 +33,19 @@ one upstream commit and tracks nanocode's `master` by moving that pin deliberate
   measured on 2026-11-12, that one line turns a key's 200 into a 400 `Your credit
   balance is too low`, as does the `claude-code-20250219` beta, which nanocode sends
   only on its subscription wire. The steer describes Claude Code's bypass permission
-  mode, which a kata capsule does not have. The edit re-serializes the body (the
+  mode, which a kata capsule does not have. nanocode gzips a body of 4 KiB or more
+  bound for `api.anthropic.com` (its `gzip_request_body`, `content-encoding: gzip`,
+  the JSON padded with random trailing whitespace) before the HTTP layer sees it, so
+  every real turn's request reaches the edit gzipped and only a test endpoint's as
+  JSON: the edit decodes a gzip body with nanocode's codec, edits it, and gzips it
+  again at nanocode's level with the padding kept. It refuses, unsent
+  (`kata_messages_body_unreadable`), a body it cannot read (another
+  `content-encoding`, gzip that does not decode, bytes that are not JSON), never
+  sending one unedited: until 2026-11-17 it sent such a body as it came, so every
+  funded `nanocode_anthropic` turn carried the identity first and was refused
+  `400 Your credit balance is too low`, MEASURED (the identity as the first system
+  block alone triggers it; the betas, the session header and metadata, the absent
+  user agent, gzip and `max_tokens` do not). The edit re-serializes the body (the
   same JSON, its members' order aside) and leaves a subscription request, whose
   billing line comes first, untouched. `nanocode_qualification`'s
   `each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer`
@@ -39,7 +53,12 @@ one upstream commit and tracks nanocode's `master` by moving that pin deliberate
   `claude-opus-5-5` and `claude-fable-5-1` and pins each model's own blocks and the
   absence of both; the unit cell
   `the_wire_edit_removes_the_identity_and_the_bypass_steer_and_nothing_else` pins
-  that the edit removes those blocks alone; `an_api_key_anthropic_request_carries_no_claude_code_mark`
+  that the edit removes those blocks alone;
+  `a_gzip_request_to_anthropic_leaves_without_the_identity_and_the_bypass_steer`
+  reads, with an independent decoder, what the wire hands the transport for a request
+  nanocode gzips for Anthropic's own host, and
+  `the_wire_edit_refuses_exactly_the_bodies_it_cannot_read` pins the refused set;
+  `an_api_key_anthropic_request_carries_no_claude_code_mark`
   reds on the identity line, the `claude-code-20250219` beta or a `metadata.user_id`
   naming an account in the request the mock receives. Since `8ec3b215` nanocode
   sends every API-key request `x-claude-code-session-id` and a `metadata.user_id`
@@ -812,7 +831,7 @@ runner's 30 s and 120 s re-run backoffs and the wire's backoff among it).
 commit sha, or a branch or tag the remote resolves, such as `master`. It runs these
 steps in order and stops at the first failure:
 
-1. `scripts/nanocode-vendor.py bump` rewrites the four direct pins in `Cargo.toml`
+1. `scripts/nanocode-vendor.py bump` rewrites the five direct pins in `Cargo.toml`
    and `NANOCODE_REV`. It then re-derives `vendor/nanocode-code-mode-engine` at the
    new rev and re-applies the patch. If the patch no longer applies, it fails
    loudly with `git apply`'s error and leaves the tree as the pristine upstream
@@ -909,6 +928,12 @@ The recipe does not finish the bump. After it:
   expiry then refuses the turn). `the_offline_status_reads_the_state_nanocode_wrote`
   (`crates/agent-nanocode/src/credential.rs`) reds on a rename; run it at the new
   rev.
+- Re-read how nanocode encodes a Messages body before its HTTP layer: at `8ec3b215`
+  its transport gzips a body of 4 KiB or more bound for `api.anthropic.com` at level
+  2 (`GZIP_LEVEL`, crate-private; kata's copy is `MESSAGES_GZIP_LEVEL`), padded with
+  trailing whitespace. A new encoding is refused by the wire edit, unsent, and
+  `a_gzip_request_to_anthropic_leaves_without_the_identity_and_the_bypass_steer`
+  reds; a test endpoint never sees the compressed body, so no mock cell would.
 - Re-read nanocode's per-model system blocks when
   `each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer`
   is red, and the default blocks for a new Claude Code or Agent SDK identity line:

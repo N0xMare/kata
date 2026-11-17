@@ -7396,6 +7396,22 @@ pins = "the Messages wire edit (`without_claude_code_blocks`) on the first reque
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
+binary = "lib"
+test = "adapter::session::tests::a_gzip_request_to_anthropic_leaves_without_the_identity_and_the_bypass_steer"
+kind = "host-free"
+layer = "L1"
+pins = "the first request a real nanocode code-only agent prepares for `https://api.anthropic.com/v1/messages`, for `claude-sonnet-5-5` and `claude-opus-5-5`, reaches the wire gzipped (nanocode compresses a body of 4 KiB or more bound for Anthropic's host before its HTTP layer sees it) and leaves `MessagesMark` still gzip and, read by an independent decoder (zlib-rs), without the Agent SDK identity or the bypass-mode steer, the rest of the body the JSON nanocode handed the wire and its whitespace padding kept (red at 26581d9f0: the edit read only an uncompressed body, so every real turn sent the identity first and the provider answered the funded `nanocode_anthropic` cells `400 Your credit balance is too low`, MEASURED 2026-11-17; red with the padding dropped)"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
+binary = "lib"
+test = "adapter::session::tests::the_wire_edit_refuses_exactly_the_bodies_it_cannot_read"
+kind = "host-free"
+layer = "L1"
+pins = "the Messages wire edit refuses (unsent, `kata_messages_body_unreadable`) exactly a body it cannot read: a `content-encoding` other than gzip (`deflate`, `br`), gzip that does not decode, and an identity-coded body that is not JSON; a JSON body with no `system` array, plain or gzipped, passes byte for byte (red with a non-JSON body sent as it came, the pre-fix behaviour)"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
 binary = "nanocode_qualification"
 test = "each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer"
 kind = "host-free"
@@ -14079,6 +14095,22 @@ test = "adapter::session::tests::the_wire_edit_removes_the_identity_and_the_bypa
 kind = "host-free"
 layer = "L1"
 pins = "the Messages wire edit (`without_claude_code_blocks`) on the first request a real nanocode code-only agent sends with its own blocks, for `claude-sonnet-4-6`, `claude-opus-5-5` and `claude-fable-5-1`, leaves the headers byte for byte and the body the same JSON but for the Agent SDK identity block that opened `system` and, for Opus 5.5 and Fable 5.1, nanocode's bypass-mode steer block; a subscription request, billing line first, is left byte for byte (red with `system` cleared, and with the identity matched anywhere in `system`)"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
+binary = "lib"
+test = "adapter::session::tests::a_gzip_request_to_anthropic_leaves_without_the_identity_and_the_bypass_steer"
+kind = "host-free"
+layer = "L1"
+pins = "the first request a real nanocode code-only agent prepares for `https://api.anthropic.com/v1/messages`, for `claude-sonnet-5-5` and `claude-opus-5-5`, reaches the wire gzipped (nanocode compresses a body of 4 KiB or more bound for Anthropic's host before its HTTP layer sees it) and leaves `MessagesMark` still gzip and, read by an independent decoder (zlib-rs), without the Agent SDK identity or the bypass-mode steer, the rest of the body the JSON nanocode handed the wire and its whitespace padding kept (red at 26581d9f0: the edit read only an uncompressed body, so every real turn sent the identity first and the provider answered the funded `nanocode_anthropic` cells `400 Your credit balance is too low`, MEASURED 2026-11-17; red with the padding dropped)"
+
+[[construct.cell]]
+package = "kata-agent-nanocode"
+binary = "lib"
+test = "adapter::session::tests::the_wire_edit_refuses_exactly_the_bodies_it_cannot_read"
+kind = "host-free"
+layer = "L1"
+pins = "the Messages wire edit refuses (unsent, `kata_messages_body_unreadable`) exactly a body it cannot read: a `content-encoding` other than gzip (`deflate`, `br`), gzip that does not decode, and an identity-coded body that is not JSON; a JSON body with no `system` array, plain or gzipped, passes byte for byte (red with a non-JSON body sent as it came, the pre-fix behaviour)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"

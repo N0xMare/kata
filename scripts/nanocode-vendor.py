@@ -14,7 +14,7 @@ THE VENDORED TREE IS A FUNCTION OF THREE INPUTS. `vendor/nanocode-code-mode-engi
 must be byte for byte, file for file, mode for mode:
 
   1. the upstream copy: every file under `crates/runtime/code-mode-engine` at the
-     rev the workspace pins its four direct nanocode dependencies to, plus the
+     rev the workspace pins its five direct nanocode dependencies to, plus the
      repository's `LICENSE-MIT` and `LICENSE-APACHE`, read from git objects (so
      no `.gitattributes` export rule and no checkout state can change a byte);
   2. with its `Cargo.toml` workspace-inherited fields resolved against
@@ -27,7 +27,7 @@ must be byte for byte, file for file, mode for mode:
 `check` REFUSES (exit 1, every difference named) a vendored tree that differs
 from that derivation in any way: a changed, missing or extra file, a changed
 executable bit, a symlink, a patch file that does not apply, or a workspace whose
-four direct nanocode pins disagree, are not on the nanocode repository, or whose
+five direct nanocode pins disagree, are not on the nanocode repository, or whose
 `[patch]` entry does not route the crate to `vendor/`. It refuses when it cannot
 derive the expectation at all (an upstream rev it cannot fetch): a check that
 cannot look is a refusal, never a pass. It does not see what cargo resolves
@@ -38,7 +38,7 @@ Subcommands:
     check            refuse a vendored tree that is not upstream@rev + the patch
     vendor           re-derive the tree at the pinned rev and re-apply the patch
     record           rewrite the patch file as the diff from upstream@rev to the tree
-    bump <rev>       move the four direct pins and NANOCODE_REV to <rev> (a commit
+    bump <rev>       move the five direct pins and NANOCODE_REV to <rev> (a commit
                      sha, branch or tag) and re-vendor; `just nanocode-bump` then
                      updates the lock and runs flake-hash
     flake-hash       point flake.nix's `nanocodeHash` at the locked rev
@@ -67,13 +67,14 @@ REPOSITORY = "https://github.com/nanocodexyz/nanocode"
 CRATE = "nanocode-code-mode-engine"
 UPSTREAM_PATH = "crates/runtime/code-mode-engine"
 LICENCE_FILES = ("LICENSE-MIT", "LICENSE-APACHE")
-# The three crates the workspace depends on from nanocode's git source; their
+# The five crates the workspace depends on from nanocode's git source; their
 # shared `rev` is the one rev the vendored copy must come from.
 DIRECT_CRATES = (
     "nanocode-backend-codex",
     "nanocode-backend-claude",
     "nanocode-process-contracts",
     "nanocode-sync",
+    "nanocode-http",
 )
 VENDOR_REL = f"vendor/{CRATE}"
 PATCH_REL = f"vendor/{CRATE}.patch"
@@ -471,7 +472,7 @@ def record(layout: Layout) -> None:
 
 
 def bump(layout: Layout, name: str) -> str:
-    """Move the four direct pins and `NANOCODE_REV` to `name`'s commit and re-vendor.
+    """Move the five direct pins and `NANOCODE_REV` to `name`'s commit and re-vendor.
 
     The lock and the flake hash follow (`just nanocode-bump` runs cargo, then
     `flake-hash`). A patch that no longer applies refuses with the pins moved and

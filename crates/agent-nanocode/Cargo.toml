@@ -30,6 +30,10 @@ nanocode-process-contracts.workspace = true
 # The stream trait of a Messages HTTP layer's response body: kata's wire hands
 # nanocode bodies of its own (`adapter::wire`).
 nanocode-sync.workspace = true
+# The gzip codec nanocode's own Messages transport uses: it compresses a body bound
+# for Anthropic's host before the client's HTTP layer sees it, so the wire's edit
+# decodes it and encodes the edited body again (`adapter::session`).
+nanocode-http.workspace = true
 # The vendored Code Mode engine (`vendor/nanocode-code-mode-engine`): its
 # re-export of nanocode's platform (`platform`), on which the adapter installs
 # kata's tokio runtime as nanocode's host (`adapter::platform`).
@@ -89,6 +93,9 @@ toml.workspace = true
 blake3.workspace = true
 # `credential`'s cells mint unsigned JWTs for the stored ChatGPT login.
 base64.workspace = true
+# The wire cells read a gzip request body with a decoder that is not nanocode's
+# (the one the wire edit itself uses). Already in the lockfile through gix.
+zlib-rs = "0.6.3"
 
 [lints]
 workspace = true

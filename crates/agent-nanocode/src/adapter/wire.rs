@@ -579,8 +579,14 @@ pub(crate) fn send_messages<'a>(
     if let Err(refusal) = wire.admit(&key) {
         return Box::pin(async move { Err(layer::Error::new(refusal.message()).unsent(true)) });
     }
+    let request = match super::session::without_claude_code_blocks(request) {
+        Ok(request) => request,
+        Err(refusal) => {
+            return Box::pin(async move { Err(layer::Error::new(refusal).unsent(true)) });
+        }
+    };
     let wire = Arc::clone(wire);
-    let sent = next.send(super::session::without_claude_code_blocks(request));
+    let sent = next.send(request);
     Box::pin(async move {
         match sent.await {
             Err(error) => {

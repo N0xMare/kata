@@ -236,22 +236,53 @@ pub(crate) const PLATFORM: &str = "linux";
 ///   whose text is exactly one of them. It opens "While bypass permissions mode
 ///   is active:", a Claude Code permission mode; a kata capsule has none.
 ///
+/// The body is read as nanocode put it on the wire: nanocode gzips a body of
+/// 4 KiB or more bound for `api.anthropic.com` (its `gzip_request_body`)
+/// BEFORE the client's HTTP layer sees it, so every real turn's request
+/// arrives here as gzip (`content-encoding: gzip`) and only a test endpoint's
+/// as JSON. A gzip body is decoded, edited, and gzipped again at nanocode's
+/// level with nanocode's codec, its trailing whitespace padding (nanocode's
+/// `gzip_padded`) kept; the header stays. A body the edit cannot read (another
+/// `content-encoding`, gzip that does not decode, or bytes that are not JSON)
+/// is refused, `Err` naming why, and never sent unedited: an unread body may
+/// carry either block.
+///
 /// Any other request (one whose first block is anything else, a subscription
-/// request's billing line among them, one with no listed steer, or a body that
-/// is not a JSON object with a `system` array) goes as it came. The rest of the
-/// prompt is nanocode's own selection for the turn's model (its
-/// `instructions::default_system_blocks`, which no public API exposes, so kata
-/// leaves the selection to nanocode and edits the wire). The edited body is the
-/// same JSON re-serialized: its members' order may differ, its values do not.
-pub(super) fn without_claude_code_blocks(mut request: layer::Request) -> layer::Request {
-    let Ok(mut body) = serde_json::from_slice::<serde_json::Value>(&request.body) else {
-        return request;
+/// request's billing line among them, one with no listed steer, or a JSON body
+/// that is not an object with a `system` array) goes as it came, byte for
+/// byte. The rest of the prompt is nanocode's own selection for the turn's
+/// model (its `instructions::default_system_blocks`, which no public API
+/// exposes, so kata leaves the selection to nanocode and edits the wire). The
+/// edited body is the same JSON re-serialized: its members' order may differ,
+/// its values do not.
+pub(super) fn without_claude_code_blocks(
+    mut request: layer::Request,
+) -> Result<layer::Request, String> {
+    let gzip = match request.headers.get(nanocode_http::header::CONTENT_ENCODING) {
+        None => false,
+        Some(coding) if coding.as_bytes() == b"gzip" => true,
+        Some(coding) => {
+            return Err(format!(
+                "{UNREADABLE_MESSAGES_BODY}: its content-encoding is `{}`",
+                String::from_utf8_lossy(coding.as_bytes())
+            ));
+        }
     };
+    let decoded = if gzip {
+        Cow::Owned(
+            nanocode_http::decode_body(nanocode_http::FlateCoding::Gzip, &request.body)
+                .map_err(|error| format!("{UNREADABLE_MESSAGES_BODY}: its gzip: {error}"))?,
+        )
+    } else {
+        Cow::Borrowed(request.body.as_slice())
+    };
+    let mut body = serde_json::from_slice::<serde_json::Value>(&decoded)
+        .map_err(|error| format!("{UNREADABLE_MESSAGES_BODY}: its JSON: {error}"))?;
     let Some(system) = body
         .get_mut("system")
         .and_then(serde_json::Value::as_array_mut)
     else {
-        return request;
+        return Ok(request);
     };
     let text = |block: &serde_json::Value| {
         block
@@ -269,13 +300,29 @@ pub(super) fn without_claude_code_blocks(mut request: layer::Request) -> layer::
         !text(block).is_some_and(|text| BYPASS_STEERS.iter().any(|steer| text == *steer))
     });
     if system.len() == before {
-        return request;
+        return Ok(request);
     }
-    if let Ok(bytes) = serde_json::to_vec(&body) {
-        request.body = bytes;
-    }
-    request
+    let mut edited = serde_json::to_vec(&body)
+        .map_err(|error| format!("{UNREADABLE_MESSAGES_BODY}: re-serializing it: {error}"))?;
+    edited.extend_from_slice(&decoded[decoded.trim_ascii_end().len()..]);
+    request.body = if gzip {
+        nanocode_http::gzip(&edited, MESSAGES_GZIP_LEVEL)
+            .map_err(|error| format!("{UNREADABLE_MESSAGES_BODY}: gzipping it again: {error}"))?
+    } else {
+        edited
+    };
+    Ok(request)
 }
+
+/// How a Messages request [`without_claude_code_blocks`] cannot read is
+/// refused.
+const UNREADABLE_MESSAGES_BODY: &str = "kata_messages_body_unreadable: kata removes the Claude \
+     Code identity and the bypass-mode steer from every Messages request and could not read \
+     this one, so it is not sent";
+
+/// The gzip level nanocode's Messages transport compresses at (its
+/// crate-private `GZIP_LEVEL`, `8ec3b215`).
+const MESSAGES_GZIP_LEVEL: u32 = 2;
 
 /// The whole text of each bypass-mode steer nanocode appends for a model,
 /// `bypass` then that model's `steer` from its `prompts/bash-first.json`
@@ -1887,7 +1934,8 @@ mod tests {
             ("claude-fable-5-1", true),
         ] {
             let sent = first_claude_request(api_key_client(), model).await;
-            let edited = super::without_claude_code_blocks(sent.clone());
+            let edited = super::without_claude_code_blocks(sent.clone())
+                .expect("a JSON body the edit reads");
             assert_eq!(edited.headers, sent.headers, "{model}");
             let mut expected: serde_json::Value =
                 serde_json::from_slice(&sent.body).expect("a JSON Messages body");
@@ -1921,9 +1969,231 @@ mod tests {
             identity,
             "billing line, then it"
         );
-        let edited = super::without_claude_code_blocks(sent.clone());
+        let edited =
+            super::without_claude_code_blocks(sent.clone()).expect("a JSON body the edit reads");
         assert_eq!(edited.headers, sent.headers);
         assert_eq!(edited.body, sent.body);
+    }
+
+    /// What [`MessagesMark`] hands the transport, kept as it would leave and
+    /// answered unsent: the layer of a client whose requests a real nanocode
+    /// agent prepares, with a sink for the transport.
+    struct MarkedSink {
+        mark: MessagesMark,
+        handed: Sink,
+        sink: Sink,
+    }
+
+    impl nanocode_backend_claude::transport::Layer for MarkedSink {
+        fn send<'a>(
+            &'a self,
+            request: layer::Request,
+            _next: layer::Next<'a>,
+        ) -> layer::BoxFuture<'a, Result<layer::Response, layer::Error>> {
+            self.handed
+                .0
+                .lock()
+                .expect("handed")
+                .get_or_insert(request.clone());
+            self.mark.send(request, layer::Next::new(&self.sink))
+        }
+    }
+
+    /// A transport that keeps the first request it is handed and sends none.
+    #[derive(Clone, Default)]
+    struct Sink(Arc<std::sync::Mutex<Option<layer::Request>>>);
+
+    impl layer::Sender for Sink {
+        fn send(
+            &self,
+            request: layer::Request,
+        ) -> layer::BoxFuture<'_, Result<layer::Response, layer::Error>> {
+            self.0.lock().expect("sink").get_or_insert(request);
+            Box::pin(async { Err(layer::Error::new("sunk").unsent(true)) })
+        }
+    }
+
+    /// A gzip body as an independent decoder (zlib-rs, not nanocode's) reads
+    /// it.
+    fn gunzip(body: &[u8]) -> Vec<u8> {
+        let mut output = vec![0_u8; 4 << 20];
+        let (decoded, code) = zlib_rs::decompress_slice(
+            &mut output,
+            body,
+            zlib_rs::InflateConfig { window_bits: 31 },
+        );
+        assert_eq!(code, zlib_rs::ReturnCode::Ok, "a whole gzip body");
+        decoded.to_vec()
+    }
+
+    /// **An API-key request to Anthropic's own host leaves without the Agent
+    /// SDK identity and the bypass-mode steer, though nanocode gzips it.**
+    /// nanocode compresses a Messages body of 4 KiB or more when the endpoint's
+    /// host is `api.anthropic.com` (its `gzip_request_body`), BEFORE its HTTP
+    /// layer sees it, so [`MessagesMark`] is handed gzip bytes on every real
+    /// turn and JSON only on a test endpoint. The first request a real nanocode
+    /// code-only agent prepares for the live cells' `claude-sonnet-5-5` and for
+    /// `claude-opus-5-5` (which nanocode steers), as the wire hands it to the
+    /// transport: still gzip, and, decoded by zlib-rs, a system prompt with
+    /// neither block, written out here; the rest of the body the JSON nanocode
+    /// handed the wire, and its whitespace padding the same.
+    ///
+    /// **Would red if:** the edit read only an uncompressed body (watched at
+    /// 26581d9f0: the gzip body went as it came, the identity first, and the
+    /// provider answered the live cells `400 Your credit balance is too low`).
+    #[tokio::test]
+    async fn a_gzip_request_to_anthropic_leaves_without_the_identity_and_the_bypass_steer() {
+        for model in ["claude-sonnet-5-5", "claude-opus-5-5"] {
+            let (handed, sink) = (Sink::default(), Sink::default());
+            let client = nanocode_backend_claude::ClaudeClient::with_api_key(
+                "https://api.anthropic.com/v1/messages".to_owned(),
+                "sk-ant-unit-not-a-key".to_owned(),
+            )
+            .with_http_layer(MarkedSink {
+                mark: MessagesMark {
+                    gate: Arc::new(TurnGate::new()),
+                    wire: Arc::default(),
+                },
+                handed: handed.clone(),
+                sink: sink.clone(),
+            });
+            super::super::platform::install().expect("kata's platform host installs");
+            let environment = nanocode_backend_claude::ClaudeEnvironment::new()
+                .working_directory(super::WORKSPACE)
+                .git_repository(true)
+                .platform(super::PLATFORM)
+                .shell(super::CAPSULE_SHELL)
+                .date("2026-11-17".to_owned());
+            let (agent, _events) = nanocode_backend_claude::Claude::builder(client, model)
+                .tools_factory(|_| Ok(nanocode_backend_claude::ClaudeTools::new()))
+                .code_only(true)
+                .workspace(super::WORKSPACE)
+                .environment(environment)
+                .build()
+                .expect("a Claude agent with no tool builds");
+            let turn = agent.prompt("go").await.expect("the turn is admitted");
+            let _ = tokio::time::timeout(std::time::Duration::from_secs(30), turn.result())
+                .await
+                .expect("an unsent first request ends the turn");
+            drop(agent.shutdown().await);
+            let sent = sink
+                .0
+                .lock()
+                .expect("sink")
+                .take()
+                .unwrap_or_else(|| panic!("{model}: the wire handed the transport no request"));
+            assert_eq!(
+                sent.headers
+                    .get("content-encoding")
+                    .and_then(|value| value.to_str().ok()),
+                Some("gzip"),
+                "{model}: nanocode gzips a request to Anthropic's own host"
+            );
+            let decoded = gunzip(&sent.body);
+            let body: serde_json::Value =
+                serde_json::from_slice(&decoded).expect("a JSON Messages body");
+            assert_eq!(body["model"], model);
+            let original = gunzip(
+                &handed
+                    .0
+                    .lock()
+                    .expect("handed")
+                    .take()
+                    .expect("handed")
+                    .body,
+            );
+            let padding = |bytes: &[u8]| bytes[bytes.trim_ascii_end().len()..].to_vec();
+            assert_eq!(
+                padding(&decoded),
+                padding(&original),
+                "{model}: the padding"
+            );
+            let mut expected: serde_json::Value =
+                serde_json::from_slice(&original).expect("a JSON Messages body");
+            expected["system"]
+                .as_array_mut()
+                .expect("system blocks")
+                .retain(|block| {
+                    block["text"].as_str().is_some_and(|text| {
+                        text != "You are a Claude agent, built on Anthropic's Claude Agent SDK."
+                            && !text.starts_with("While bypass permissions mode is active:")
+                    })
+                });
+            assert_eq!(body, expected, "{model}: the rest of the body");
+            let system: Vec<&str> = body["system"]
+                .as_array()
+                .expect("system blocks")
+                .iter()
+                .map(|block| block["text"].as_str().unwrap_or_default())
+                .collect();
+            assert!(
+                system[0].starts_with("\nYou are an agent working with the user"),
+                "{model}: nanocode's upstream block opens the prompt: {system:#?}"
+            );
+            assert!(
+                !system.iter().any(|text| {
+                    text.contains("You are a Claude agent, built on Anthropic's Claude Agent SDK.")
+                        || text.starts_with("While bypass permissions mode is active:")
+                }),
+                "{model}: a Claude Code block left: {system:#?}"
+            );
+        }
+    }
+
+    /// **The wire edit refuses exactly the bodies it cannot read, and passes a
+    /// readable one with no `system` byte for byte.** Refused (`Err`, so
+    /// [`MessagesMark`] sends nothing): a `content-encoding` other than gzip
+    /// (`deflate`, `br`), a gzip body that does not decode, and an identity-coded
+    /// body that is not JSON. Not refused: a JSON body with no `system` array,
+    /// plain and gzipped, each left as it came.
+    ///
+    /// **Would red if:** an unreadable body went as it came (watched: the
+    /// pre-fix edit's `return request` on a body it could not parse), or a
+    /// readable body without blocks were refused or re-encoded.
+    #[test]
+    fn the_wire_edit_refuses_exactly_the_bodies_it_cannot_read() {
+        let request = |coding: Option<&'static str>, body: Vec<u8>| {
+            let mut headers = nanocode_http::types::HeaderMap::new();
+            if let Some(coding) = coding {
+                headers.insert(
+                    nanocode_http::header::CONTENT_ENCODING,
+                    nanocode_http::types::HeaderValue::from_static(coding),
+                );
+            }
+            layer::Request {
+                method: nanocode_http::Method::POST,
+                url: "https://api.anthropic.com/v1/messages".to_owned(),
+                headers,
+                body,
+            }
+        };
+        let json = br#"{"model":"claude-sonnet-5-5","messages":[]}"#.to_vec();
+        let gzipped = nanocode_http::gzip(&json, 2).expect("gzip");
+        for (what, refused) in [
+            ("deflate", request(Some("deflate"), gzipped.clone())),
+            ("br", request(Some("br"), json.clone())),
+            (
+                "gzip that does not decode",
+                request(Some("gzip"), json.clone()),
+            ),
+            ("not JSON", request(None, b"not json".to_vec())),
+        ] {
+            let refusal =
+                super::without_claude_code_blocks(refused).expect_err(&format!("{what}: refused"));
+            assert!(
+                refusal.starts_with("kata_messages_body_unreadable:"),
+                "{what}: {refusal}"
+            );
+        }
+        for (what, readable) in [
+            ("plain", request(None, json.clone())),
+            ("gzip", request(Some("gzip"), gzipped.clone())),
+        ] {
+            let passed = super::without_claude_code_blocks(readable.clone())
+                .unwrap_or_else(|refusal| panic!("{what}: {refusal}"));
+            assert_eq!(passed.body, readable.body, "{what}: byte for byte");
+            assert_eq!(passed.headers, readable.headers, "{what}");
+        }
     }
 
     /// **kata's own refusal of a Messages request reads as the gate's, and no

@@ -3606,6 +3606,7 @@ dependencies = [
  "nanocode-backend-claude",
  "nanocode-backend-codex",
  "nanocode-code-mode-engine",
+ "nanocode-http",
  "nanocode-process-contracts",
  "nanocode-sync",
  "reqwest",
@@ -3620,6 +3621,7 @@ dependencies = [
  "toml 0.8.23",
  "tracing",
  "ulid",
+ "zlib-rs",
 ]
 
 [[package]]
