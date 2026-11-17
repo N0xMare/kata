@@ -54,7 +54,8 @@ use kata_types::metering::{EstimateBasis, MeteredCost, ProviderCost};
 /// The `YYYY-MM` the shipped [`PRICE_TABLE`] list prices were captured: the
 /// Anthropic rows, read off Anthropic's official pricing page,
 /// <https://platform.claude.com/docs/en/about-claude/pricing> (fetched
-/// 2026-11-02; `docs.anthropic.com/en/docs/about-claude/pricing` redirects
+/// 2026-11-02, and again 2026-11-16 for the Fable 5.2 and Mythos 5.2 rows;
+/// `docs.anthropic.com/en/docs/about-claude/pricing` redirects
 /// there), and the model ids off
 /// <https://platform.claude.com/docs/en/about-claude/models/overview> (same
 /// fetch).
@@ -144,7 +145,8 @@ fn parse_year_month(s: &str) -> Option<(i32, u32)> {
 /// Anthropic's list prices per MTok, as of [`PRICE_TABLE_AS_OF`] (source and
 /// fetch date there), for the Claude 5 ids a `nanocode_anthropic` turn can pin
 /// (nanocode's `ClaudeModel`, 8ec3b215) that the page prices at a flat rate.
-/// Cache reads are 0.025× input on Fable 5.1 and Mythos 5.1, 0.05× on Opus 5.5
+/// Cache reads are 0.025× input on Fable 5.2, Mythos 5.2, Fable 5.1 and Mythos
+/// 5.1, 0.05× on Opus 5.5
 /// and Sonnet 5.5 (the page's footnotes); a cache WRITE is priced at the 5-minute write
 /// rate, 1.25× input, because that is the only write a priced turn makes: nanocode
 /// requests a one-hour TTL only when `cache_one_hour` is set (its builder's, or a
@@ -155,8 +157,9 @@ fn parse_year_month(s: &str) -> Option<(i32, u32)> {
 /// Claude Haiku 5.5) include the full 1M token context window at standard
 /// pricing").
 ///
-/// `claude-mythos-5-1` is the id nanocode pins for the page's "Claude Mythos 5.1"
-/// (limited availability); the models page lists no id for it.
+/// `claude-mythos-5-1` and `claude-mythos-5-2` are the ids nanocode pins for the
+/// page's "Claude Mythos 5.1" and "Claude Mythos 5.2" (limited availability);
+/// the models page lists no id for either.
 ///
 /// Left out, each by its reason, so a turn on it is estimated at the
 /// unknown-model floor (an upper bound, `$15`/`$75` per MTok, above every
@@ -165,14 +168,30 @@ fn parse_year_month(s: &str) -> Option<(i32, u32)> {
 /// tokens it pays the higher tier) and a turn's summed usage cannot say which
 /// requests crossed; `claude-fable-5-5`, which nanocode names, is on neither of
 /// Anthropic's pages; the legacy `claude-opus-5`, `claude-sonnet-5` and
-/// `claude-fable-5` are ids nanocode refuses, so no priced adapter runs them;
-/// `claude-fable-5-2` and `claude-mythos-5-2`, which nanocode names since
-/// 8ec3b215, have no price fetched for them yet.
+/// `claude-fable-5` are ids nanocode refuses, so no priced adapter runs them.
 /// Not modelled: the 1.1× US `inference_geo`
 /// multiplier and fast mode, neither of which kata or nanocode requests, and the
 /// Batch API, which an agent turn never uses.
 static PRICE_TABLE: &[(BillingBackend, &str, f64, f64, f64, f64, &str)] = &[
     // ── Anthropic: input, output, cache read ×, 5-minute cache write × ──
+    (
+        BillingBackend::Anthropic,
+        "claude-fable-5-2",
+        8.0,
+        40.0,
+        0.025,
+        1.25,
+        PRICE_TABLE_AS_OF,
+    ),
+    (
+        BillingBackend::Anthropic,
+        "claude-mythos-5-2",
+        8.0,
+        40.0,
+        0.025,
+        1.25,
+        PRICE_TABLE_AS_OF,
+    ),
     (
         BillingBackend::Anthropic,
         "claude-fable-5-1",

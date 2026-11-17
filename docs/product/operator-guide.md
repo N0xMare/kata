@@ -575,10 +575,11 @@ any model call, rather than run the turn at a default the node never stated.
 Declaring nothing sends nothing — the model's own default applies.
 
 `nanocode_anthropic` bills against the built-in `anthropic` rows: an `api_key`
-turn on `claude-fable-5-1`, `claude-mythos-5-1`, `claude-opus-5-5` or
-`claude-sonnet-5-5` is `estimated` from Anthropic's list prices (input, output,
-cache read, and the 5-minute cache write, each at its own rate — read off
-Anthropic's pricing page 2026-11-02, dated `2026-11` on every estimate), any
+turn on `claude-fable-5-2`, `claude-mythos-5-2`, `claude-fable-5-1`,
+`claude-mythos-5-1`, `claude-opus-5-5` or `claude-sonnet-5-5` is `estimated`
+from Anthropic's list prices (input, output, cache read, and the 5-minute cache
+write, each at its own rate — read off Anthropic's pricing page 2026-11-02, the
+5.2 rows 2026-11-16, dated `2026-11` on every estimate), any
 other model at the unknown-model floor (`claude-haiku-5-5` is priced per
 request's prompt length, which a turn's summed usage cannot state), and a
 `subscription` turn is `Unavailable`. `nanocode_openai` has no billing backend:

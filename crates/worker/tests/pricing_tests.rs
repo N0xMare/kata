@@ -759,7 +759,7 @@ fn a_nan_pricing_rate_is_refused_by_the_snapshot_loader() {
 /// **Every built-in Anthropic row charges each token class at the page's own
 /// price.** The figures below are written out from Anthropic's pricing table
 /// (<https://platform.claude.com/docs/en/about-claude/pricing>, fetched
-/// 2026-11-02) as `$ / MTok` for base input, 5-minute cache writes, cache hits
+/// 2026-11-02; the Fable 5.2 and Mythos 5.2 rows 2026-11-16) as `$ / MTok` for base input, 5-minute cache writes, cache hits
 /// and output — not derived from the table's multipliers — and one million
 /// tokens of each class alone must cost exactly that, dated
 /// `PRICE_TABLE_AS_OF`. `claude-haiku-5-5` (priced per request's prompt
@@ -768,11 +768,14 @@ fn a_nan_pricing_rate_is_refused_by_the_snapshot_loader() {
 ///
 /// **Would red if:** a row's rate or multiplier disagreed with the page (a
 /// cache read at the standard 0.1x on Sonnet 5.5, a write at the 1-hour 2x),
-/// or a row were dated other than by the table's date.
+/// or a row were dated other than by the table's date (red before the Fable 5.2
+/// and Mythos 5.2 rows: both estimated at the unknown-model floor).
 #[test]
 fn the_anthropic_rows_charge_each_class_at_the_pages_price() {
     // (model, base input, 5m cache write, cache hit, output) — $ per MTok.
     for (model, input, write, read, output) in [
+        ("claude-fable-5-2", 8.0, 10.0, 0.20, 40.0),
+        ("claude-mythos-5-2", 8.0, 10.0, 0.20, 40.0),
         ("claude-fable-5-1", 10.0, 12.50, 0.25, 50.0),
         ("claude-mythos-5-1", 10.0, 12.50, 0.25, 50.0),
         ("claude-opus-5-5", 4.0, 5.0, 0.20, 20.0),

@@ -7280,7 +7280,7 @@ binary = "pricing_tests"
 test = "the_anthropic_rows_charge_each_class_at_the_pages_price"
 kind = "host-free"
 layer = "L1"
-pins = "every built-in `anthropic` row (fable-5-1, mythos-5-1, opus-5-5, sonnet-5-5) charges one million tokens of input, 5-minute cache write, cache read and output at exactly the $/MTok Anthropic's pricing page states (written out in the cell, not derived from the multipliers), dated `2026-11`; `claude-haiku-5-5` and `claude-fable-5-5` have no row and fall to the floor"
+pins = "every built-in `anthropic` row (fable-5-2, mythos-5-2, fable-5-1, mythos-5-1, opus-5-5, sonnet-5-5) charges one million tokens of input, 5-minute cache write, cache read and output at exactly the $/MTok Anthropic's pricing page states (written out in the cell, not derived from the multipliers), dated `2026-11`; `claude-haiku-5-5` and `claude-fable-5-5` have no row and fall to the floor (red before the 5.2 rows: fable-5-2 estimated at the floor)"
 
 [[construct.cell]]
 package = "kata-worker"
