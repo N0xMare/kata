@@ -660,27 +660,35 @@ fn claude_code_marks(head: &str, body: &Value) -> Vec<String> {
 }
 
 /// **Each Anthropic model gets nanocode's own system blocks for that model,
-/// less the Agent SDK identity**, read off the request bodies the mock
-/// RECEIVED for two models nanocode prompts differently (its per-model
-/// selection, `instructions::default_system_blocks`, which kata leaves to
-/// nanocode and edits only on the wire, `MessagesMark`):
+/// less the Agent SDK identity and the bypass-mode steer**, read off the
+/// request bodies the mock RECEIVED for three models nanocode prompts
+/// differently (its per-model selection, `instructions::default_system_blocks`,
+/// which kata leaves to nanocode and edits only on the wire, `MessagesMark`):
 ///
 /// - `claude-sonnet-4-6`: the upstream block without the Opus 5.5 paragraph
 ///   ([`OPUS_5_5_PARAGRAPH`]) and closing with the total-tokens reminder
-///   ([`TOTAL_TOKENS_REMINDER`]), then the Code Mode instructions and no
-///   Bash-first steer;
+///   ([`TOTAL_TOKENS_REMINDER`]), then the Code Mode instructions;
 /// - `claude-opus-5-5`: the upstream block with the Opus 5.5 paragraph and no
-///   reminder, then the Code Mode instructions and nanocode's Bash-first steer
-///   for that model.
+///   reminder, then the Code Mode instructions;
+/// - `claude-fable-5-1`: the upstream block without the Opus 5.5 paragraph and
+///   closing with the reminder, then the Code Mode instructions.
 ///
-/// Neither request carries the identity. MEASURED at 8ec3b215.
+/// Each request's `system` is exactly those two blocks and the capsule's
+/// environment after them: neither the identity
+/// nor the block nanocode appends for `claude-opus-5-5` and `claude-fable-5-1`
+/// (its `bash-first.json`), which opens [`BYPASS_STEER`] and speaks of Claude
+/// Code's permission modes, which a kata capsule does not have. MEASURED at
+/// 8ec3b215.
 ///
 /// **Would red if:** kata sent one set of blocks to every model (watched: its
 /// blocks before, nanocode's defaults for no model in particular: Sonnet sent
-/// the Opus 5.5 paragraph and no reminder), or the wire kept the identity
-/// (watched: `MessagesMark` sending the request unedited).
+/// the Opus 5.5 paragraph and no reminder), the wire kept the identity
+/// (watched: `MessagesMark` sending the request unedited), or the wire kept
+/// the bypass-mode steer (watched before the wire removed it: Opus 5.5 and
+/// Fable 5.1 sent a third block opening "While bypass permissions mode is
+/// active:").
 #[tokio::test]
-async fn each_anthropic_model_gets_its_own_system_blocks_less_the_identity() {
+async fn each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer() {
     async fn system_sent(model: &str) -> Vec<String> {
         let mock = MockProvider::start(vec![claude_text_reply("ok")]).await;
         let (mut session, _witness) = open(&anthropic(&mock), DoubleConfig::default());
@@ -702,15 +710,21 @@ async fn each_anthropic_model_gets_its_own_system_blocks_less_the_identity() {
             .collect()
     }
     let identity = nanocode_backend_claude::subscription_wire::IDENTITY;
-    for (model, opus_paragraph, reminder, steered) in [
-        ("claude-sonnet-4-6", false, true, false),
-        ("claude-opus-5-5", true, false, true),
+    for (model, opus_paragraph, reminder) in [
+        ("claude-sonnet-4-6", false, true),
+        ("claude-opus-5-5", true, false),
+        ("claude-fable-5-1", false, true),
     ] {
         let system = system_sent(model).await;
         assert!(
             !system.iter().any(|text| text == identity),
             "{model}: the identity was sent: {system:#?}"
         );
+        assert!(
+            !system.iter().any(|text| text.contains(BYPASS_STEER)),
+            "{model}: the bypass-mode steer was sent: {system:#?}"
+        );
+        assert_eq!(system.len(), 3, "{model}: three blocks: {system:#?}");
         let upstream = &system[0];
         assert!(
             upstream.starts_with("\nYou are an agent working with the user"),
@@ -731,10 +745,10 @@ async fn each_anthropic_model_gets_its_own_system_blocks_less_the_identity() {
             "{model}: the Code Mode instructions follow: {:?}",
             system[1]
         );
-        assert_eq!(
-            system.iter().any(|text| text.contains(BASH_FIRST_STEER)),
-            steered,
-            "{model}: nanocode's Bash-first steer: {system:#?}"
+        assert!(
+            system[2].starts_with("# Environment\n"),
+            "{model}: the capsule's environment closes the prompt: {:?}",
+            system[2]
         );
     }
 }
@@ -749,8 +763,8 @@ const TOTAL_TOKENS_REMINDER: &str = "\n\n<total_tokens>15000000 tokens left</tot
 
 /// How nanocode's Bash-first steer opens, the block it appends after the Code
 /// Mode instructions for the models its `bash-first.json` names (8ec3b215:
-/// `claude-fable-5-1` and `claude-opus-5-5`).
-const BASH_FIRST_STEER: &str = "While bypass permissions mode is active:";
+/// `claude-fable-5-1` and `claude-opus-5-5`), and kata removes on the wire.
+const BYPASS_STEER: &str = "While bypass permissions mode is active:";
 
 /// The session identity an API-key Messages request carries, as the mock
 /// RECEIVED it: the `x-claude-code-session-id` header's value and the

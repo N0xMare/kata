@@ -7341,18 +7341,18 @@ pins = "an API-key Anthropic turn's Messages request, as the mock received it, c
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "lib"
-test = "adapter::session::tests::the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else"
+test = "adapter::session::tests::the_wire_edit_removes_the_identity_and_the_bypass_steer_and_nothing_else"
 kind = "host-free"
 layer = "L1"
-pins = "the Messages wire edit (`without_agent_sdk_identity`) on the first request a real nanocode code-only agent sends with its own blocks, for `claude-sonnet-4-6` and `claude-opus-5-5`, leaves the headers byte for byte and the body the same JSON but for the Agent SDK identity block that opened `system`; a subscription request, billing line first, is left byte for byte (red with `system` cleared, and with the identity matched anywhere in `system`)"
+pins = "the Messages wire edit (`without_claude_code_blocks`) on the first request a real nanocode code-only agent sends with its own blocks, for `claude-sonnet-4-6`, `claude-opus-5-5` and `claude-fable-5-1`, leaves the headers byte for byte and the body the same JSON but for the Agent SDK identity block that opened `system` and, for Opus 5.5 and Fable 5.1, nanocode's bypass-mode steer block; a subscription request, billing line first, is left byte for byte (red with `system` cleared, and with the identity matched anywhere in `system`)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "nanocode_qualification"
-test = "each_anthropic_model_gets_its_own_system_blocks_less_the_identity"
+test = "each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer"
 kind = "host-free"
 layer = "L1"
-pins = "the request bodies the mock receives carry nanocode's own per-model blocks and no Agent SDK identity: for `claude-sonnet-4-6` the upstream block without the Opus 5.5 paragraph and closing with the total-tokens reminder, no Bash-first steer; for `claude-opus-5-5` the paragraph, no reminder, and nanocode's Bash-first steer; the Code Mode instructions second for both (red with one set of blocks sent to every model: Sonnet got the Opus 5.5 paragraph; and with `MessagesMark` sending the request unedited: the identity sent)"
+pins = "the request bodies the mock receives carry nanocode's own per-model blocks, no Agent SDK identity and no bypass-mode steer, exactly three blocks each: for `claude-sonnet-4-6` and `claude-fable-5-1` the upstream block without the Opus 5.5 paragraph and closing with the total-tokens reminder; for `claude-opus-5-5` the paragraph and no reminder; then the Code Mode instructions and the capsule's environment (red with one set of blocks sent to every model: Sonnet got the Opus 5.5 paragraph; with `MessagesMark` sending the request unedited: the identity sent; and before the wire removed the steer: Opus 5.5 sent \"While bypass permissions mode is active:\")"
 
 [[construct.cell]]
 package = "kata-worker"
@@ -14027,18 +14027,18 @@ pins = "an API-key Anthropic turn's Messages request, as the mock received it, c
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "lib"
-test = "adapter::session::tests::the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else"
+test = "adapter::session::tests::the_wire_edit_removes_the_identity_and_the_bypass_steer_and_nothing_else"
 kind = "host-free"
 layer = "L1"
-pins = "the Messages wire edit (`without_agent_sdk_identity`) on the first request a real nanocode code-only agent sends with its own blocks, for `claude-sonnet-4-6` and `claude-opus-5-5`, leaves the headers byte for byte and the body the same JSON but for the Agent SDK identity block that opened `system`; a subscription request, billing line first, is left byte for byte (red with `system` cleared, and with the identity matched anywhere in `system`)"
+pins = "the Messages wire edit (`without_claude_code_blocks`) on the first request a real nanocode code-only agent sends with its own blocks, for `claude-sonnet-4-6`, `claude-opus-5-5` and `claude-fable-5-1`, leaves the headers byte for byte and the body the same JSON but for the Agent SDK identity block that opened `system` and, for Opus 5.5 and Fable 5.1, nanocode's bypass-mode steer block; a subscription request, billing line first, is left byte for byte (red with `system` cleared, and with the identity matched anywhere in `system`)"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
 binary = "nanocode_qualification"
-test = "each_anthropic_model_gets_its_own_system_blocks_less_the_identity"
+test = "each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer"
 kind = "host-free"
 layer = "L1"
-pins = "the request bodies the mock receives carry nanocode's own per-model blocks and no Agent SDK identity: for `claude-sonnet-4-6` the upstream block without the Opus 5.5 paragraph and closing with the total-tokens reminder, no Bash-first steer; for `claude-opus-5-5` the paragraph, no reminder, and nanocode's Bash-first steer; the Code Mode instructions second for both (red with one set of blocks sent to every model: Sonnet got the Opus 5.5 paragraph; and with `MessagesMark` sending the request unedited: the identity sent)"
+pins = "the request bodies the mock receives carry nanocode's own per-model blocks, no Agent SDK identity and no bypass-mode steer, exactly three blocks each: for `claude-sonnet-4-6` and `claude-fable-5-1` the upstream block without the Opus 5.5 paragraph and closing with the total-tokens reminder; for `claude-opus-5-5` the paragraph and no reminder; then the Code Mode instructions and the capsule's environment (red with one set of blocks sent to every model: Sonnet got the Opus 5.5 paragraph; with `MessagesMark` sending the request unedited: the identity sent; and before the wire removed the steer: Opus 5.5 sent \"While bypass permissions mode is active:\")"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"
@@ -14134,7 +14134,7 @@ binary = "lib"
 test = "tests::the_harness_identity_carries_every_fact_at_its_shipped_value"
 kind = "host-free"
 layer = "L1"
-pins = "`harness_identity()` holds exactly six keys, each fact equal to the constant or function the adapter itself names (`NANOCODE_REV`, `CODE_MODE_ENGINE_DIGEST`, `syscall_filter_digest()`, `CODE_MODE_LIMITS` with a literal 300000 ms wall, `CAPSULE_STATEMENT`, `claude_system_blocks()`), and each backend's tool definitions are non-empty — a mirror of those constants: no shipped value is read independently"
+pins = "`harness_identity()` holds exactly six keys, each fact equal to the constant or function the adapter itself names (`NANOCODE_REV`, `CODE_MODE_ENGINE_DIGEST`, `syscall_filter_digest()`, `CODE_MODE_LIMITS` with a literal 300000 ms wall, `CAPSULE_STATEMENT`, the identity and `BYPASS_STEERS` as `removed_system_blocks`), and each backend's tool definitions are non-empty — a mirror of those constants: no shipped value is read independently"
 
 [[construct.cell]]
 package = "kata-agent-nanocode"

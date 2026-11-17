@@ -12,7 +12,7 @@ one upstream commit and tracks nanocode's `master` by moving that pin deliberate
   `crates/agent-nanocode/src/lib.rs` names the same commit.
   `crates/agent-nanocode/tests/nanocode_seam.rs` refuses a `Cargo.lock` that
   resolves any nanocode package to another commit, and a host tool set that moved.
-- **The Anthropic kind's system prompt, less one line.** kata builds the Claude
+- **The Anthropic kind's system prompt, less two blocks.** kata builds the Claude
   agent without system blocks of its own, so nanocode selects its default blocks for
   the turn's model (`instructions::default_system_blocks`, crate-private at
   `8ec3b215`: for most models it drops the Opus 5.5 paragraph that closes its upstream
@@ -22,26 +22,34 @@ one upstream commit and tracks nanocode's `master` by moving that pin deliberate
   permissions mode is active:" after the Code Mode instructions a code-only agent
   gets). The Messages client's HTTP layer, `MessagesMark` in
   `crates/agent-nanocode/src/adapter/session.rs`, then sends every request without
-  the Claude Agent SDK identity line that opens those blocks
-  (`without_agent_sdk_identity`, `subscription_wire::IDENTITY`): kata is not the
-  Agent SDK, and an API key's credits may refuse a request that says it is: measured
-  on 2026-11-12, that one line turns a key's 200 into a 400 `Your credit balance is
-  too low`, as does the `claude-code-20250219` beta, which nanocode sends only on its
-  subscription wire. The edit re-serializes the body (the same JSON, its members'
-  order aside) and leaves a subscription request, whose billing line comes first,
-  untouched. `nanocode_qualification`'s
-  `each_anthropic_model_gets_its_own_system_blocks_less_the_identity` reads the
-  request bodies the mock receives for `claude-sonnet-4-6` and `claude-opus-5-5` and
-  pins each model's own blocks and the identity's absence; the unit cell
-  `the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else` pins that the edit
-  removes that block alone; `an_api_key_anthropic_request_carries_no_claude_code_mark`
+  two of those blocks, each removed only when its whole text matches
+  (`without_claude_code_blocks`): the Claude Agent SDK identity line that opens them
+  (`subscription_wire::IDENTITY`), and the bypass-mode steer (`BYPASS_STEERS`, kata's
+  copy of the two `bash-first.json` steers, since the file is crate-private). kata is
+  not the Agent SDK, and an API key's credits may refuse a request that says it is:
+  measured on 2026-11-12, that one line turns a key's 200 into a 400 `Your credit
+  balance is too low`, as does the `claude-code-20250219` beta, which nanocode sends
+  only on its subscription wire. The steer describes Claude Code's bypass permission
+  mode, which a kata capsule does not have. The edit re-serializes the body (the
+  same JSON, its members' order aside) and leaves a subscription request, whose
+  billing line comes first, untouched. `nanocode_qualification`'s
+  `each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer`
+  reads the request bodies the mock receives for `claude-sonnet-4-6`,
+  `claude-opus-5-5` and `claude-fable-5-1` and pins each model's own blocks and the
+  absence of both; the unit cell
+  `the_wire_edit_removes_the_identity_and_the_bypass_steer_and_nothing_else` pins
+  that the edit removes those blocks alone; `an_api_key_anthropic_request_carries_no_claude_code_mark`
   reds on the identity line, the `claude-code-20250219` beta or a `metadata.user_id`
   naming an account in the request the mock receives. Since `8ec3b215` nanocode
   sends every API-key request `x-claude-code-session-id` and a `metadata.user_id`
   naming only the session (upstream records this as what stock Claude Code sends on
   an API key); the cell pins both to the session's id, and whether a key's credits
-  refuse them is not measured. `harness_identity` folds the one block kata removes;
-  the blocks themselves follow `nanocode_rev` and the stage's model.
+  refuse them is not measured. `harness_identity` folds the blocks kata removes;
+  the blocks themselves follow `nanocode_rev` and the stage's model. The upstream
+  block keeps other Claude Code product text a kata capsule does not match (its
+  terminal display, its user-selected permission mode and hooks, clickable
+  `file_path:line_number`, the Claude Code surfaces line, a fixed total-tokens
+  reminder); kata removes no part of a block, so these stay, listed for review.
 - **One vendored crate**, `vendor/nanocode-code-mode-engine`: nanocode's
   `crates/runtime/code-mode-engine`, the host that runs Code Mode cells in djs,
   nanocode's own JavaScript engine (`crates/patches/djs` upstream, which kata
@@ -846,12 +854,13 @@ The recipe does not finish the bump. After it:
   (`crates/agent-nanocode/src/credential.rs`) reds on a rename; run it at the new
   rev.
 - Re-read nanocode's per-model system blocks when
-  `each_anthropic_model_gets_its_own_system_blocks_less_the_identity` is red, and the
-  default blocks for a new Claude Code or Agent SDK identity line: the qualification
-  cell refuses the two nanocode names at `8ec3b215` (unchanged since `2ac77424`),
-  not one upstream adds later, and the wire edit removes only the identity that
-  opens the blocks (`the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else`
-  reds when it moves).
+  `each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer`
+  is red, and the default blocks for a new Claude Code or Agent SDK identity line:
+  the qualification cell refuses the two nanocode names at `8ec3b215` (unchanged
+  since `2ac77424`), not one upstream adds later, and the wire edit removes only the
+  identity that opens the blocks and the bypass-mode steers whose text it holds
+  (`the_wire_edit_removes_the_identity_and_the_bypass_steer_and_nothing_else` reds
+  when either moves; re-copy `BYPASS_STEERS` from `prompts/bash-first.json`).
 - Re-read how nanocode presents the host tools to the model: since `8ec3b215` the
   Responses kind sends them inside a `functions` namespace, which
   `the_model_facing_tool_list_is_the_pinned_set` flattens and pins

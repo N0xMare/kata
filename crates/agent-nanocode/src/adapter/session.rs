@@ -13,7 +13,7 @@
 //!    environment, so nanocode probes nothing on the host. The Anthropic kind
 //!    takes nanocode's own system blocks for the turn's model, and its client
 //!    sends them without the Claude Agent SDK identity that opens them
-//!    ([`without_agent_sdk_identity`]).
+//!    ([`without_claude_code_blocks`]).
 //! 5. Tool-set check: the host tool set is exactly kata's, with no dynamic or
 //!    attachable provider.
 //! 6. Prompt. The issuance watermark is marked `ModelTokens` INSIDE the model
@@ -223,20 +223,28 @@ pub(crate) const TIMEZONE: &str = "UTC";
 /// The platform the Anthropic kind's environment states: every capsule is Linux.
 pub(crate) const PLATFORM: &str = "linux";
 
-/// A Messages `request` without the Claude Agent SDK identity
-/// (`subscription_wire::IDENTITY`) that opens nanocode's default system prompt
-/// for every model: its `system` array's first block when that block's text is
-/// exactly the identity; any other request (one whose first block is anything
-/// else, a subscription request's billing line among them, or a body that is
-/// not a JSON object with a `system` array) goes as it came. kata is not the
-/// Agent SDK, and an API key's credits may refuse a request that claims to be
-/// (measured: that one line turns a key's 200 into a 400 "credit balance is too
-/// low"). The rest of the prompt is nanocode's own selection for the turn's
-/// model (its `instructions::default_system_blocks`, which no public API
-/// exposes, so kata leaves the selection to nanocode and edits the wire). The
-/// edited body is the same JSON re-serialized: its members' order may differ,
-/// its values do not.
-fn without_agent_sdk_identity(mut request: layer::Request) -> layer::Request {
+/// A Messages `request` without the two system blocks of nanocode's default
+/// prompt that describe a Claude Code product, not a kata capsule, each removed
+/// only on an EXACT match of its whole text:
+///
+/// - the Claude Agent SDK identity (`subscription_wire::IDENTITY`) that opens
+///   the prompt for every model: the `system` array's FIRST block, when its
+///   text is exactly the identity. kata is not the Agent SDK, and an API key's
+///   credits may refuse a request that claims to be (measured: that one line
+///   turns a key's 200 into a 400 "credit balance is too low");
+/// - the bypass-mode steer nanocode appends after the Code Mode instructions
+///   for the models its `bash-first.json` names ([`BYPASS_STEERS`]): any block
+///   whose text is exactly one of them. It opens "While bypass permissions mode
+///   is active:", a Claude Code permission mode; a kata capsule has none.
+///
+/// Any other request (one whose first block is anything else, a subscription
+/// request's billing line among them, one with no listed steer, or a body that
+/// is not a JSON object with a `system` array) goes as it came. The rest of the
+/// prompt is nanocode's own selection for the turn's model (its
+/// `instructions::default_system_blocks`, which no public API exposes, so kata
+/// leaves the selection to nanocode and edits the wire). The edited body is the
+/// same JSON re-serialized: its members' order may differ, its values do not.
+fn without_claude_code_blocks(mut request: layer::Request) -> layer::Request {
     let Ok(mut body) = serde_json::from_slice::<serde_json::Value>(&request.body) else {
         return request;
     };
@@ -246,19 +254,57 @@ fn without_agent_sdk_identity(mut request: layer::Request) -> layer::Request {
     else {
         return request;
     };
-    if system
-        .first()
-        .and_then(|block| block.get("text"))
-        .and_then(serde_json::Value::as_str)
-        != Some(nanocode_backend_claude::subscription_wire::IDENTITY)
+    let text = |block: &serde_json::Value| {
+        block
+            .get("text")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    };
+    let before = system.len();
+    if system.first().and_then(text).as_deref()
+        == Some(nanocode_backend_claude::subscription_wire::IDENTITY)
     {
+        system.remove(0);
+    }
+    system.retain(|block| {
+        !text(block).is_some_and(|text| BYPASS_STEERS.iter().any(|steer| text == *steer))
+    });
+    if system.len() == before {
         return request;
     }
-    system.remove(0);
     if let Ok(bytes) = serde_json::to_vec(&body) {
         request.body = bytes;
     }
     request
+}
+
+/// The whole text of each bypass-mode steer nanocode appends for a model,
+/// `bypass` then that model's `steer` from its `prompts/bash-first.json`
+/// (8ec3b215: `claude-fable-5-1` and `claude-opus-5-5`; the file is
+/// crate-private, so kata keeps its own copy, and
+/// `nanocode_qualification`'s
+/// `each_anthropic_model_gets_its_own_system_blocks_less_the_identity_and_the_bypass_steer`
+/// reds when a bump changes a steer kata no longer matches).
+pub(crate) const BYPASS_STEERS: [&str; 2] = [
+    "While bypass permissions mode is active:\n\nDo your work through the Bash tool \
+     wherever it can accomplish the job: read files with cat, head, or sed -n, search with \
+     grep and find, and make file changes with sed, heredocs, or short scripts, rather than \
+     using the dedicated Read, Edit, or Write tools. Fall back to a dedicated tool only when \
+     Bash genuinely cannot do the job.",
+    "While bypass permissions mode is active:\n\nYou can do much of your work through the \
+     Bash tool when it is the simpler route: read files with cat, head, or sed -n, search \
+     with grep and find, and make small, mechanical file changes with sed, heredocs, or \
+     short scripts instead of the dedicated Read, Edit, or Write tools. The choice is yours: \
+     prefer Edit or Write when a shell edit would be fragile, such as exact or multi-line \
+     replacements, or sed/awk flags that differ between GNU and BSD/macOS.",
+];
+
+/// Every system block [`without_claude_code_blocks`] may remove, the identity
+/// first: what `crate::harness_identity` folds.
+pub(crate) fn removed_system_blocks() -> Vec<&'static str> {
+    let mut blocks = vec![nanocode_backend_claude::subscription_wire::IDENTITY];
+    blocks.extend(BYPASS_STEERS);
+    blocks
 }
 
 /// What kata tells a Responses-kind model about where its tools run, sent as
@@ -1456,7 +1502,7 @@ where
 }
 
 /// Marks the issuance watermark `ModelTokens` on every Messages request the
-/// Anthropic kind's client makes, and sends it [`without_agent_sdk_identity`],
+/// Anthropic kind's client makes, and sends it [`without_claude_code_blocks`],
 /// before the request leaves: the client's HTTP
 /// layer sees each request it sends, nanocode's own retries of one included,
 /// and with an API key the client sends nothing but the Messages POST. Once
@@ -1485,7 +1531,7 @@ impl nanocode_backend_claude::transport::Layer for MessagesMark {
                 Err(layer::Error::new(TurnStopped.to_string()).unsent(true))
             });
         }
-        next.send(without_agent_sdk_identity(request))
+        next.send(without_claude_code_blocks(request))
     }
 }
 
@@ -1842,24 +1888,32 @@ mod tests {
         )
     }
 
-    /// **The API-key wire's edit removes the Agent SDK identity and nothing
-    /// else, for every model; a subscription request goes as it came.** The
-    /// first request a real nanocode code-only agent sends with its own
-    /// per-model defaults, captured before it leaves, for two models nanocode
-    /// prompts differently: [`super::without_agent_sdk_identity`] leaves its
-    /// headers byte for byte, and its body the same JSON but for the identity
-    /// block that opened `system`. A subscription request (its billing line
-    /// first, the identity second) is left byte for byte.
+    /// **The API-key wire's edit removes the Agent SDK identity and the
+    /// bypass-mode steer and nothing else, for every model; a subscription
+    /// request goes as it came.** The first request a real nanocode code-only
+    /// agent sends with its own per-model defaults, captured before it leaves,
+    /// for three models nanocode prompts differently:
+    /// [`super::without_claude_code_blocks`] leaves its headers byte for byte,
+    /// and its body the same JSON but for the identity block that opened
+    /// `system` and, for `claude-opus-5-5` and `claude-fable-5-1`, the steer
+    /// block opening "While bypass permissions mode is active:". A
+    /// subscription request (its billing line first, the identity second) is
+    /// left byte for byte.
     ///
-    /// **Would red if:** the edit removed any block but the identity (watched:
-    /// `system` cleared), or reached a subscription request (watched: the
-    /// identity matched anywhere in `system`).
+    /// **Would red if:** the edit removed any block but those (watched:
+    /// `system` cleared), reached a subscription request (watched: the
+    /// identity matched anywhere in `system`), or kept a steer (watched: Opus
+    /// 5.5's steer sent while [`super::BYPASS_STEERS`] matched none).
     #[tokio::test]
-    async fn the_wire_edit_removes_the_agent_sdk_identity_and_nothing_else() {
+    async fn the_wire_edit_removes_the_identity_and_the_bypass_steer_and_nothing_else() {
         let identity = nanocode_backend_claude::subscription_wire::IDENTITY;
-        for model in ["claude-sonnet-4-6", "claude-opus-5-5"] {
+        for (model, steered) in [
+            ("claude-sonnet-4-6", false),
+            ("claude-opus-5-5", true),
+            ("claude-fable-5-1", true),
+        ] {
             let sent = first_claude_request(api_key_client(), model).await;
-            let edited = super::without_agent_sdk_identity(sent.clone());
+            let edited = super::without_claude_code_blocks(sent.clone());
             assert_eq!(edited.headers, sent.headers, "{model}");
             let mut expected: serde_json::Value =
                 serde_json::from_slice(&sent.body).expect("a JSON Messages body");
@@ -1869,6 +1923,17 @@ mod tests {
                 "{model}: nanocode opens with it"
             );
             system.remove(0);
+            let blocks = system.len();
+            system.retain(|block| {
+                !block["text"]
+                    .as_str()
+                    .is_some_and(|text| text.starts_with("While bypass permissions mode is active:"))
+            });
+            assert_eq!(
+                system.len() + usize::from(steered),
+                blocks,
+                "{model}: nanocode's steer"
+            );
             let edited: serde_json::Value =
                 serde_json::from_slice(&edited.body).expect("a JSON Messages body");
             assert_eq!(edited, expected, "{model}");
@@ -1882,7 +1947,7 @@ mod tests {
             identity,
             "billing line, then it"
         );
-        let edited = super::without_agent_sdk_identity(sent.clone());
+        let edited = super::without_claude_code_blocks(sent.clone());
         assert_eq!(edited.headers, sent.headers);
         assert_eq!(edited.body, sent.body);
     }
