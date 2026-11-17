@@ -6720,7 +6720,7 @@ binary = "lib"
 test = "syscall_filter::tests::every_listed_call_runs_and_every_thread_is_filtered"
 kind = "host-free"
 layer = "L1"
-pins = "an interpreter confined whole issues each of the filter's 34 listed calls on arguments its rule admits and reports what each returned: the kernel's own answer for each (EINTR for a `restart_syscall` with nothing to resume), ENOSYS for `clone3`, EACCES for a read-only close-on-exec `openat`, a handled SIGUSR1 for `rt_sigreturn`, then exit 0; the calls issued are exactly the list's; meanwhile /proc/<pid>/task/*/status shows `Seccomp: 2` and `NoNewPrivs: 1` on every thread, the libtest thread included (red with the filter not installed: `calls that did not run as listed: [(\"clone3\", -22), (\"openat\", 3)]`; red with any listed call dropped: that call ends the interpreter by SIGSYS)"
+pins = "an interpreter confined whole issues each of the filter's 34 listed calls on arguments its rule admits and reports what each returned: the kernel's own answer for each (EINTR for a `restart_syscall` with nothing to resume), ENOSYS for `clone3`, EACCES for a read-only close-on-exec `openat`, a handled SIGUSR1 for `rt_sigreturn`, then exit 0; the calls issued are exactly the list's; meanwhile /proc/<pid>/task/*/status lists exactly its two live threads by name, `adversary` (the libtest thread that installed the filter) and `exe` (the main thread, filtered only by TSYNC), each `Seccomp: 2` and `NoNewPrivs: 1`, a thread gone mid-read (NotFound or ESRCH) or exited skipped (red with TSYNC removed: `exe` in mode 0; red with the filter not installed: `calls that did not run as listed: [(\"clone3\", -22), (\"openat\", 3)]`; red with any listed call dropped: that call ends the interpreter by SIGSYS)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"
@@ -14802,7 +14802,7 @@ binary = "lib"
 test = "syscall_filter::tests::every_listed_call_runs_and_every_thread_is_filtered"
 kind = "host-free"
 layer = "L1"
-pins = "an interpreter confined whole issues every call of the filter's list (the calls issued equal `allowed(0)`'s names) and exits 0, each returning non-negative except `clone3` ENOSYS, `openat` EACCES, `rseq` and `set_robust_list` EINVAL and `restart_syscall` EINTR; every thread under /proc/<pid>/task (at least two) shows `Seccomp: 2` and `NoNewPrivs: 1`"
+pins = "an interpreter confined whole issues every call of the filter's list (the calls issued equal `allowed(0)`'s names) and exits 0, each returning non-negative except `clone3` ENOSYS, `openat` EACCES, `rseq` and `set_robust_list` EINVAL and `restart_syscall` EINTR; its live threads under /proc/<pid>/task are exactly `adversary` and `exe` by name, each `Seccomp: 2` and `NoNewPrivs: 1` (red with TSYNC removed: `exe` in mode 0)"
 
 [[construct.cell]]
 package = "kata-code-mode-host"

@@ -1176,21 +1176,26 @@ mod tests {
     }
 
     /// **R12: every listed call runs in a filtered interpreter, and the kernel
-    /// reports every one of its threads filtered.** The adversary issues each
-    /// call on arguments its rule admits and reports what each returned: the
-    /// kernel's own answer for each (EINVAL for the null `rseq` and
+    /// reports each of its threads filtered, by name.** The adversary issues
+    /// each call on arguments its rule admits and reports what each returned:
+    /// the kernel's own answer for each (EINVAL for the null `rseq` and
     /// `set_robust_list`, EINTR for a `restart_syscall` with nothing to
-    /// resume), the filter's ENOSYS for `clone3` and EACCES for a
-    /// read-only `openat`, and a handled SIGUSR1 for `rt_sigreturn`; then it
-    /// exits 0. While it waits, `/proc/<pid>/task/*/status` shows seccomp mode
-    /// 2 and no-new-privs on every thread, the libtest thread included, which
-    /// is what `SECCOMP_FILTER_FLAG_TSYNC` is for. The calls reported are
-    /// exactly the list's.
+    /// resume), the filter's ENOSYS for `clone3` and EACCES for a read-only
+    /// `openat`, and a handled SIGUSR1 for `rt_sigreturn`; then it exits 0.
+    /// While it waits, `/proc/<pid>/task/*/status` lists exactly its two live
+    /// threads, each in seccomp mode 2 under no-new-privs: `exe`, the main
+    /// thread (the process was started as `/proc/self/exe`), which waits on
+    /// libtest and never called `seccomp(2)`, so only
+    /// `SECCOMP_FILTER_FLAG_TSYNC` puts it under the filter; and `adversary`,
+    /// libtest's thread that installed the filter and issued the calls (its
+    /// `prctl(PR_SET_NAME)` named it). The calls reported are exactly the
+    /// list's.
     ///
     /// **Would red if:** the filter were not installed (watched: `clone3`
-    /// EINVAL, `openat` a descriptor, `Seccomp: 0`), a listed call were
-    /// dropped from it (that call ends the adversary by SIGSYS), or the list
-    /// grew a call this cell does not issue.
+    /// EINVAL, `openat` a descriptor, `Seccomp: 0`), it were installed without
+    /// TSYNC (watched: `exe` in mode 0), a listed call were dropped from it
+    /// (that call ends the adversary by SIGSYS), or the list grew a call this
+    /// cell does not issue.
     #[test]
     fn every_listed_call_runs_and_every_thread_is_filtered() {
         let mut threads = Vec::new();
@@ -1201,9 +1206,16 @@ mod tests {
             {
                 // `adversary-thread` is joined once the kernel clears its tid,
                 // which precedes the removal of its task entry: listed here, it
-                // can be gone by this read. A gone thread runs nothing.
+                // can be gone by this read (`NotFound`, or `ESRCH` once its
+                // task is released mid-read), or still listed as exited. A
+                // gone or exited thread runs nothing.
                 let state = match std::fs::read_to_string(task.path().join("status")) {
-                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(error)
+                        if error.kind() == std::io::ErrorKind::NotFound
+                            || error.raw_os_error() == Some(libc::ESRCH) =>
+                    {
+                        continue;
+                    }
                     read => read.expect("a status"),
                 };
                 let field = |name: &str| {
@@ -1214,7 +1226,10 @@ mod tests {
                         .unwrap_or_default()
                         .to_owned()
                 };
-                threads.push((field("Seccomp:"), field("NoNewPrivs:")));
+                if matches!(field("State:").chars().next(), Some('Z' | 'X')) {
+                    continue;
+                }
+                threads.push((field("Name:"), field("Seccomp:"), field("NoNewPrivs:")));
             }
         });
         assert_eq!(status.code(), Some(0), "the adversary ended {status:?}");
@@ -1242,13 +1257,12 @@ mod tests {
         listed.sort_unstable();
         let issued: Vec<&str> = returned.keys().map(String::as_str).collect();
         assert_eq!(issued, listed, "the calls issued are the list's");
-        assert!(
-            threads.len() >= 2,
-            "the libtest thread and the adversary's: {threads:?}"
-        );
-        assert!(
-            threads.iter().all(|(mode, nnp)| mode == "2" && nnp == "1"),
-            "every thread filtered under no-new-privs: {threads:?}"
+        threads.sort();
+        let filtered = |name: &str| (name.to_owned(), "2".to_owned(), "1".to_owned());
+        assert_eq!(
+            threads,
+            [filtered("adversary"), filtered("exe")],
+            "each live thread, by name, filtered under no-new-privs"
         );
     }
 
